@@ -45,5 +45,15 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>We use the camera to scan the passport/ID</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>MySafar uses your location to improve suggestions and show you popular travel destinations near you.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Permission required to record audio</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Allow access to photo library</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>We need access to your calendar to add your booked flights</string>
 </dict>
 </plist>

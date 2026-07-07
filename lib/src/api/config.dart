@@ -11,6 +11,7 @@ class MySafarConfig {
     this.myId,
     this.socialAuth,
     this.enableFirestoreConfig = false,
+    this.enableVersionGate = false,
     this.startLocale,
     this.saveLocale = false,
   });
@@ -35,6 +36,11 @@ class MySafarConfig {
   /// Firestore'dan recommendation endpointlarini sinxronlash. Host app
   /// Firebase'ni o'zi init qilgan bo'lishi shart.
   final bool enableFirestoreConfig;
+
+  /// Backend'dagi minimal versiya tekshiruvi (majburiy yangilash dialogi).
+  /// Faqat MySafar app'ning o'zida ma'noga ega — SDK embed qilingan hostda
+  /// versiya siyosati host'niki, shu sabab default o'chiq.
+  final bool enableVersionGate;
 
   /// Boshlang'ich til. `null` bo'lsa saqlangan til yoki `uz` ishlatiladi.
   final Locale? startLocale;
