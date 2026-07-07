@@ -96,7 +96,7 @@ class SupportWidget extends StatelessWidget {
                       ),
                       const SizedBox(width: 7),
                       SvgPicture.asset(
-                        "assets/img/booking/phone_icon.svg",
+                        "packages/mysafar_sdk/assets/img/booking/phone_icon.svg",
                         width: 13,
                         height: 13,
                         colorFilter:
@@ -106,7 +106,7 @@ class SupportWidget extends StatelessWidget {
                       Text(
                         "+998 55 512 00 08",
                         style: TextStyle(
-                          fontFamily: "Gilroy",
+                          fontFamily: "packages/mysafar_sdk/Gilroy",
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
                           color: brand,

@@ -267,7 +267,7 @@ class _AuthPageState extends State<AuthPage> {
                                             context.szBoxWidth8,
                                           ] else ...[
                                             SvgPicture.asset(
-                                              'assets/img/auth/google.svg',
+                                              'packages/mysafar_sdk/assets/img/auth/google.svg',
                                               width: 24,
                                               height: 24,
                                               errorBuilder: (_, __, ___) =>

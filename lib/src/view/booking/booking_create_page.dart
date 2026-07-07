@@ -310,7 +310,7 @@ class _BookingCreatePageState extends State<BookingCreatePage> {
             children: [
               Text(label,
                   style: TextStyle(
-                      fontFamily: "Gilroy", fontSize: 12, color: muted)),
+                      fontFamily: "packages/mysafar_sdk/Gilroy", fontSize: 12, color: muted)),
               const SizedBox(height: 2),
               Text(
                 value,

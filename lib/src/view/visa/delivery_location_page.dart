@@ -335,7 +335,7 @@ class _DeliveryLocationPageState extends State<DeliveryLocationPage> {
                         children: [
                           ClipOval(
                             child: Image.asset(
-                              'assets/img/flags/uz.png',
+                              'packages/mysafar_sdk/assets/img/flags/uz.png',
                               width: 22,
                               height: 22,
                               fit: BoxFit.cover,

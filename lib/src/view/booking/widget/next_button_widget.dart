@@ -68,7 +68,7 @@ class NextButtonWidget extends StatelessWidget {
                         Text(
                           "ticket_price".tr(),
                           style: TextStyle(
-                            fontFamily: "Gilroy",
+                            fontFamily: "packages/mysafar_sdk/Gilroy",
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
                             color: muted,
@@ -85,7 +85,7 @@ class NextButtonWidget extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontFamily: "Gilroy",
+                              fontFamily: "packages/mysafar_sdk/Gilroy",
                               fontWeight: FontWeight.w800,
                               fontSize: 23,
                               color: Colors.white,
@@ -99,7 +99,7 @@ class NextButtonWidget extends StatelessWidget {
                             "count": "$passenger",
                           }),
                           style: TextStyle(
-                            fontFamily: "Gilroy",
+                            fontFamily: "packages/mysafar_sdk/Gilroy",
                             fontSize: 12,
                             fontWeight: FontWeight.w400,
                             color: muted,
@@ -153,7 +153,7 @@ class NextButtonWidget extends StatelessWidget {
                                   Text(
                                     nextTittle.tr(),
                                     style: const TextStyle(
-                                      fontFamily: "Gilroy",
+                                      fontFamily: "packages/mysafar_sdk/Gilroy",
                                       fontSize: 16,
                                       color: Colors.white,
                                       fontWeight: FontWeight.w700,

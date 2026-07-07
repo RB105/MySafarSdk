@@ -532,7 +532,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
                     Text(
                       'payment_order_id'.tr(),
                       style: TextStyle(
-                        fontFamily: "Gilroy",
+                        fontFamily: "packages/mysafar_sdk/Gilroy",
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                         color: muted,
@@ -597,7 +597,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
                 child: Text(
                   'payment_id_help'.tr(),
                   style: TextStyle(
-                    fontFamily: "Gilroy",
+                    fontFamily: "packages/mysafar_sdk/Gilroy",
                     fontSize: 12,
                     height: 1.4,
                     fontWeight: FontWeight.w500,
@@ -674,7 +674,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
                     Text(
                       'payment_time_left'.tr(),
                       style: TextStyle(
-                        fontFamily: "Gilroy",
+                        fontFamily: "packages/mysafar_sdk/Gilroy",
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                         color: muted,
@@ -686,7 +686,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
                           ? 'payment_time_expired'.tr()
                           : PaymentHelper.formatDuration(remaining),
                       style: TextStyle(
-                        fontFamily: "Gilroy",
+                        fontFamily: "packages/mysafar_sdk/Gilroy",
                         fontSize: 20,
                         color: color,
                         fontWeight: FontWeight.w800,

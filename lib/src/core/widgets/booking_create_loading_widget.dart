@@ -30,7 +30,7 @@ class LoadingDialog {
                 width: 152,
                 height: 152,
                 child: Lottie.asset(
-              'assets/img/booking/airplane.json',
+              'packages/mysafar_sdk/assets/img/booking/airplane.json',
               repeat: true,
               fit: BoxFit.contain,
 

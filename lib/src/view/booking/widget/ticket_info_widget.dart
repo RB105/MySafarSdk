@@ -56,7 +56,7 @@ class TicketInfoWidget extends StatelessWidget {
                 ),
               ],
             ),
-            SvgPicture.asset("assets/img/booking/ticket_icon.svg",
+            SvgPicture.asset("packages/mysafar_sdk/assets/img/booking/ticket_icon.svg",
                 colorFilter: ColorFilter.mode(
                   context.theme.appBarTheme.iconTheme!.color!,
                   BlendMode.srcIn,

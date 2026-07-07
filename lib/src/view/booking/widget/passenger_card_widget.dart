@@ -140,7 +140,7 @@ class PassengerCardWidget extends StatelessWidget {
                 height: 20,
                 width: 20,
                 child: Image.asset(
-                  "assets/img/booking/saved.png",
+                  "packages/mysafar_sdk/assets/img/booking/saved.png",
                   color: context.themeProvider.isDark
                       ? Colors.white
                       : Colors.black,

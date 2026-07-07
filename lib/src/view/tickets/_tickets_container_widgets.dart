@@ -53,7 +53,7 @@ class _TixTheme {
   static TextStyle style(double size, FontWeight weight, Color color,
           {double? height}) =>
       TextStyle(
-        fontFamily: "Gilroy",
+        fontFamily: "packages/mysafar_sdk/Gilroy",
         fontSize: size,
         fontWeight: weight,
         color: color,

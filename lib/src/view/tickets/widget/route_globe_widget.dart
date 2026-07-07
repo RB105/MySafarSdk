@@ -34,7 +34,7 @@ class _RouteGlobeWidgetState extends State<RouteGlobeWidget> {
   void initState() {
     super.initState();
     _controller = FlutterEarthGlobeController(
-      surface: const AssetImage('assets/img/tickets/earth_day.jpg'),
+      surface: const AssetImage('packages/mysafar_sdk/assets/img/tickets/earth_day.jpg'),
       // Static globe — no auto-rotation.
       isRotating: false,
       zoom: 0,

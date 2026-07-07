@@ -198,7 +198,7 @@ class _TicketedBookingSearchViewState
         mainAxisSize: MainAxisSize.min,
         children: [
           Image.asset(
-            'assets/img/home/icons/search_ticket_ic.png',
+            'packages/mysafar_sdk/assets/img/home/icons/search_ticket_ic.png',
             width: 80,
             height: 80,
             fit: BoxFit.contain,
@@ -573,7 +573,7 @@ class _TicketResultCardState extends State<_TicketResultCard> {
                       SizedBox(
                         height: 22,
                         width: 22,
-                        child: Image.asset("assets/img/booking/pfd_icon.png"),
+                        child: Image.asset("packages/mysafar_sdk/assets/img/booking/pfd_icon.png"),
                       ),
                       const SizedBox(width: 8),
                       Text(

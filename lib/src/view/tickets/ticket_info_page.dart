@@ -384,7 +384,7 @@ class _TicketHero extends StatelessWidget {
                     BlendMode.srcIn,
                   ),
                   child: Image.asset(
-                    'assets/img/tickets/worls_map.png',
+                    'packages/mysafar_sdk/assets/img/tickets/worls_map.png',
                     fit: BoxFit.cover,
                     alignment: Alignment.center,
                     errorBuilder: (_, __, ___) => const SizedBox.shrink(),

@@ -1047,7 +1047,7 @@ class ProjectDialogs {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Lottie.asset(
-                    'assets/img/profile/wallet_congrats.json',
+                    'packages/mysafar_sdk/assets/img/profile/wallet_congrats.json',
                     repeat: false,
                     fit: BoxFit.contain,
                     width: 100,
@@ -1133,7 +1133,7 @@ class ProjectDialogs {
             ),
             const SizedBox(height: 16),
             Lottie.asset(
-              'assets/img/profile/utyan_cache.json',
+              'packages/mysafar_sdk/assets/img/profile/utyan_cache.json',
               repeat: true,
               fit: BoxFit.contain,
               width: 100,

@@ -16,7 +16,7 @@ class HomeBackgroundCarousel extends StatefulWidget {
   const HomeBackgroundCarousel({super.key});
 
   /// Fon rasmlari shu papkadan olinadi.
-  static const String dir = 'assets/img/home/backgrounds/';
+  static const String dir = 'packages/mysafar_sdk/assets/img/home/backgrounds/';
 
   /// Rasmlar almashish intervali.
   static const Duration interval = Duration(seconds: 5);

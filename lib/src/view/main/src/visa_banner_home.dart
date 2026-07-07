@@ -4,7 +4,7 @@ import 'package:mysafar_sdk/src/view/visa/delivery_location_page.dart';
 class VisaBannerHome extends StatelessWidget {
   const VisaBannerHome({super.key});
 
-  static const String _visaCardAsset = "assets/img/home/visa_card.png";
+  static const String _visaCardAsset = "packages/mysafar_sdk/assets/img/home/visa_card.png";
 
   @override
   Widget build(BuildContext context) {

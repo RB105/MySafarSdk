@@ -67,7 +67,7 @@ class ProjectTheme {
             borderRadius: BorderRadius.circular(8)),
         hintStyle: const TextStyle(
             color: Color(0xffA7A7AA),
-            fontFamily: "Gilroy",
+            fontFamily: "packages/mysafar_sdk/Gilroy",
             fontWeight: FontWeight.w400,
             fontSize: 14),
       ));
@@ -110,7 +110,7 @@ class ProjectTheme {
         ),
         hintStyle: const TextStyle(
             color: Color(0xffB2B2B2),
-            fontFamily: "Gilroy",
+            fontFamily: "packages/mysafar_sdk/Gilroy",
             fontWeight: FontWeight.w400,
             fontSize: 14),
       ));
@@ -143,7 +143,7 @@ class ProjectTheme {
     headlineMedium: secondaryTextLightStyle,
     headlineSmall: secondaryTextLightStyle.copyWith(fontSize: 12),
     //
-  ).apply(fontFamily: "Gilroy");
+  ).apply(fontFamily: "packages/mysafar_sdk/Gilroy");
 
   static final textThemeDark = TextTheme(
     labelLarge:
@@ -171,7 +171,7 @@ class ProjectTheme {
     headlineLarge: secondaryTextDarkStyle.copyWith(fontSize: 18),
     headlineMedium: secondaryTextDarkStyle,
     headlineSmall: secondaryTextDarkStyle.copyWith(fontSize: 12),
-  ).apply(fontFamily: "Gilroy");
+  ).apply(fontFamily: "packages/mysafar_sdk/Gilroy");
 
   static final textLightStyle = TextStyle(
       color: textColorLight, fontSize: 16, fontWeight: FontWeight.w500);

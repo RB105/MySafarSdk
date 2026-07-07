@@ -31,7 +31,7 @@ class BookedTicketPaymentBanner extends StatelessWidget {
               width: 52,
               height: 52,
               child: Image.asset(
-                'assets/img/home/icons/search_ticket_ic.png',
+                'packages/mysafar_sdk/assets/img/home/icons/search_ticket_ic.png',
                 fit: BoxFit.contain,
               ),
             ),
@@ -272,7 +272,7 @@ class _HomeHotTicketCard extends StatelessWidget {
                     DestinationImageCarousel(
                       key: ValueKey('hot-$destCity'),
                       query: destCity,
-                      fallbackAsset: "assets/img/tickets/ticket_bg.png",
+                      fallbackAsset: "packages/mysafar_sdk/assets/img/tickets/ticket_bg.png",
                     ),
                     Positioned(
                       top: 10,
@@ -646,7 +646,7 @@ class HotTicketCard extends StatelessWidget {
             DestinationImageCarousel(
               key: ValueKey(flight.ticket.id),
               query: destCity,
-              fallbackAsset: "assets/img/tickets/ticket_bg.png",
+              fallbackAsset: "packages/mysafar_sdk/assets/img/tickets/ticket_bg.png",
             ),
             DecoratedBox(
               decoration: BoxDecoration(

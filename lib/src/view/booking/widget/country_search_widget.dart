@@ -86,7 +86,7 @@ class _SearchCountryWidgetState extends State<SearchCountryWidget> {
                       height: 24,
                       width: 32,
                       child: Image.asset(
-                        "assets/img/flags/${filteredCodes[index]["code"].toString().toLowerCase()}.png",
+                        "packages/mysafar_sdk/assets/img/flags/${filteredCodes[index]["code"].toString().toLowerCase()}.png",
                       ),
                     ),
                     title: Text(

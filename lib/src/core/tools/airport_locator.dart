@@ -33,7 +33,7 @@ class AirportLocator {
     if (_cache != null) return Future.value();
     return _loading ??= () async {
       try {
-        final raw = await rootBundle.loadString('assets/data/airports.json');
+        final raw = await rootBundle.loadString('packages/mysafar_sdk/assets/data/airports.json');
         final decoded = json.decode(raw) as Map<String, dynamic>;
         _cache = decoded.map(
           (key, value) => MapEntry(
