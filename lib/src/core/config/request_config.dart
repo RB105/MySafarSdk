@@ -12,14 +12,11 @@ import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart'
     show AnalyticsService;
 import 'package:dio/dio.dart'
     show DioException, DioExceptionType, Options, Response;
-import 'package:get_storage/get_storage.dart' show GetStorage;
+import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 
 mixin RequestConfig<T> {
 
-  bool get hasAccessToken {
-    final token = GetStorage().read('access_token');
-    return token != null && '$token'.isNotEmpty;
-  }
+  bool get hasAccessToken => MySafarSdk.tokens.isLoggedIn;
 
   /// Resolves the auth strategy. Partner auth takes precedence over bearer,
   /// matching the previous behaviour.

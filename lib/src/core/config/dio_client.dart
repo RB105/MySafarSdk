@@ -2,7 +2,7 @@ import 'dart:async' show Completer;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
-import 'package:get_storage/get_storage.dart' show GetStorage;
+import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/core/config/app_config.dart' show AppConfig;
 import 'package:mysafar_sdk/src/core/constants/end_points.dart' show EndPoints;
 
@@ -43,7 +43,6 @@ class DioClient {
 class TokenManager {
   TokenManager._();
 
-  static final GetStorage _db = GetStorage();
   static Completer<bool>? _inFlight;
 
   static Future<bool> refresh() {
@@ -62,18 +61,19 @@ class TokenManager {
   }
 
   static Future<bool> _doRefresh() async {
-    final refreshToken = _db.read('refresh_token');
-    if (refreshToken == null || refreshToken.toString().isEmpty) return false;
+    final refreshToken = MySafarSdk.tokens.refreshToken;
+    if (refreshToken == null || refreshToken.isEmpty) return false;
 
     await AppConfig.ensureLoaded();
     if (AppConfig.baseUrl.isEmpty) return false;
 
     // Bare client with no interceptor, so a 401 here cannot recurse.
     final dio = Dio(_baseOptions()..baseUrl = AppConfig.baseUrl);
+    var refreshed = false;
     try {
       final response = await dio.post(
         EndPoints.api_v1_token_refresh,
-        data: {'refresh': '$refreshToken'},
+        data: {'refresh': refreshToken},
         options: Options(headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -81,21 +81,23 @@ class TokenManager {
       );
       final access = response.data is Map ? response.data['access'] : null;
       if (response.statusCode == 200 && access != null) {
-        _db.write('access_token', '$access');
-        return true;
+        await MySafarSdk.tokens.saveAccess('$access');
+        refreshed = true;
       }
     } on DioException {
-      return false;
+      refreshed = false;
     } finally {
       dio.close();
     }
-    return false;
+    if (!refreshed) {
+      // Sessiya uzil-kesil tugadi — host o'z login oqimini ko'rsatishi mumkin.
+      MySafarSdk.callbacks.onAuthRequired?.call();
+    }
+    return refreshed;
   }
 }
 
 class _MainAuthInterceptor extends Interceptor {
-  final GetStorage _db = GetStorage();
-
   @override
   void onRequest(
       RequestOptions options, RequestInterceptorHandler handler) async {
@@ -130,7 +132,7 @@ class _MainAuthInterceptor extends Interceptor {
       }
       options.headers['Authorization'] = 'Token ${AppConfig.partnerToken}';
     } else if (mode == AuthMode.bearer) {
-      final token = _db.read('access_token') ?? '';
+      final token = MySafarSdk.tokens.accessToken ?? '';
       options.headers['Authorization'] = 'Bearer $token';
     }
 
@@ -144,7 +146,7 @@ class _MainAuthInterceptor extends Interceptor {
   void onError(DioException err, ErrorInterceptorHandler handler) async {
     final mode = err.requestOptions.extra['authMode'] as AuthMode? ?? AuthMode.none;
     final alreadyRetried = err.requestOptions.extra['authRetry'] == true;
-    final token = _db.read<String>('access_token') ?? '';
+    final token = MySafarSdk.tokens.accessToken ?? '';
 
     if (mode == AuthMode.bearer &&
         !alreadyRetried &&

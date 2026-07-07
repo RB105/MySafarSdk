@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 import 'package:mysafar_sdk/src/core/constants/end_points.dart';
+import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 
 /// Firebase Firestore'dan olinadigan va Hive'da keshlanadigan remote config.
 ///
@@ -55,6 +56,8 @@ class RemoteConfigService {
   /// Xatolik (internet yo'q, hujjat yo'q) bo'lsa — jim: eski kesh yoki fallback
   /// ishlatilaveradi.
   Future<void> sync() async {
+    // Host Firebase'ni init qilmagan bo'lsa — jim: kesh/fallback ishlayveradi.
+    if (!MySafarSdk.isFirebaseAvailable) return;
     try {
       final snap = await _configDoc.get();
       final data = snap.data() ?? const <String, dynamic>{};

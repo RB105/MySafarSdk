@@ -1,5 +1,6 @@
 // ignore_for_file: depend_on_referenced_packages
 import 'package:flutter/services.dart';
+import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/service/profile/profile_cache.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:mysafar_sdk/src/core/tools/project_assets.dart';
@@ -170,15 +171,22 @@ class _MyIdVerificationPageState extends State<MyIdVerificationPage> {
 
   Future<void> _startMyIdVerification(String sessionId) async {
     try {
-      const clientHash =
-          """MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAq1w7u/sNwxIBo+59nkboUHXqIFcotqWbqHpAfdNI8DqEND7VZgrS1I1/Q9sqdxg7jSIs29ZADkXuPrmTqXulosmHD0b338HzN52M1Zh9RAsUw1hB6yOVhW79WAtEg1uPSce5sET9tSOYxqbElDU/Qi8AVkZmhqrx/Bu/+Bcla9aRTiY0Ot2i8luTs/mQu98LGeYP0szL+HCtcrxf3k2VUJml0DbxSvWuvSnhh1s1Rtmei7T/koLb9GiFkkheMbvSdht5kko3utP+cmFRCpTLDkZo7WDQ9GKxavvfvOs1ViYKbIYbaN2Ff0RD2QlLtr8Lg1ZV2mhoqvUHE6u+CTh8UwIDAQAB""";
-      const clientHashId = "7286f172-1dad-4fd0-8d11-4ec2f3ab9a99";
+      // ── MyID almashtirish chegarasi ──────────────────────────────────────
+      // MyID SDK'ga bog'liq kod faqat shu sahifa, MyIdSessionCubit va
+      // BanCheckAndVisaService'dagi my-id-session metodlarida. Kirish
+      // ma'lumotlari hardcode emas — host `MySafarConfig.myId` orqali beradi
+      // (null bo'lsa identifikatsiya kirish nuqtalari ko'rsatilmaydi).
+      final myIdConfig = MySafarSdk.config.myId;
+      if (myIdConfig == null) {
+        debugPrint('MyID: MySafarConfig.myId berilmagan — verifikatsiya yopiq');
+        return;
+      }
 
       final result = await MyIdClient.start(
         config: MyIdConfig(
           sessionId: sessionId,
-          clientHash: clientHash,
-          clientHashId: clientHashId,
+          clientHash: myIdConfig.clientHash,
+          clientHashId: myIdConfig.clientHashId,
           environment: MyIdEnvironment.PRODUCTION,
           entryType: MyIdEntryType.IDENTIFICATION,
         ),

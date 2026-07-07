@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show FontWeight, HapticFeedback;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get_storage/get_storage.dart';
+import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/service/profile/profile_cache.dart';
 import 'package:mysafar_sdk/src/service/profile/tickets_cache.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -499,6 +500,10 @@ class ProjectDialogs {
                       final lang = box.read('lang');
 
                       await box.erase();
+                      // Custom TokenStore ishlatilgan bo'lsa ham tokenlar
+                      // aniq tozalanishi uchun (box.erase faqat GetStorage'ni
+                      // o'chiradi).
+                      await MySafarSdk.tokens.clear();
                       // Hive keshlari (profil + biletlar) — oldingi
                       // foydalanuvchi ma'lumoti qolib ketmasligi uchun tozalaymiz.
                       await ProfileCache().clear();
@@ -515,6 +520,7 @@ class ProjectDialogs {
                       }
 
                       await GoogleSignIn.instance.signOut();
+                      MySafarSdk.callbacks.onLoggedOut?.call();
                       // ignore: use_build_context_synchronously
                       Navigator.pushNamedAndRemoveUntil(context,
                           BottomNavBarPage.routeName, (route) => false,
@@ -545,6 +551,7 @@ class ProjectDialogs {
                           final lang = box.read('lang');
 
                           await box.erase();
+                          await MySafarSdk.tokens.clear();
                           await ProfileCache().clear();
                           await TicketsCache().clear();
                           AnalyticsService().clearUser();
@@ -557,6 +564,7 @@ class ProjectDialogs {
                           }
 
                           await GoogleSignIn.instance.signOut();
+                          MySafarSdk.callbacks.onLoggedOut?.call();
                           // ignore: use_build_context_synchronously
                           Navigator.pushNamedAndRemoveUntil(context,
                               BottomNavBarPage.routeName, (route) => false,

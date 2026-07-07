@@ -1,21 +1,30 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:telegram_login/telegram_login.dart';
 
 class TelegramLoginService {
   static Future<String?> loginWithTelegram() async {
+    // Client ID / redirect'lar endi hardcode emas — host `MySafarConfig
+    // .socialAuth.telegram` orqali beradi. Berilmagan bo'lsa login o'tkazilmaydi
+    // (tugma ham UI'da ko'rsatilmaydi, bu himoya chegarasi xolos).
+    final config = MySafarSdk.config.socialAuth?.telegram;
+    if (config == null) {
+      debugPrint('TelegramLoginService: telegram auth is not configured');
+      return null;
+    }
+
     final telegramLogin = TelegramLogin();
 
     await telegramLogin.configure(
       TelegramLoginConfiguration(
-        clientId: '8564524682',
+        clientId: config.clientId,
         redirectUri: Platform.isAndroid
             ? (kDebugMode
-                    ? 'https://app337613136-login.tg.dev' // Debug
-                    : 'https://app1749756658-login.tg.dev' // GOOGLE PLAY SHA-256
-                )
-            : "https://app1896443054-login.tg.dev",
+                ? (config.redirectUriAndroidDebug ?? config.redirectUriAndroid)
+                : config.redirectUriAndroid)
+            : config.redirectUriIos,
         scopes: const ['profile', "phone"],
       ),
     );

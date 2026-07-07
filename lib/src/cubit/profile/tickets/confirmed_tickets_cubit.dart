@@ -1,13 +1,13 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:get_storage/get_storage.dart';
 import 'package:mysafar_sdk/src/core/config/response_config.dart';
 import 'package:mysafar_sdk/src/model/remote/profile/confirmed_ticket_models.dart'
     show ConfirmedTicketsModel;
 import 'package:mysafar_sdk/src/service/profile/profile_service.dart'
     show ProfileService;
 import 'package:mysafar_sdk/src/service/profile/tickets_cache.dart';
+import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 part 'confirmed_tickets_state.dart';
 
 class ConfirmedTicketsCubit extends Cubit<ConfirmedTicketsState> {
@@ -18,12 +18,9 @@ class ConfirmedTicketsCubit extends Cubit<ConfirmedTicketsState> {
   final _profileService = ProfileService();
   final _cache = TicketsCache();
 
-  /// Foydalanuvchi login qilganmi — `access_token` mavjud va bo'sh emasmi.
+  /// Foydalanuvchi login qilganmi — access token mavjud va bo'sh emasmi.
   /// Token yo'q bo'lsa biletlarni serverdan yangilashga umuman urinmaymiz.
-  bool get _isLoggedIn {
-    final token = GetStorage().read('access_token');
-    return token != null && '$token'.isNotEmpty;
-  }
+  bool get _isLoggedIn => MySafarSdk.tokens.isLoggedIn;
 
   /// Biletlarni yuklaydi.
   ///

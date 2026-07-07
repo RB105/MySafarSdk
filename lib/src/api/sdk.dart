@@ -2,6 +2,7 @@ import 'dart:async' show unawaited;
 
 import 'package:easy_localization/easy_localization.dart'
     show EasyLocalization;
+import 'package:firebase_core/firebase_core.dart' show Firebase;
 import 'package:flutter/widgets.dart' show WidgetsFlutterBinding;
 import 'package:get_storage/get_storage.dart' show GetStorage;
 import 'package:mysafar_sdk/src/api/analytics.dart';
@@ -39,6 +40,11 @@ class MySafarSdk {
   static MySafarTokenStore get tokens => _tokens;
   static MySafarAnalytics get analytics => _analytics;
   static MySafarCallbacks get callbacks => _callbacks;
+
+  /// Host app Firebase'ni init qilganmi. Firestore'ga tayanuvchi ixtiyoriy
+  /// funksiyalar (remote config, news, payment turlari) shu tekshiruvdan
+  /// o'tmasa kesh/fallback rejimida ishlaydi.
+  static bool get isFirebaseAvailable => Firebase.apps.isNotEmpty;
 
   /// SDK'ni ishga tayyorlaydi. `runApp`dan oldin chaqirilishi shart.
   ///

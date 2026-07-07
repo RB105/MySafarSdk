@@ -1,4 +1,3 @@
-import 'package:get_storage/get_storage.dart';
 import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/model/remote/profile/confirmed_ticket_models.dart';
 import 'package:mysafar_sdk/src/service/account_service.dart';
@@ -6,6 +5,7 @@ import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart';
 import 'package:mysafar_sdk/src/service/profile/profile_cache.dart';
 import 'package:mysafar_sdk/src/service/profile/profile_service.dart';
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
+import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 
 part 'profile_state.dart';
 
@@ -18,15 +18,11 @@ class ProfileCubit extends Cubit<ProfileState> {
 
   final ProfileService _profileService = ProfileService();
   final AccountService _accountService = AccountService();
-  final GetStorage _storage = GetStorage();
   final ProfileCache _cache = ProfileCache();
 
-  /// Foydalanuvchi login qilganmi — `access_token` mavjud va bo'sh emasmi.
+  /// Foydalanuvchi login qilganmi — access token mavjud va bo'sh emasmi.
   /// Token yo'q bo'lsa profilni serverdan yangilashga umuman urinmaymiz.
-  bool get _isLoggedIn {
-    final token = _storage.read('access_token');
-    return token != null && '$token'.isNotEmpty;
-  }
+  bool get _isLoggedIn => MySafarSdk.tokens.isLoggedIn;
 
   /// Profilni yuklaydi.
   ///

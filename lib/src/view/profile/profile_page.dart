@@ -11,6 +11,8 @@ import 'package:mysafar_sdk/src/view/profile/pages/my_data_page.dart';
 import 'package:mysafar_sdk/src/view/profile/pages/ofd_cheques_page.dart';
 import 'package:mysafar_sdk/src/view/profile/pages/edit_profile_page.dart';
 import 'package:mysafar_sdk/src/view/visa/myid_verification_page.dart';
+import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart' show showToastMessage;
+import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 
 class ProfilePage extends StatefulWidget {
   final ProfileModel? profileData;
@@ -687,6 +689,12 @@ class _ProfilePageState extends State<ProfilePage> {
                                           MyApplicationsPage.routeName,
                                         );
                                       } else {
+                                        // MyID sozlanmagan hostda (config.myId
+                                        // yo'q) identifikatsiyaga o'tmaymiz.
+                                        if (MySafarSdk.config.myId == null) {
+                                          showToastMessage('error_other'.tr());
+                                          return;
+                                        }
                                         final cubit =
                                             context.read<ProfileCubit>();
                                         final verified =

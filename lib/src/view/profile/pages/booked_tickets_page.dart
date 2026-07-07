@@ -1,6 +1,5 @@
 // ignore_for_file: depend_on_referenced_packages
 
-import 'package:get_storage/get_storage.dart';
 import 'package:lottie/lottie.dart';
 
 import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart';
@@ -11,6 +10,7 @@ import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
 import 'package:mysafar_sdk/src/view/profile/pages/booked_tickets_constants.dart';
 import 'package:mysafar_sdk/src/view/profile/pages/widget/ticked_list_page.dart';
 import 'package:mysafar_sdk/src/view/profile/pages/widget/user_shimmer_widget.dart';
+import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 
 class BookedTicketsPage extends StatefulWidget {
   const BookedTicketsPage({super.key});
@@ -42,11 +42,7 @@ class _BookedTicketsPageState extends State<BookedTicketsPage>
     super.dispose();
   }
 
-  bool get _isLoggedIn {
-    final token =
-        GetStorage().read<String>(BookedTicketsConstants.accessTokenKey);
-    return token?.isNotEmpty ?? false;
-  }
+  bool get _isLoggedIn => MySafarSdk.tokens.isLoggedIn;
 
   @override
   Widget build(BuildContext context) {

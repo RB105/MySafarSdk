@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/model/remote/payment/payment_type_config.dart';
 import 'package:mysafar_sdk/src/service/payment/payment_type_cache.dart';
 
@@ -11,7 +12,9 @@ import 'package:mysafar_sdk/src/service/payment/payment_type_cache.dart';
 class PaymentTypeRepository {
   static const String collectionName = 'payment_types';
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  // Getter — field emas: Firebase init qilinmagan hostda konstruktorda
+  // yiqilmaslik uchun instance'ga faqat guard'dan o'tgach murojaat qilinadi.
+  FirebaseFirestore get _firestore => FirebaseFirestore.instance;
   final PaymentTypeCache _cache = PaymentTypeCache();
 
   CollectionReference<Map<String, dynamic>> get _collection =>
@@ -23,6 +26,11 @@ class PaymentTypeRepository {
   /// Firestore'dan bir marta o'qiydi, `order` bo'yicha saralaydi va keshni
   /// yangilaydi. Xatolik bo'lsa exception qaytaradi (chaqiruvchi fallback qiladi).
   Future<List<PaymentTypeConfig>> fetch() async {
+    // Firebase yo'q — network xatosi kabi exception; chaqiruvchi kesh/lokal
+    // zaxiraga o'tadi (mavjud fallback yo'li o'zgarmaydi).
+    if (!MySafarSdk.isFirebaseAvailable) {
+      throw StateError('Firebase is not initialized in the host app');
+    }
     final snap = await _collection.get();
     final list = _mapAndSort(snap.docs);
     // Bo'sh natija keshni buzmasin — faqat ma'lumot bo'lsa yozamiz.
@@ -32,6 +40,7 @@ class PaymentTypeRepository {
 
   /// Real-time oqim — har o'zgarishда yangi ro'yxat + kesh yangilanishi.
   Stream<List<PaymentTypeConfig>> watch() {
+    if (!MySafarSdk.isFirebaseAvailable) return Stream.value(cached());
     return _collection.snapshots().map((snap) {
       final list = _mapAndSort(snap.docs);
       if (list.isNotEmpty) _cache.save(list);

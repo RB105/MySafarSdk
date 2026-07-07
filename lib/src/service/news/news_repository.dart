@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/model/remote/news/news_model.dart';
 import 'package:mysafar_sdk/src/service/news/news_cache.dart';
 
@@ -12,7 +13,9 @@ import '../../view/imports/app_imports.dart';
 class NewsRepository {
   static const String collectionName = 'news';
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  // Getter — field emas: Firebase init qilinmagan hostda konstruktorda
+  // yiqilmaslik uchun instance'ga faqat guard'dan o'tgach murojaat qilinadi.
+  FirebaseFirestore get _firestore => FirebaseFirestore.instance;
   final NewsCache _cache = NewsCache();
 
   CollectionReference<Map<String, dynamic>> get _collection =>
@@ -25,6 +28,8 @@ class NewsRepository {
   /// Barcha (`isActive != false`) yangiliklarni yangi'dan eski tartibida
   /// bir marta o'qib beradi va keshni yangilaydi.
   Future<List<NewsModel>> getNews() async {
+    // Firebase yo'q (host init qilmagan) — kesh bilan kifoyalanamiz.
+    if (!MySafarSdk.isFirebaseAvailable) return cachedNews();
     final snapshot =
         await _collection.orderBy('createdAt', descending: true).get();
 
@@ -36,6 +41,7 @@ class NewsRepository {
   /// Real-time oqim — news qo'shilsa/o'zgarsa/o'chirilsa darhol yangi ro'yxat
   /// keladi va shu zahoti kesh ham yangilanadi.
   Stream<List<NewsModel>> watchNews() {
+    if (!MySafarSdk.isFirebaseAvailable) return Stream.value(cachedNews());
     return _collection
         .orderBy('createdAt', descending: true)
         .snapshots()
@@ -57,6 +63,7 @@ class NewsRepository {
 
   /// Firestore'da o'qilganlar sonini (read count) bittaga oshiradi.
   Future<void> incrementReadCount(String newsId) async {
+    if (!MySafarSdk.isFirebaseAvailable) return;
     try {
       await _collection.doc(newsId).update({
         'read': FieldValue.increment(1),
@@ -68,7 +75,7 @@ class NewsRepository {
 
   /// Bir nechta yangiliklarni o'qilgan deb belgilash (batch).
   Future<void> incrementMultipleReadCounts(Iterable<String> newsIds) async {
-    if (newsIds.isEmpty) return;
+    if (newsIds.isEmpty || !MySafarSdk.isFirebaseAvailable) return;
     try {
       final batch = _firestore.batch();
       for (final id in newsIds) {

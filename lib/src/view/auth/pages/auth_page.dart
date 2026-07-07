@@ -232,6 +232,7 @@ class _AuthPageState extends State<AuthPage> {
                                           ),
                                         )),
                                   ),
+                                  if (AuthCubit.googleAuthEnabled) ...[
                                   const SizedBox(height: 16),
                                   SizedBox(
                                     height: 56,
@@ -291,6 +292,7 @@ class _AuthPageState extends State<AuthPage> {
                                       ),
                                     ),
                                   ),
+                                  ],
                                   // const SizedBox(height: 16),
                                   // SizedBox(
                                   //   height: 56,

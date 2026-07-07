@@ -3,7 +3,6 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:get_storage/get_storage.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
@@ -23,6 +22,7 @@ import 'package:mysafar_sdk/src/view/booking/widget/passenger_date_picker.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/paymentbottomsheet.dart'
     show showCitySearchPicker;
 import 'package:mysafar_sdk/src/view/booking/widget/support_widget.dart';
+import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 
 class PassengerInformationPage extends StatefulWidget {
   final FlightElement element;
@@ -268,10 +268,7 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
 
   Future<void> _navigateToBookingPage(
       BuildContext context, PassengerSaved state) async {
-    final getStorage = GetStorage();
-    final accessToken = getStorage.read('access_token');
-
-    if (accessToken == null || accessToken.toString().isEmpty) {
+    if (!MySafarSdk.tokens.isLoggedIn) {
       final authResult = await showBookingAuthBottomSheet(context);
 
       if (!mounted) return;

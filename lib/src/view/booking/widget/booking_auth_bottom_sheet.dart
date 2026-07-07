@@ -306,6 +306,7 @@ class _BookingAuthBottomSheetState extends State<BookingAuthBottomSheet> {
                 ),
               ),
             ),
+            if (AuthCubit.googleAuthEnabled) ...[
             const SizedBox(height: 16),
             SizedBox(
               height: 56,
@@ -350,6 +351,7 @@ class _BookingAuthBottomSheetState extends State<BookingAuthBottomSheet> {
                 ),
               ),
             ),
+            ],
             const SizedBox(height: 32),
           ],
         ),

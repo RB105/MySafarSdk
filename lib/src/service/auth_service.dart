@@ -29,8 +29,11 @@ class AuthService with RequestConfig {
         });
 
     if (response is NetworkSuccessResponse) {
-      _db.write("refresh_token", response.data["jwt_token"]["refresh"]);
-      _db.write("access_token", response.data["jwt_token"]["access"]);
+      await MySafarSdk.tokens.saveTokens(
+        access: '${response.data["jwt_token"]["access"]}',
+        refresh: '${response.data["jwt_token"]["refresh"]}',
+      );
+      MySafarSdk.callbacks.onLoggedIn?.call();
 
       // Set FCM reg_id after successful auth
       setRegId();
@@ -58,8 +61,11 @@ class AuthService with RequestConfig {
         });
 
     if (response is NetworkSuccessResponse) {
-      _db.write("refresh_token", response.data["jwt_token"]["refresh"]);
-      _db.write("access_token", response.data["jwt_token"]["access"]);
+      await MySafarSdk.tokens.saveTokens(
+        access: '${response.data["jwt_token"]["access"]}',
+        refresh: '${response.data["jwt_token"]["refresh"]}',
+      );
+      MySafarSdk.callbacks.onLoggedIn?.call();
 
       setRegId();
 
@@ -84,8 +90,11 @@ class AuthService with RequestConfig {
       "lastname": lastName ?? ""
     });
     if (response is NetworkSuccessResponse) {
-      _db.write("refresh_token", response.data["jwt_token"]["refresh"]);
-      _db.write("access_token", response.data["jwt_token"]["access"]);
+      await MySafarSdk.tokens.saveTokens(
+        access: '${response.data["jwt_token"]["access"]}',
+        refresh: '${response.data["jwt_token"]["refresh"]}',
+      );
+      MySafarSdk.callbacks.onLoggedIn?.call();
 
       // Set FCM reg_id after successful auth
       setRegId();
@@ -211,8 +220,11 @@ class AuthService with RequestConfig {
         params: {"phone": phone, "otp_token": token, "otp": otp});
 
     if (response is NetworkSuccessResponse) {
-      _db.write("refresh_token", response.data["jwt_token"]["refresh"]);
-      _db.write("access_token", response.data["jwt_token"]["access"]);
+      await MySafarSdk.tokens.saveTokens(
+        access: '${response.data["jwt_token"]["access"]}',
+        refresh: '${response.data["jwt_token"]["refresh"]}',
+      );
+      MySafarSdk.callbacks.onLoggedIn?.call();
 
       // Set FCM reg_id after successful auth
       setRegId();

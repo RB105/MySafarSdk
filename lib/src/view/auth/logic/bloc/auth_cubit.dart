@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/service/auth_service.dart';
 import 'package:mysafar_sdk/src/service/telegram_auth.dart';
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
@@ -18,12 +19,27 @@ class AuthCubit extends Cubit<AuthState> {
   })  : _googleSignIn = googleSignIn ?? GoogleSignIn.instance,
         _authService = authService ?? AuthService(),
         super(const AuthState()) {
-    _googleSignIn.initialize(
-      serverClientId: Platform.isAndroid
-          ? '791001549279-qcame4pbkp1ehs63mfu4l83crqaq7vcp.apps.googleusercontent.com'
-          : '791001549279-7okn2ju3d7ngbvi186acqbgoe7mmd167.apps.googleusercontent.com',
-    );
+    // Client ID'lar endi hardcode emas — host `MySafarConfig.socialAuth`
+    // orqali beradi. Berilmagan bo'lsa Google tugmasi UI'da ko'rsatilmaydi.
+    final google = MySafarSdk.config.socialAuth?.google;
+    if (google != null) {
+      _googleSignIn.initialize(
+        serverClientId: Platform.isAndroid
+            ? google.serverClientIdAndroid
+            : google.serverClientIdIos,
+      );
+    }
   }
+
+  /// Google tugmasini ko'rsatish sharti: config berilgan VA host Firebase'ni
+  /// init qilgan (kirish oqimi FirebaseAuth orqali o'tadi).
+  static bool get googleAuthEnabled =>
+      MySafarSdk.config.socialAuth?.google != null &&
+      MySafarSdk.isFirebaseAvailable;
+
+  /// Telegram tugmasini ko'rsatish sharti.
+  static bool get telegramAuthEnabled =>
+      MySafarSdk.config.socialAuth?.telegram != null;
 
   Future<void> googleSignIn() async {
     emit(state.copyWith(
