@@ -13,6 +13,7 @@ import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
 import 'package:myid/myid.dart';
 import 'package:myid/myid_config.dart';
 import 'package:myid/enums.dart';
+import 'package:mysafar_sdk/src/cubit/profile/profile_cubit.dart';
 
 class MyIdVerificationPage extends StatefulWidget {
   static const routName = "/myIdVerification";

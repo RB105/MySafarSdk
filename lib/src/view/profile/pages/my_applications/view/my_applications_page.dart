@@ -7,6 +7,7 @@ import 'package:mysafar_sdk/src/view/profile/pages/my_applications/service/my_ap
 import 'package:mysafar_sdk/src/view/profile/pages/my_applications/widget/application_card_shimmer.dart';
 import 'package:mysafar_sdk/src/view/profile/pages/my_contracts/view/my_contracts_page.dart';
 import 'package:mysafar_sdk/src/view/visa/myid_verification_page.dart';
+import 'package:mysafar_sdk/src/cubit/profile/profile_cubit.dart';
 
 class MyApplicationsPage extends StatefulWidget {
   const MyApplicationsPage({super.key});

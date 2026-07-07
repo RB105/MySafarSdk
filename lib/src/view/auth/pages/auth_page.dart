@@ -10,6 +10,7 @@ import 'package:mysafar_sdk/src/view/auth/widget/auth_custom_input.dart';
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
 import 'package:mysafar_sdk/src/view/navbar/bottom_nav_bar.dart';
 import 'package:flutter/services.dart';
+import 'package:mysafar_sdk/src/cubit/profile/profile_cubit.dart';
 
 class AuthPage extends StatefulWidget {
   final VoidCallback? onAuthSuccess;

@@ -13,6 +13,8 @@ import 'package:mysafar_sdk/src/view/profile/pages/edit_profile_page.dart';
 import 'package:mysafar_sdk/src/view/visa/myid_verification_page.dart';
 import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart' show showToastMessage;
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
+import 'package:mysafar_sdk/src/view/profile/pages/settings_page.dart';
+import 'package:mysafar_sdk/src/cubit/profile/profile_cubit.dart';
 
 class ProfilePage extends StatefulWidget {
   final ProfileModel? profileData;
