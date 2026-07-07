@@ -1,0 +1,530 @@
+{
+  "result": [
+    {
+      "id": 4485,
+      "transaction": {
+        "tr_id": "87c8fda2-ca0f-41db-8abe-d5ab72901899",
+        "amount": 1243204,
+        "currency": 860,
+        "status": false
+      },
+      "created_at": "03-10-2025 11:36",
+      "updated_at": "2025-10-03T12:36:23.058816+05:00",
+      "is_deleted": false,
+      "deleted_at": null,
+      "ticket_source": 0,
+      "type": 1,
+      "billing_id": 125357974025,
+      "locator": "6C9ZF9",
+      "signature": null,
+      "expire_remain": 431398,
+      "response": {
+        "pid": "269204_20251003093555605299_APIMAV3_api-wl",
+        "code": 0,
+        "data": {
+          "book": {
+            "order": {
+              "sig": "ce0f43c2031866ae19be5c2b1dd681aec6b5fd67",
+              "price": {
+                "UZS": {
+                  "fee": 26451,
+                  "fare": 70988,
+                  "taxes": 1109555,
+                  "amount": 1206994,
+                  "discount": 0,
+                  "insurance": 0,
+                  "amount_base": 1206994,
+                  "extra_baggage": 0,
+                  "amount_without_payment_expense": 1206994
+                }
+              },
+              "expire": "2025-10-08T11:26:00+05:00",
+              "status": {
+                "sign": "Booked",
+                "title": "Забронировано"
+              },
+              "channel": {
+                "code": "1P5CBARS",
+                "source": {
+                  "code": "BARS"
+                }
+              },
+              "created": "03.10.2025 09:35:56",
+              "is_real": true,
+              "payment": null,
+              "user_id": 13596082,
+              "order_id": 29878284,
+              "payments": [
+                {
+                  "order_amount": 1206994,
+                  "merchant_name": "balanceMa",
+                  "is_affiliate_fee": false,
+                  "agent_mode_prices": {
+                    "amount_to_pay": 1206994
+                  },
+                  "agent_affiliate_fee": 0,
+                  "partner_affiliate_fee": 0
+                }
+              ],
+              "void_info": {
+                "time_limit": null,
+                "is_available": false
+              },
+              "expire_remain": 431398,
+              "billing_number": 125357974025,
+              "alfa_podeli_payment": null
+            },
+            "flight": {
+              "type": "regular",
+              "duration": 270,
+              "is_vtrip": false,
+              "provider": {
+                "gds": 36,
+                "name": "TUA",
+                "supplier": {
+                  "id": 1525,
+                  "code": "HH",
+                  "title": "Qanot Sharq"
+                }
+              },
+              "segments": [
+                {
+                  "id": 39949066,
+                  "arr": {
+                    "city": {
+                      "id": 64192,
+                      "code": "MOW",
+                      "title": "Москва"
+                    },
+                    "date": "22.10.2025",
+                    "time": "05:10:00",
+                    "region": {
+                      "id": null,
+                      "code": null,
+                      "title": null
+                    },
+                    "airport": {
+                      "id": 80750,
+                      "code": "DME",
+                      "title": "Домодедово"
+                    },
+                    "country": {
+                      "id": 191,
+                      "code": "RU",
+                      "title": "Россия"
+                    },
+                    "datetime": "22.10.2025 05:10:00",
+                    "terminal": ""
+                  },
+                  "dep": {
+                    "city": {
+                      "id": 85524,
+                      "code": "TAS",
+                      "title": "Ташкент"
+                    },
+                    "date": "22.10.2025",
+                    "time": "02:40:00",
+                    "region": {
+                      "id": null,
+                      "code": null,
+                      "title": null
+                    },
+                    "airport": {
+                      "id": 81720,
+                      "code": "TAS",
+                      "title": "Международный Аэропорт Ташкент"
+                    },
+                    "country": {
+                      "id": 233,
+                      "code": "UZ",
+                      "title": "Узбекистан"
+                    },
+                    "datetime": "22.10.2025 02:40:00",
+                    "terminal": "2"
+                  },
+                  "type": "regular",
+                  "class": {
+                    "name": "C",
+                    "title": "Эконом",
+                    "type_id": 1
+                  },
+                  "stops": [],
+                  "status": {
+                    "code": "HK",
+                    "description": "Подтверждено"
+                  },
+                  "baggage": {
+                    "piece": 0,
+                    "weight": null
+                  },
+                  "carrier": {
+                    "id": 1525,
+                    "code": "HH",
+                    "title": "Qanot Sharq"
+                  },
+                  "comment": "",
+                  "aircraft": "Airbus A320-100/200",
+                  "cbaggage": {
+                    "piece": 1,
+                    "weight": 5
+                  },
+                  "duration": {
+                    "flight": {
+                      "hour": 4,
+                      "common": 270,
+                      "minute": 30
+                    }
+                  },
+                  "provider": {
+                    "gds": 36,
+                    "name": "TUA",
+                    "supplier": {
+                      "id": 1525,
+                      "code": "HH",
+                      "title": "Qanot Sharq"
+                    }
+                  },
+                  "direction": 0,
+                  "fare_code": "C2ST",
+                  "is_change": true,
+                  "is_refund": false,
+                  "refundBlock": {
+                    "beforeDeparture": {
+                      "isFree": null,
+                      "comment": null,
+                      "available": false
+                    }
+                  },
+                  "exchangeBlock": {
+                    "beforeDeparture": {
+                      "isFree": null,
+                      "comment": null,
+                      "available": true
+                    }
+                  },
+                  "flight_number": "701",
+                  "flight_changes": [
+                    []
+                  ],
+                  "baggage_recheck": false,
+                  "refunded_status": null,
+                  "ticket_duration": 270,
+                  "aircraft_details": {
+                    "code": "320",
+                    "title": "Airbus A320-100/200"
+                  },
+                  "information_texts": {
+                    "registration_info": null
+                  },
+                  "validating_carrier": {
+                    "id": 1525,
+                    "code": "HH",
+                    "title": "Qanot Sharq"
+                  },
+                  "is_mini_rules_exists": true,
+                  "is_online_checkin_required": null,
+                  "parameters_for_each_passenger": [
+                    {
+                      "brand": "ST",
+                      "baggage": {
+                        "weight": null,
+                        "bags_count": 0,
+                        "dimensions": null,
+                        "weight_unit": null
+                      },
+                      "accessories": null,
+                      "flight_class": {
+                        "id": 1,
+                        "code": "E",
+                        "title": "Эконом",
+                        "provider_code": "C"
+                      },
+                      "passenger_id": "RAVSHANOV_ANZOR_AC0317321_03-08-2002",
+                      "extra_baggage": null,
+                      "is_refundable": false,
+                      "ticket_number": null,
+                      "flight_comment": "",
+                      "is_exchangeable": true,
+                      "carry_on_baggage": {
+                        "weight": 5,
+                        "bags_count": 1,
+                        "dimensions": null,
+                        "weight_unit": "KG"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "fare_family_type": "ST",
+              "is_tour_operator": false
+            },
+            "tickets": [
+              {
+                "actual": true,
+                "carrier": {
+                  "id": 1525,
+                  "code": "HH",
+                  "title": "Qanot Sharq"
+                },
+                "locator": "6C9ZF9",
+                "duration": {
+                  "flight": {
+                    "hour": 4,
+                    "common": 270,
+                    "minute": 30
+                  }
+                },
+                "provider": {
+                  "name": "TUA",
+                  "currency": "UZS"
+                },
+                "documents": {
+                  "ticket_receipt": "https://api-uz.myagent.online/ma/eticket_125357974025_6C9ZF9.pdf"
+                },
+                "passengers": [
+                  {
+                    "id": 48121672,
+                    "age": {
+                      "last": "RAVSHANOV",
+                      "first": "ANZOR",
+                      "middle": "ABZAL"
+                    },
+                    "uuid": "0fe3c4d9-3451-4713-bcc2-f77cce0c29bd",
+                    "email": "ravshanovanzor@gmail.com",
+                    "phone": "998954286709",
+                    "gender": "M",
+                    "document": {
+                      "num": "AC0317321",
+                      "type": "A",
+                      "expire": "2028-11-27 00:00:00",
+                      "original_number": "AC0317321"
+                    },
+                    "birthdate": "03.08.2002",
+                    "bonus_card": null,
+                    "insurances": [],
+                    "ticketData": {
+                      "text": null,
+                      "number": null,
+                      "refunded": false
+                    },
+                    "citizenship": "UZ",
+                    "accompanying_adults": []
+                  }
+                ],
+                "receipt_text": "",
+                "vnd_locators": [
+                  "HH/CWDT63"
+                ],
+                "booking_provider": "TUA",
+                "account_code_info": {
+                  "code": null,
+                  "is_discount_code_applied": false
+                },
+                "booking_office_id": "MIXVEL_HH_4280_UZ",
+                "special_tariff_type": null,
+                "fare_family_marketing_name": "STANDART"
+              }
+            ],
+            "is_vtrip": false,
+            "documents": {
+              "adt": {
+                "kz": [
+                  "ZA"
+                ],
+                "ru": [
+                  "P"
+                ],
+                "other": [
+                  "A"
+                ]
+              },
+              "chd": {
+                "kz": [
+                  "ZA"
+                ],
+                "ru": [
+                  "P"
+                ],
+                "other": [
+                  "A"
+                ]
+              },
+              "inf": {
+                "kz": [
+                  "ZA"
+                ],
+                "ru": [
+                  "P"
+                ],
+                "other": [
+                  "A"
+                ]
+              },
+              "ins": {
+                "kz": [
+                  "ZA"
+                ],
+                "ru": [
+                  "P"
+                ],
+                "other": [
+                  "A"
+                ]
+              },
+              "src": {
+                "kz": [
+                  "ZA"
+                ],
+                "ru": [
+                  "P"
+                ],
+                "other": [
+                  "A"
+                ]
+              },
+              "yth": {
+                "kz": [
+                  "ZA"
+                ],
+                "ru": [
+                  "P"
+                ],
+                "other": [
+                  "A"
+                ]
+              }
+            },
+            "insurances": [],
+            "passengers": [
+              {
+                "id": 48121672,
+                "age": "adt",
+                "key": "RAVSHANOV_ANZOR_AC0317321_03-08-2002",
+                "name": {
+                  "last": "RAVSHANOV",
+                  "first": "ANZOR",
+                  "middle": "ABZAL"
+                },
+                "uuid": "0fe3c4d9-3451-4713-bcc2-f77cce0c29bd",
+                "email": "ravshanovanzor@gmail.com",
+                "phone": "998954286709",
+                "gender": "M",
+                "document": {
+                  "num": "AC0317321",
+                  "type": "A",
+                  "expire": "2028-11-27 00:00:00",
+                  "original_number": "AC0317321"
+                },
+                "birthdate": "03.08.2002",
+                "bonus_card": null,
+                "insurances": [],
+                "ticketData": {
+                  "text": null,
+                  "number": null,
+                  "refunded": false
+                },
+                "citizenship": "UZ",
+                "accompanying_adults": []
+              }
+            ],
+            "payed_data": null,
+            "is_price_changed": false,
+            "agent_mode_prices": {
+              "debit_from_balance": 1206994,
+              "passengers_amounts_details": [
+                {
+                  "key": "RAVSHANOV_ANZOR_AC0317321_03-08-2002",
+                  "service_amount_for_active_agent_mode": 1206994,
+                  "service_amount_for_non_active_agent_mode": 1206994
+                }
+              ],
+              "total_amount_for_active_agent_mode": 1206994
+            },
+            "is_partner_office": false,
+            "is_payment_disabled": false,
+            "order_price_details": {
+              "comsa": 0,
+              "acquiring": 0,
+              "total_price": 1206994,
+              "my_agent_fee": 26451,
+              "affiliate_fee": 0,
+              "tickets_price": 1206994,
+              "insurance_price": 0,
+              "total_agent_profit": 0,
+              "agent_affiliate_fee": 0,
+              "partner_affiliate_fee": 0
+            },
+            "refund_availability": {
+              "tickets": [],
+              "is_auto_refund_request_available": false
+            },
+            "is_eticket_available": true,
+            "disabling_reason_ticket": null,
+            "is_search_price_changed": false,
+            "passengers_price_details": [
+              {
+                "id": 48121672,
+                "fee": 26451,
+                "key": "RAVSHANOV_ANZOR_AC0317321_03-08-2002",
+                "vat": 0,
+                "uuid": "0fe3c4d9-3451-4713-bcc2-f77cce0c29bd",
+                "comsa": 0,
+                "taxes": [
+                  {
+                    "code": "YQ",
+                    "amount": 425929,
+                    "currency": "UZS"
+                  },
+                  {
+                    "code": "YR",
+                    "amount": 56791,
+                    "currency": "UZS"
+                  },
+                  {
+                    "code": "RI",
+                    "amount": 271893,
+                    "currency": "UZS"
+                  },
+                  {
+                    "code": "FX",
+                    "amount": 141977,
+                    "currency": "UZS"
+                  },
+                  {
+                    "code": "UZ",
+                    "amount": 212965,
+                    "currency": "UZS"
+                  }
+                ],
+                "tariff": 70988,
+                "acquiring": 0,
+                "commissions": {
+                  "other_commission": 3549.4
+                },
+                "taxes_amount": 1109555,
+                "ticket_price": 1206994,
+                "affiliate_fee": 0,
+                "refund_amounts": null,
+                "insurance_price": 0,
+                "agent_affiliate_fee": 0,
+                "partner_affiliate_fee": 0
+              }
+            ],
+            "payment_disabling_reason": null,
+            "refund_request_already_sent": false
+          }
+        },
+        "time": {
+          "execution": 7.0627
+        },
+        "success": true
+      },
+      "price": null,
+      "callback_status": "Cancelled",
+      "ticket_count": 1,
+      "user": 7868,
+      "partner": 2019
+    }
+  ],
+  "max_page":1,"page":1,"count":2
+}

@@ -1,0 +1,684 @@
+{
+    "id": "1W7ZUZTIOWA1000000090TASLED20260624_RU_100_C0B629A1-VTRIP..4.810.F275100900S269268600X218957000S214008800X57668000S55259800.OENCO05EQ19TVV9BdmNhc2lhO01JWFZFTF9EUF80MjQ0X1Va.U1Q=..UZS-31.SU.1891.TAS.202606240520.SVO.202606240730.32A.RNO.250.0.TUA.0.0PC.1P10K..1.0..0.0.0.RWNvbm9teSBCYXNl__36.DP.6827.SVO.202606241520.LED.202606241650.73H.TALLAG.90.0.TUA.1.0PC.1PC..1.0..0.0.0.U1Q",
+    "is_tour_operator": false,
+    "tariff": "",
+    "tariff_class": "",
+    "fare_family_type": "Economy Base, ST",
+    "fare_family_flag": true,
+    "fare_family_marketing_name": "БАЗОВЫЙ",
+    "duration": 810,
+    "segments_count": 2,
+    "type": "vtrip",
+    "is_inner_flight": false,
+    "is_baggage": false,
+    "is_charter": false,
+    "is_refund": false,
+    "is_change": true,
+    "is_hide_tariff": false,
+    "is_subsidized": false,
+    "book_url": "",
+    "citizenships": null,
+    "is_vtrip": true,
+    "provider": {
+        "gds": null,
+        "name": "VTRIP",
+        "supplier": {
+            "id": null,
+            "code": null,
+            "title": null
+        }
+    },
+    "office_id": null,
+    "has_office_credentials": false,
+    "price": {
+        "UZS": {
+            "amount": "2 751 009",
+            "filter_index": 2751009
+        },
+        "RUB": {
+            "amount": "17 203"
+        },
+        "USD": {
+            "amount": "237"
+        }
+    },
+    "price_details": [],
+    "extra_baggage": [],
+    "segments": [
+        {
+            "arr": {
+                "date": "24.06.2026",
+                "time": "07:30",
+                "datetime": "24.06.2026 07:30:00",
+                "ts": 1782275400,
+                "terminal": "C",
+                "airport": {
+                    "id": 80752,
+                    "title": "Шереметьево",
+                    "short_title": "",
+                    "code": "SVO"
+                },
+                "city": {
+                    "id": 64192,
+                    "code": "MOW",
+                    "title": "Москва"
+                },
+                "region": {
+                    "id": null,
+                    "code": null,
+                    "title": null
+                },
+                "country": {
+                    "id": 191,
+                    "code": "RU",
+                    "title": "Россия"
+                }
+            },
+            "dep": {
+                "date": "24.06.2026",
+                "time": "05:20",
+                "datetime": "24.06.2026 05:20:00",
+                "ts": 1782267600,
+                "terminal": "2",
+                "airport": {
+                    "id": 81720,
+                    "title": "Международный Аэропорт Ташкент",
+                    "short_title": "",
+                    "code": "TAS"
+                },
+                "city": {
+                    "id": 85524,
+                    "code": "TAS",
+                    "title": "Ташкент"
+                },
+                "region": {
+                    "id": null,
+                    "code": null,
+                    "title": null
+                },
+                "country": {
+                    "id": 233,
+                    "code": "UZ",
+                    "title": "Узбекистан"
+                }
+            },
+            "seats": 1,
+            "flight_number": "1891",
+            "direction": 0,
+            "duration": {
+                "flight": {
+                    "common": 250,
+                    "hour": 4,
+                    "minute": 10
+                }
+            },
+            "route_duration": 810,
+            "is_baggage": false,
+            "comment": null,
+            "comment_hash": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+            "baggage": {
+                "piece": 0,
+                "weight": null,
+                "dimensions": null,
+                "weight_unit": null
+            },
+            "cbaggage": {
+                "piece": 1,
+                "weight": 10,
+                "dimensions": {
+                    "width": 40,
+                    "length": 55,
+                    "height": 25
+                },
+                "weight_unit": "KG"
+            },
+            "accessories": {
+                "piece": null,
+                "weight": null,
+                "dimensions": null,
+                "weight_unit": null
+            },
+            "refundBlock": {
+                "beforeDeparture": {
+                    "available": false,
+                    "isFree": false,
+                    "comment": "Refund of the carriage charge in the event the carrier is notified of cancellation of carriage by the passenger before the check-in deadline for the flight specified in the ticket: Not allowed"
+                }
+            },
+            "exchangeBlock": {
+                "beforeDeparture": {
+                    "available": true,
+                    "isFree": false,
+                    "comment": "Changes made no later than 40 minutes before the departure time specified in the ticket bought (subject to the availability of seats for the paid fare): Allowed for an additional charge"
+                }
+            },
+            "is_refund": false,
+            "is_change": true,
+            "refund": false,
+            "change": true,
+            "class": {
+                "type_id": 1,
+                "name": "E",
+                "service": "R"
+            },
+            "first": true,
+            "last": true,
+            "fare_code": "RNO",
+            "carrier": {
+                "id": 636,
+                "code": "SU",
+                "title": "Аэрофлот"
+            },
+            "marketing_supplier": {
+                "id": 636,
+                "code": "SU",
+                "title": "Аэрофлот"
+            },
+            "validating_carrier": {
+                "id": 0,
+                "code": "",
+                "title": ""
+            },
+            "aircraft": {
+                "code": "32A",
+                "title": "Airbus A320 Sharklets"
+            },
+            "stops": [],
+            "miles": "",
+            "change_miles": "",
+            "is_mini_rules_exists": true,
+            "is_online_checkin_required": null,
+            "brands": [],
+            "baggage_recheck": false,
+            "passenger_baggage": [],
+            "mini_rules": {
+                "refund": {
+                    "before_departure": {
+                        "status": "unavailable",
+                        "is_available": false,
+                        "is_free": false,
+                        "comment": "Без возврата",
+                        "is_mini_rules_exist": true
+                    }
+                },
+                "exchange": {
+                    "before_departure": {
+                        "status": "available",
+                        "is_available": true,
+                        "is_free": false,
+                        "comment": "Обмен доступен. Платно/со штрафом до вылета\nChanges made no later than 40 minutes before the departure time specified in the ticket bought (subject to the availability of seats for the paid fare): Allowed for an additional charge",
+                        "is_mini_rules_exist": true
+                    }
+                },
+                "baggage": {
+                    "piece": 0,
+                    "weight": {
+                        "unit": null,
+                        "value": null
+                    },
+                    "dimensions": null,
+                    "status": "unavailable",
+                    "is_available": false,
+                    "comment": "Без багажа"
+                },
+                "carry_on_baggage": {
+                    "piece": 1,
+                    "weight": {
+                        "unit": "KG",
+                        "value": 10
+                    },
+                    "dimensions": {
+                        "unit": "cm",
+                        "width": 40,
+                        "length": 55,
+                        "height": 25
+                    },
+                    "status": "available",
+                    "is_available": true,
+                    "comment": "1 место ручной клади 55x40x25 см до 10 кг"
+                },
+                "accessories": {
+                    "piece": null,
+                    "weight": null,
+                    "dimensions": null,
+                    "status": "hidden",
+                    "is_available": false,
+                    "comment": "Нет информации о личной вещи"
+                }
+            },
+            "information_texts": {
+                "registration_info": null
+            },
+            "provider": {
+                "gds": 31,
+                "name": "TUA",
+                "supplier": {
+                    "id": 636,
+                    "code": "SU",
+                    "title": "Aeroflot"
+                }
+            },
+            "type": "regular",
+            "office_id": "NDC_SU_Avcasia",
+            "has_office_credentials": false
+        },
+        {
+            "arr": {
+                "date": "24.06.2026",
+                "time": "16:50",
+                "datetime": "24.06.2026 16:50:00",
+                "ts": 1782309000,
+                "terminal": "1",
+                "airport": {
+                    "id": 80431,
+                    "title": "Пулково",
+                    "short_title": "",
+                    "code": "LED"
+                },
+                "city": {
+                    "id": 7069620,
+                    "code": "LED",
+                    "title": "Санкт-Петербург"
+                },
+                "region": {
+                    "id": null,
+                    "code": null,
+                    "title": null
+                },
+                "country": {
+                    "id": 191,
+                    "code": "RU",
+                    "title": "Россия"
+                }
+            },
+            "dep": {
+                "date": "24.06.2026",
+                "time": "15:20",
+                "datetime": "24.06.2026 15:20:00",
+                "ts": 1782303600,
+                "terminal": "D",
+                "airport": {
+                    "id": 80752,
+                    "title": "Шереметьево",
+                    "short_title": "",
+                    "code": "SVO"
+                },
+                "city": {
+                    "id": 64192,
+                    "code": "MOW",
+                    "title": "Москва"
+                },
+                "region": {
+                    "id": null,
+                    "code": null,
+                    "title": null
+                },
+                "country": {
+                    "id": 191,
+                    "code": "RU",
+                    "title": "Россия"
+                }
+            },
+            "seats": 1,
+            "flight_number": "6827",
+            "direction": 0,
+            "duration": {
+                "flight": {
+                    "common": 90,
+                    "hour": 1,
+                    "minute": 30
+                }
+            },
+            "route_duration": 810,
+            "is_baggage": false,
+            "comment": null,
+            "comment_hash": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+            "baggage": {
+                "piece": 0,
+                "weight": null,
+                "dimensions": null,
+                "weight_unit": null
+            },
+            "cbaggage": {
+                "piece": 1,
+                "weight": null,
+                "dimensions": {
+                    "width": 30,
+                    "length": 36,
+                    "height": 27
+                },
+                "weight_unit": null
+            },
+            "accessories": {
+                "piece": null,
+                "weight": null,
+                "dimensions": null,
+                "weight_unit": null
+            },
+            "refundBlock": {
+                "beforeDeparture": {
+                    "available": false,
+                    "isFree": false,
+                    "comment": "До вылета возврат недоступен"
+                }
+            },
+            "exchangeBlock": {
+                "beforeDeparture": {
+                    "available": true,
+                    "isFree": false,
+                    "comment": "До вылета доступен платный обмен"
+                }
+            },
+            "is_refund": false,
+            "is_change": true,
+            "refund": false,
+            "change": true,
+            "class": {
+                "type_id": 1,
+                "name": "E",
+                "service": "T"
+            },
+            "first": true,
+            "last": true,
+            "fare_code": "TALLAG",
+            "carrier": {
+                "id": 1481,
+                "code": "DP",
+                "title": "Победа"
+            },
+            "marketing_supplier": {
+                "id": 1481,
+                "code": "DP",
+                "title": "Победа"
+            },
+            "validating_carrier": {
+                "id": 0,
+                "code": "",
+                "title": ""
+            },
+            "aircraft": {
+                "code": "73H",
+                "title": "Boeing 737-800 with winglets"
+            },
+            "stops": [],
+            "miles": "",
+            "change_miles": "",
+            "is_mini_rules_exists": true,
+            "is_online_checkin_required": null,
+            "brands": [
+                "ST"
+            ],
+            "baggage_recheck": true,
+            "passenger_baggage": [],
+            "mini_rules": {
+                "refund": {
+                    "before_departure": {
+                        "status": "unavailable",
+                        "is_available": false,
+                        "is_free": false,
+                        "comment": "Без возврата",
+                        "is_mini_rules_exist": true
+                    }
+                },
+                "exchange": {
+                    "before_departure": {
+                        "status": "available",
+                        "is_available": true,
+                        "is_free": false,
+                        "comment": "Обмен доступен. Платно/со штрафом до вылета\nДо вылета доступен платный обмен",
+                        "is_mini_rules_exist": true
+                    }
+                },
+                "baggage": {
+                    "piece": 0,
+                    "weight": {
+                        "unit": null,
+                        "value": null
+                    },
+                    "dimensions": null,
+                    "status": "unavailable",
+                    "is_available": false,
+                    "comment": "Без багажа"
+                },
+                "carry_on_baggage": {
+                    "piece": 1,
+                    "weight": {
+                        "unit": null,
+                        "value": null
+                    },
+                    "dimensions": {
+                        "unit": null,
+                        "width": 30,
+                        "length": 36,
+                        "height": 27
+                    },
+                    "status": "available",
+                    "is_available": true,
+                    "comment": "1 место ручной клади 36x30x27 см"
+                },
+                "accessories": {
+                    "piece": null,
+                    "weight": null,
+                    "dimensions": null,
+                    "status": "hidden",
+                    "is_available": false,
+                    "comment": "Нет информации о личной вещи"
+                }
+            },
+            "information_texts": {
+                "registration_info": null
+            },
+            "provider": {
+                "gds": 36,
+                "name": "TUA",
+                "supplier": {
+                    "id": 1481,
+                    "code": "DP",
+                    "title": "Pobeda"
+                }
+            },
+            "type": "regular",
+            "office_id": "MIXVEL_DP_4244_UZ",
+            "has_office_credentials": false
+        }
+    ],
+    "segments_direction": [
+        [
+            0,
+            1
+        ]
+    ],
+    "upgrades": [],
+    "pricer_info": [],
+    "documents": {
+        "adt": {
+            "ru": [
+                "P"
+            ],
+            "kz": [
+                "ZA"
+            ],
+            "other": [
+                "A"
+            ]
+        },
+        "chd": {
+            "ru": [
+                "P"
+            ],
+            "kz": [
+                "ZA"
+            ],
+            "other": [
+                "A"
+            ]
+        },
+        "inf": {
+            "ru": [
+                "P"
+            ],
+            "kz": [
+                "ZA"
+            ],
+            "other": [
+                "A"
+            ]
+        },
+        "ins": {
+            "ru": [
+                "P"
+            ],
+            "kz": [
+                "ZA"
+            ],
+            "other": [
+                "A"
+            ]
+        },
+        "src": {
+            "ru": [
+                "P"
+            ],
+            "kz": [
+                "ZA"
+            ],
+            "other": [
+                "A"
+            ]
+        },
+        "yth": {
+            "ru": [
+                "P"
+            ],
+            "kz": [
+                "ZA"
+            ],
+            "other": [
+                "A"
+            ]
+        }
+    },
+    "ticketing_time_limit": 1780555322,
+    "booking_with_partial_data_allowed": false,
+    "special_tariff_type": null,
+    "age_thresholds": {
+        "infant": {
+            "min": 0,
+            "max": 2
+        },
+        "child": {
+            "min": 2,
+            "max": 12
+        },
+        "adult": {
+            "min": 12,
+            "max": 200
+        }
+    },
+    "is_discount_code_applied": false,
+    "is_partner_office": null,
+    "additional_services": {
+        "additional_baggage": {
+            "is_search_available": false,
+            "is_book_available": false
+        }
+    },
+    "is_payment_on_book": false,
+    "conversion_session_token": "684837DD-93E3-A210-67C7-5A7E663A893F",
+    "mini_rules": {
+        "refund": {
+            "before_departure": {
+                "status": "unavailable",
+                "is_available": false,
+                "is_free": false,
+                "comment": "В этом перелёте несколько билетов. Правила возврата и обмена для каждого из них могут отличаться",
+                "is_mini_rules_exist": true
+            }
+        },
+        "exchange": {
+            "before_departure": {
+                "status": "available",
+                "is_available": true,
+                "is_free": false,
+                "comment": "В этом перелёте несколько билетов. Правила возврата и обмена для каждого из них могут отличаться",
+                "is_mini_rules_exist": true
+            }
+        },
+        "baggage": {
+            "piece": 0,
+            "weight": null,
+            "dimensions": null,
+            "status": "unavailable",
+            "is_available": false,
+            "comment": "Без багажа"
+        },
+        "carry_on_baggage": {
+            "piece": 1,
+            "weight": null,
+            "dimensions": null,
+            "status": "available",
+            "is_available": true,
+            "comment": "1 место ручной клади"
+        },
+        "accessories": {
+            "piece": null,
+            "weight": null,
+            "dimensions": null,
+            "status": "hidden",
+            "is_available": false,
+            "comment": "Нет информации о личной вещи"
+        }
+    },
+    "directions": [
+        {
+            "segments": [
+                0,
+                1
+            ],
+            "mini_rules": {
+                "refund": {
+                    "before_departure": {
+                        "status": "unavailable",
+                        "is_available": false,
+                        "is_free": false,
+                        "comment": "В этом перелёте несколько билетов. Правила возврата и обмена для каждого из них могут отличаться",
+                        "is_mini_rules_exist": true
+                    }
+                },
+                "exchange": {
+                    "before_departure": {
+                        "status": "available",
+                        "is_available": true,
+                        "is_free": false,
+                        "comment": "В этом перелёте несколько билетов. Правила возврата и обмена для каждого из них могут отличаться",
+                        "is_mini_rules_exist": true
+                    }
+                },
+                "baggage": {
+                    "piece": 0,
+                    "weight": null,
+                    "dimensions": null,
+                    "status": "unavailable",
+                    "is_available": false,
+                    "comment": "Без багажа"
+                },
+                "carry_on_baggage": {
+                    "piece": 1,
+                    "weight": null,
+                    "dimensions": null,
+                    "status": "available",
+                    "is_available": true,
+                    "comment": "1 место ручной клади"
+                },
+                "accessories": {
+                    "piece": null,
+                    "weight": null,
+                    "dimensions": null,
+                    "status": "hidden",
+                    "is_available": false,
+                    "comment": "Нет информации о личной вещи"
+                }
+            }
+        }
+    ]
+}
