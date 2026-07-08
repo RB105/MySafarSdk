@@ -17,11 +17,11 @@ dependencies:
   get_storage: ^2.1.1
   provider: ^6.0.5
   dio: ^5.9.0
-  bloc: ^9.0.0
+  bloc: ^7.0.0
   mask_text_input_formatter: ^2.9.0
   google_sign_in: ^7.2.0
   webview_flutter: ^4.2.4
-  flutter_bloc: ^9.1.0
+  flutter_bloc: ^7.0.0
   intl: ^0.20.2
   # Diapazon keng — host app (masalan Unired 32.x) bilan to'qnashmasligi uchun.
   syncfusion_flutter_datepicker: 32.1.21
