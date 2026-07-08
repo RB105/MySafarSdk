@@ -38,8 +38,24 @@ class HostApp extends StatelessWidget {
   }
 }
 
-class HostHomePage extends StatelessWidget {
+class HostHomePage extends StatefulWidget {
   const HostHomePage({super.key});
+
+  @override
+  State<HostHomePage> createState() => _HostHomePageState();
+}
+
+class _HostHomePageState extends State<HostHomePage> {
+  @override
+  void initState() {
+    super.initState();
+    // TEST: avtomatik embed ochish (tap simulyatsiyasi o'rniga)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const MySafarEmbed()),
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
