@@ -1,10 +1,8 @@
-import 'dart:io' show Platform;
 
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/core/config/request_config.dart';
 import 'package:mysafar_sdk/src/core/config/response_config.dart';
 import 'package:mysafar_sdk/src/core/constants/end_points.dart';
-import 'package:flutter/foundation.dart';
 import 'package:get_storage/get_storage.dart' show GetStorage;
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart';
 import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
@@ -15,41 +13,6 @@ class AuthService with RequestConfig {
 
   /// Analytics service instance
   final AnalyticsService _analyticsService = AnalyticsService();
-
-  Future<NetworkResponse> googleAuth({
-    required String token,
-    required String email,
-  }) async {
-    final response = await postRequest(
-        partnerToken: true,
-        endPoint: EndPoints.google_auth,
-        params: {
-          "token": token,
-          "email": email,
-          "type": Platform.isIOS ? "mobile-ios" : "mobile-android"
-        });
-
-    if (response is NetworkSuccessResponse) {
-      await MySafarSdk.tokens.saveTokens(
-        access: '${response.data["jwt_token"]["access"]}',
-        refresh: '${response.data["jwt_token"]["refresh"]}',
-      );
-      MySafarSdk.callbacks.onLoggedIn?.call();
-
-      // Set FCM reg_id after successful auth
-      setRegId();
-
-      // Track Google registration/login analytics
-      _analyticsService.trackUserLoggedInGoogle(email: email);
-      _analyticsService.setUser(userId: email, attributes: {
-        'auth_provider': 'google',
-        'lang': _db.read<String>('lang') ?? 'uz',
-      });
-
-      return NetworkSuccessResponse(data: response.data);
-    }
-    return response;
-  }
 
   Future<NetworkResponse> telegramAuth({
     required String token,
@@ -67,8 +30,6 @@ class AuthService with RequestConfig {
         refresh: '${response.data["jwt_token"]["refresh"]}',
       );
       MySafarSdk.callbacks.onLoggedIn?.call();
-
-      setRegId();
 
       return NetworkSuccessResponse(data: response.data);
     }
@@ -97,9 +58,6 @@ class AuthService with RequestConfig {
       );
       MySafarSdk.callbacks.onLoggedIn?.call();
 
-      // Set FCM reg_id after successful auth
-      setRegId();
-
       // Track phone registration analytics
       _analyticsService.trackUserRegisteredPhone(phoneNumber: phoneNum);
       _analyticsService.setUser(userId: phoneNum, attributes: {
@@ -127,8 +85,6 @@ class AuthService with RequestConfig {
         refresh: '${response.data["jwt_token"]["refresh"]}',
       );
       MySafarSdk.callbacks.onLoggedIn?.call();
-
-      setRegId();
 
       _analyticsService.trackUserRegisteredPhone(phoneNumber: phoneNumber);
       _analyticsService.setUser(userId: phoneNumber, attributes: {
@@ -177,55 +133,6 @@ class AuthService with RequestConfig {
     return response;
   }
 
-  /// set-regid for FCM
-  Future<void> setRegId() async {
-    if (!hasAccessToken) {
-      if (kDebugMode) {
-        debugPrint('setRegId skipped: user not authorized');
-      }
-      return;
-    }
-
-    String? regId = _db.read('regId');
-
-    if (regId == null || regId.isEmpty) {
-      try {
-        regId = await MySafarSdk.callbacks.getPushToken?.call();
-        if (regId != null) {
-          _db.write('regId', regId);
-          if (kDebugMode) {
-            debugPrint('regId fetched from host push provider');
-          }
-        }
-      } catch (e) {
-        if (kDebugMode) {
-          debugPrint('Error getting push token: $e');
-        }
-      }
-    }
-
-    if (regId == null || regId.isEmpty) {
-      if (kDebugMode) {
-        debugPrint('regId is still null, skipping setRegId');
-      }
-      return;
-    }
-
-    if (kDebugMode) {
-      debugPrint('regId is available');
-    }
-    await postRequest(
-        headers: true,
-        endPoint: EndPoints.auth_set_reg_id,
-        params: {"reg_id": regId}).then(
-      (value) {
-        if (kDebugMode && value is NetworkSuccessResponse) {
-          debugPrint('Success in reg id SET');
-        }
-      },
-    );
-  }
-
   Future sendOtp(String phone) async {
     final response = await postRequest(
         endPoint: EndPoints.auth_send_otp, params: {"phone": phone});
@@ -254,9 +161,6 @@ class AuthService with RequestConfig {
         refresh: '${response.data["jwt_token"]["refresh"]}',
       );
       MySafarSdk.callbacks.onLoggedIn?.call();
-
-      // Set FCM reg_id after successful auth
-      setRegId();
 
       // Track phone login analytics
       _analyticsService.trackUserLoggedInPhone(phoneNumber: phone);

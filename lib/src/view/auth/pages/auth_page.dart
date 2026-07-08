@@ -233,67 +233,6 @@ class _AuthPageState extends State<AuthPage> {
                                           ),
                                         )),
                                   ),
-                                  if (AuthCubit.googleAuthEnabled) ...[
-                                  const SizedBox(height: 16),
-                                  SizedBox(
-                                    height: 56,
-                                    width: double.infinity,
-                                    child: OutlinedButton(
-                                      style: OutlinedButton.styleFrom(
-                                        side: BorderSide(
-                                            color: ProjectTheme.blueBg),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                        ),
-                                      ),
-                                      onPressed: state.googleAuthStatus ==
-                                              ActionStatus.isLoading
-                                          ? null
-                                          : () {
-                                              AnalyticsService()
-                                                  .trackButtonTap('auth_google');
-                                              context
-                                                  .read<AuthCubit>()
-                                                  .googleSignIn();
-                                            },
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          if (state.googleAuthStatus ==
-                                              ActionStatus.isLoading) ...[
-                                            _adaptiveLoader(
-                                                color: ProjectTheme.blueBg),
-                                            context.szBoxWidth8,
-                                          ] else ...[
-                                            SvgPicture.asset(
-                                              'packages/mysafar_sdk/assets/img/auth/google.svg',
-                                              width: 24,
-                                              height: 24,
-                                              errorBuilder: (_, __, ___) =>
-                                                  const Icon(
-                                                Icons.g_mobiledata,
-                                                size: 24,
-                                              ),
-                                            ),
-                                            context.szBoxWidth8,
-                                          ],
-                                          Text(
-                                            'sign_google'.tr(),
-                                            style: context
-                                                .theme.textTheme.bodyLarge
-                                                ?.copyWith(
-                                              color: ProjectTheme.blueBg,
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  ],
                                   // const SizedBox(height: 16),
                                   // SizedBox(
                                   //   height: 56,

@@ -11,10 +11,10 @@ class MySafarConfig {
     this.appName,
     this.myId,
     this.socialAuth,
-    this.enableFirestoreConfig = false,
     this.enableVersionGate = false,
     this.enableServicesTab = true,
     this.enableShowcaseTour = false,
+    this.enableFullProfile = false,
     this.startLocale,
     this.saveLocale = true,
   });
@@ -40,10 +40,6 @@ class MySafarConfig {
   /// tugmalari yashiriladi (faqat telefon-OTP qoladi).
   final MySafarSocialAuthConfig? socialAuth;
 
-  /// Firestore'dan recommendation endpointlarini sinxronlash. Host app
-  /// Firebase'ni o'zi init qilgan bo'lishi shart.
-  final bool enableFirestoreConfig;
-
   /// Backend'dagi minimal versiya tekshiruvi (majburiy yangilash dialogi).
   /// Faqat MySafar app'ning o'zida ma'noga ega — SDK embed qilingan hostda
   /// versiya siyosati host'niki, shu sabab default o'chiq.
@@ -57,6 +53,11 @@ class MySafarConfig {
   /// rejimda odatda keraksiz, shu sabab default o'chiq; MySafar app'ning o'zi
   /// `true` qiladi.
   final bool enableShowcaseTour;
+
+  /// Profil sahifasining to'liq rejimi. Default o'chiq — embed'da faqat
+  /// "Ma'lumotlarim" va "Qo'llab-quvvatlash" ko'rinadi; `true` bo'lsa
+  /// arizalarim, cheklar, sozlamalar va hisobni o'chirish/chiqish ham chiqadi.
+  final bool enableFullProfile;
 
   /// Boshlang'ich til. `null` bo'lsa saqlangan til yoki `uz` ishlatiladi.
   final Locale? startLocale;
@@ -79,20 +80,9 @@ class MySafarMyIdConfig {
 }
 
 class MySafarSocialAuthConfig {
-  const MySafarSocialAuthConfig({this.google, this.telegram});
+  const MySafarSocialAuthConfig({this.telegram});
 
-  final MySafarGoogleAuthConfig? google;
   final MySafarTelegramAuthConfig? telegram;
-}
-
-class MySafarGoogleAuthConfig {
-  const MySafarGoogleAuthConfig({
-    required this.serverClientIdAndroid,
-    required this.serverClientIdIos,
-  });
-
-  final String serverClientIdAndroid;
-  final String serverClientIdIos;
 }
 
 class MySafarTelegramAuthConfig {

@@ -1,6 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
-/// Firestore `payment_types` collection'idagi bitta to'lov turining MATN qismi.
+/// Bitta to'lov turining MATN qismi (kesh/server ma'lumotidan).
 ///
 /// RASM: `imageUrl` bo'sh bo'lmasa — admin panel yuklagan logotip (Storage'dan)
 /// ishlatiladi; bo'sh bo'lsa ilova `name` bo'yicha LOKAL asset'dan oladi
@@ -33,10 +31,6 @@ class PaymentTypeConfig {
     this.imageUrl = '',
     this.order = 0,
   });
-
-  factory PaymentTypeConfig.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
-    return _build(doc.data() ?? const {}, fallbackName: doc.id);
-  }
 
   factory PaymentTypeConfig.fromMap(Map<String, dynamic> map) {
     return _build(map, fallbackName: '');

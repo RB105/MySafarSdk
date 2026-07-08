@@ -5,7 +5,6 @@ class MySafarCallbacks {
     this.onAuthRequired,
     this.onLoggedIn,
     this.onLoggedOut,
-    this.getPushToken,
     this.onRequestReview,
   });
 
@@ -18,10 +17,6 @@ class MySafarCallbacks {
 
   /// Foydalanuvchi SDK ichida logout qildi.
   final void Function()? onLoggedOut;
-
-  /// Push registration token (masalan FCM) beradi — SDK login'dan keyin uni
-  /// backend'ga ro'yxatdan o'tkazadi. `null` bo'lsa push ro'yxati o'tkaziladi.
-  final Future<String?> Function()? getPushToken;
 
   /// SDK app-store baho so'ramoqchi bo'lganda chaqiriladi (host in_app_review
   /// bilan o'zi hal qiladi). `null` bo'lsa so'ralmaydi.

@@ -14,7 +14,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/service/profile/profile_cache.dart';
 import 'package:mysafar_sdk/src/service/profile/tickets_cache.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:lottie/lottie.dart';
 import 'package:mysafar_sdk/src/core/constants/end_points.dart';
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
@@ -519,7 +518,6 @@ class ProjectDialogs {
                         await box.write('lang', lang);
                       }
 
-                      await GoogleSignIn.instance.signOut();
                       MySafarSdk.callbacks.onLoggedOut?.call();
                       // ignore: use_build_context_synchronously
                       Navigator.pushNamedAndRemoveUntil(context,
@@ -563,8 +561,7 @@ class ProjectDialogs {
                             await box.write('lang', lang);
                           }
 
-                          await GoogleSignIn.instance.signOut();
-                          MySafarSdk.callbacks.onLoggedOut?.call();
+                              MySafarSdk.callbacks.onLoggedOut?.call();
                           // ignore: use_build_context_synchronously
                           Navigator.pushNamedAndRemoveUntil(context,
                               BottomNavBarPage.routeName, (route) => false,

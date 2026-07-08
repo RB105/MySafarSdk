@@ -1,7 +1,5 @@
-import 'dart:async' show unawaited;
 
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
-import 'package:firebase_core/firebase_core.dart' show Firebase;
 import 'package:flutter/foundation.dart' show VoidCallback, debugPrint;
 import 'package:flutter/widgets.dart' show WidgetsFlutterBinding;
 import 'package:get_storage/get_storage.dart' show GetStorage;
@@ -21,8 +19,6 @@ import 'package:mysafar_sdk/src/api/token_store.dart';
 import 'package:mysafar_sdk/src/core/config/app_config.dart' show AppConfig;
 import 'package:mysafar_sdk/src/service/cache/hive_service.dart'
     show HiveService;
-import 'package:mysafar_sdk/src/service/config/remote_config_service.dart'
-    show RemoteConfigService;
 import 'package:mysafar_sdk/src/service/deep_link_gateway.dart'
     show DeepLinkGateway;
 
@@ -60,11 +56,6 @@ class MySafarSdk {
   static MySafarAnalytics get analytics => _analytics;
   static MySafarCallbacks get callbacks => _callbacks;
 
-  /// Host app Firebase'ni init qilganmi. Firestore'ga tayanuvchi ixtiyoriy
-  /// funksiyalar (remote config, news, payment turlari) shu tekshiruvdan
-  /// o'tmasa kesh/fallback rejimida ishlaydi.
-  static bool get isFirebaseAvailable => Firebase.apps.isNotEmpty;
-
   /// SDK'ni ishga tayyorlaydi. `runApp`dan oldin chaqirilishi shart.
   ///
   /// Firebase'ga bog'liq funksiyalar (Firestore remote config, Google auth)
@@ -97,11 +88,6 @@ class MySafarSdk {
       persist: config.saveLocale,
     );
 
-    // Firestore'dan recommendation endpointlarini fon rejimida yangilaymiz
-    // (bloklamaydi — birinchi qidiruv kesh yoki fallback bilan ishlaydi).
-    if (config.enableFirestoreConfig) {
-      unawaited(RemoteConfigService.instance.sync());
-    }
   }
 
   /// Host app deep-link'ni SDK'ga uzatadi (masalan

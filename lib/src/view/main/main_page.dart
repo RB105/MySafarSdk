@@ -37,8 +37,6 @@ import 'package:mysafar_sdk/src/service/pexels/pexels_service.dart';
 import 'package:mysafar_sdk/src/view/booking/passenger_information_page.dart';
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
 import 'package:mysafar_sdk/src/view/destinations/destinations_info_map_page.dart';
-import 'package:mysafar_sdk/src/view/main/pages/notification_page.dart';
-import 'package:mysafar_sdk/src/view/main/widgets/news_unread_badge.dart';
 import 'package:mysafar_sdk/src/view/booking/ticketed_booking_search_page.dart';
 import 'package:mysafar_sdk/src/view/tickets/ticket_page.dart';
 import 'package:path_provider/path_provider.dart';
@@ -219,14 +217,6 @@ class _MainPageState extends State<MainPage>
                               )
                             : null,
                         actions: [
-                            NewsUnreadBadge(
-                                child: _circleIconButton(
-                                    ProjectAssets.notificationIcon,
-                                    () => Navigator.of(context)
-                                        .pushNamed(NotificationPage.routeName),
-                                    showcaseKey: HomeShowcaseKeys.notif,
-                                    showcaseTitle: "showcase_notif_title".tr(),
-                                    showcaseDesc: "showcase_notif_desc".tr())),
                             _circleIconButton(
                                 ProjectAssets.callCenterIcon,
                                 () => ProjectDialogs.showSupportMenu(context),

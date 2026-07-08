@@ -13,7 +13,6 @@ import 'package:mysafar_sdk/src/cubit/booking/passenger/passenger_state.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_model.dart'
     show FlightElement;
 import 'package:mysafar_sdk/src/view/booking/booking_create_page.dart';
-import 'package:mysafar_sdk/src/view/booking/widget/booking_auth_bottom_sheet.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/contact_form_widget.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/next_button_widget.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/passenger_card_widget.dart';
@@ -22,7 +21,6 @@ import 'package:mysafar_sdk/src/view/booking/widget/passenger_date_picker.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/paymentbottomsheet.dart'
     show showCitySearchPicker;
 import 'package:mysafar_sdk/src/view/booking/widget/support_widget.dart';
-import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 
 class PassengerInformationPage extends StatefulWidget {
   final FlightElement element;
@@ -268,28 +266,8 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
 
   Future<void> _navigateToBookingPage(
       BuildContext context, PassengerSaved state) async {
-    if (!MySafarSdk.tokens.isLoggedIn) {
-      final authResult = await showBookingAuthBottomSheet(context);
-
-      if (!mounted) return;
-
-      if (authResult != true) {
-        context.read<PassengerCubit>().restoreState();
-        return;
-      }
-      context.read<PassengerCubit>().loadProfileData();
-
-      if (!mounted) return;
-
-      final currentState = context.read<PassengerCubit>().state;
-      if (currentState is PassengerLoaded) {
-        _updateContactControllers(currentState.email, currentState.phone);
-      }
-
-      context.read<PassengerCubit>().restoreState();
-      return;
-    }
-
+    // SDK'da login talab qilinmaydi — sessiyani host boshqaradi (web-register).
+    // Token tekshiruvi va auth bottom-sheet olib tashlangan.
     await Navigator.push(
       context,
       MaterialPageRoute(

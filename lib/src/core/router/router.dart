@@ -18,9 +18,6 @@ import 'package:mysafar_sdk/src/view/destinations/destination_details_page.dart'
 import 'package:mysafar_sdk/src/view/main/main_page.dart';
 import 'package:mysafar_sdk/src/view/destinations/destinations_info_map_page.dart';
 import 'package:mysafar_sdk/src/view/main/pages/main_input_page.dart';
-import 'package:mysafar_sdk/src/view/main/pages/notification_page.dart';
-import 'package:mysafar_sdk/src/view/main/pages/news_detail_page.dart';
-import 'package:mysafar_sdk/src/model/remote/news/news_model.dart' show NewsModel;
 import 'package:mysafar_sdk/src/view/navbar/bottom_nav_bar.dart';
 import 'package:mysafar_sdk/src/view/profile/pages/add_passenger_page.dart';
 import 'package:mysafar_sdk/src/view/profile/pages/my_applications/view/my_applications_page.dart';
@@ -83,13 +80,6 @@ class RouterGenerator {
             MainInputPage(isSmart: settings.arguments as bool? ?? false),
             settings);
 
-      case NotificationPage.routeName:
-        return _navigate(NotificationPage(), settings);
-      case NewsDetailPage.routeName:
-        return _navigateWithArgument<NewsModel>(
-          settings,
-          (args) => NewsDetailPage(news: args),
-        );
       case RecommendationsTicketPage.routeName:
         return _navigateWithArgument<RecommendationRequestBody>(
           settings,

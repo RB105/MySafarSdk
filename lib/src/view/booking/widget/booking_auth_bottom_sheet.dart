@@ -5,7 +5,6 @@ import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:mysafar_sdk/src/core/enum/status.dart';
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
@@ -306,52 +305,6 @@ class _BookingAuthBottomSheetState extends State<BookingAuthBottomSheet> {
                 ),
               ),
             ),
-            if (AuthCubit.googleAuthEnabled) ...[
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 56,
-              width: double.infinity,
-              child: OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: ProjectTheme.blueBg),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                onPressed: state.googleAuthStatus == ActionStatus.isLoading
-                    ? null
-                    : () => context.read<AuthCubit>().googleSignIn(),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (state.googleAuthStatus == ActionStatus.isLoading) ...[
-                      _adaptiveLoader(color: ProjectTheme.blueBg),
-                      context.szBoxWidth8,
-                    ] else ...[
-                      SvgPicture.asset(
-                        'packages/mysafar_sdk/assets/img/auth/google.svg',
-                        width: 24,
-                        height: 24,
-                        errorBuilder: (_, __, ___) => const Icon(
-                          Icons.g_mobiledata,
-                          size: 24,
-                        ),
-                      ),
-                      context.szBoxWidth8,
-                    ],
-                    Text(
-                      'sign_google'.tr(),
-                      style: context.theme.textTheme.bodyLarge?.copyWith(
-                        color: ProjectTheme.blueBg,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            ],
             const SizedBox(height: 32),
           ],
         ),

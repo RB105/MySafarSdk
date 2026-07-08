@@ -8,14 +8,12 @@ class EndPoints {
 
   // auth
 
-  static const String google_auth = '/auth/google-auth';
   static const String telegram_auth = '/auth/telegram-login';
   static const String auth_phone_register = '/auth/phone-register';
   static const String auth_web_register = '/auth/web-register';
   static const String auth_phone_login = '/auth/phone-login';
   static const String auth_send_otp = '/auth/send-otp';
   static const String auth_verify_otp = '/auth/verify-otp';
-  static const String auth_set_reg_id = '/auth/set-regid';
   static const String auth_set_password = '/auth/set-password';
   static const String auth_user_delete = '/auth/user-delete';
 

@@ -48,16 +48,8 @@ class TicketCubit extends Bloc<TicketEvent, TicketsState> {
 
     final params = event.requestBody.toJson();
 
-    // Har qidiruvdan oldin endpoint ro'yxatini Firestore'dan yangilaymiz —
-    // shu bilan admin paneldagi o'zgarish (ilovani qayta ochmasdan) shu
-    // qidiruvga ham darrov qo'llanadi. Sekin/oflayn bo'lsa keshdagini
-    // ishlataveramiz (timeout).
-    try {
-      await RemoteConfigService.instance
-          .sync()
-          .timeout(const Duration(seconds: 4));
-    } catch (_) {}
-    if (isClosed || generation != _requestGeneration) return;
+    // Firebase SDK'dan olib tashlangan — endpoint ro'yxati Hive keshi yoki
+    // koddagi zaxira ro'yxatdan olinadi, tarmoq sinxronizatsiyasi yo'q.
 
     // Manbalar (endpoint) ro'yxati Firestore'dan (Hive keshi orqali) keladi;
     // bo'lmasa koddagi 3 ta zaxira endpoint ishlatiladi.

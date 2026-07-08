@@ -4,7 +4,6 @@ import 'package:mysafar_sdk/src/model/remote/avia/airports_model.dart'
     show AirPortsModel;
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
 import 'package:mysafar_sdk/src/view/main/main_page.dart' show MainSearchForm;
-import 'package:mysafar_sdk/src/view/main/pages/notification_page.dart';
 import 'package:mysafar_sdk/src/view/main/src/floating_support_badge.dart';
 
 /// Chipta qidiruvini alohida sahifa sifatida ochadi (notification/deeplink
@@ -25,20 +24,6 @@ class MainInputPage extends StatelessWidget {
           elevation: 4.0,
           shadowColor: Colors.black38,
           actions: [
-            InkWell(
-                borderRadius: BorderRadius.circular(24),
-                onTap: () =>
-                    Navigator.of(context).pushNamed(NotificationPage.routeName),
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: SvgPicture.asset(
-                    Assets.iconsNotificationIcon,
-                    colorFilter: ColorFilter.mode(
-                        context.theme.appBarTheme.iconTheme!.color!,
-                        BlendMode.srcIn),
-                  ),
-                )),
             InkWell(
               borderRadius: BorderRadius.circular(24),
               onTap: () => ProjectDialogs.showSupportMenu(context),

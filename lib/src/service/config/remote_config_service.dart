@@ -1,8 +1,5 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
 import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 import 'package:mysafar_sdk/src/core/constants/end_points.dart';
-import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 
 /// Firebase Firestore'dan olinadigan va Hive'da keshlanadigan remote config.
 ///
@@ -34,10 +31,6 @@ class RemoteConfigService {
   static const String boxName = 'remote_config';
   static const String _kRecommendationEndpoints = 'recommendation_endpoints';
 
-  /// Firestore hujjat manzili: config/avia
-  DocumentReference<Map<String, dynamic>> get _configDoc =>
-      FirebaseFirestore.instance.collection('config').doc('avia');
-
   Box get _box => Hive.box(boxName);
 
   /// Firestore ham, kesh ham bo'sh bo'lsa ishlatiladigan zaxira ro'yxat —
@@ -47,30 +40,6 @@ class RemoteConfigService {
     EndPoints.avia_recommendations_myagent,
     EndPoints.avia_recommendations_flydubai,
   ];
-
-  /// Firestore `config/avia` hujjatidagi BARCHA string-list maydonlarini olib
-  /// Hive'ga saqlaydi. Shu bois faqat recommendation emas, kelajakda qo'shilgan
-  /// har qanday endpoint guruhi (masalan `hot_recommendations`, `quick_...`)
-  /// avtomatik keshlanadi — kodga tegmasdan.
-  ///
-  /// Xatolik (internet yo'q, hujjat yo'q) bo'lsa — jim: eski kesh yoki fallback
-  /// ishlatilaveradi.
-  Future<void> sync() async {
-    // Host Firebase'ni init qilmagan bo'lsa — jim: kesh/fallback ishlayveradi.
-    if (!MySafarSdk.isFirebaseAvailable) return;
-    try {
-      final snap = await _configDoc.get();
-      final data = snap.data() ?? const <String, dynamic>{};
-      for (final entry in data.entries) {
-        final list = _sanitize(entry.value);
-        if (list.isNotEmpty) {
-          await _box.put(entry.key, list);
-        }
-      }
-    } catch (e) {
-      debugPrint('RemoteConfigService.sync error: $e');
-    }
-  }
 
   /// Berilgan kalitdagi endpoint ro'yxati:
   ///   • Firestore'dan kelib Hive'da saqlangan bo'lsa — o'sha

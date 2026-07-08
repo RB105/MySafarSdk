@@ -673,6 +673,10 @@ class _ProfilePageState extends State<ProfilePage> {
                                     iconColor: ProjectTheme.brandColor,
                                     onTap: () => _openMyDataPage(context),
                                   ),
+                                  // Arizalarim/cheklar faqat to'liq profil
+                                  // rejimida (embed'da default o'chiq).
+                                  if (MySafarSdk
+                                      .config.enableFullProfile) ...[
                                   _buildDivider(context),
                                   _buildProfileActionTile(
                                     context: context,
@@ -727,6 +731,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                       OFDChequesPage.routeName,
                                     ),
                                   ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -750,6 +755,7 @@ class _ProfilePageState extends State<ProfilePage> {
                             ),
                             child: Column(
                               children: [
+                                if (MySafarSdk.config.enableFullProfile) ...[
                                 _buildProfileActionTile(
                                   context: context,
                                   assetPath: ProjectAssets.iconsSettings,
@@ -766,6 +772,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                   ),
                                 ),
                                 _buildDivider(context),
+                                ],
                                 _buildProfileActionTile(
                                   context: context,
                                   assetPath: ProjectAssets.iconsSupport,
@@ -781,7 +788,10 @@ class _ProfilePageState extends State<ProfilePage> {
                           ),
                         ),
                         context.szBoxHeight16,
-                        if (profileData != null)
+                        // Hisobni o'chirish/chiqish — sessiyani host boshqaradi,
+                        // embed'da default ko'rsatilmaydi.
+                        if (MySafarSdk.config.enableFullProfile &&
+                            profileData != null)
                           Material(
                             color: Colors.transparent,
                             child: InkWell(
