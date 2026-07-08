@@ -23,7 +23,8 @@ dependencies:
   webview_flutter: ^4.2.4
   flutter_bloc: ^9.1.0
   intl: ^0.20.2
-  syncfusion_flutter_datepicker: ^29.1.35
+  # Diapazon keng — host app (masalan Unired 32.x) bilan to'qnashmasligi uchun.
+  syncfusion_flutter_datepicker: '>=29.1.35 <33.0.0'
   firebase_core: ^3.13.0
   firebase_auth: ^5.7.0
   easy_localization: ^3.0.8
@@ -31,7 +32,7 @@ dependencies:
   shimmer: ^3.0.0
   image_picker: ^1.1.2
   collection: ^1.18.0
-  syncfusion_flutter_calendar: ^29.1.37
+  syncfusion_flutter_calendar: '>=29.1.37 <33.0.0'
   url_launcher: ^6.2.4
   flutter_slidable: ^4.0.0
   cached_network_image: ^3.4.1
