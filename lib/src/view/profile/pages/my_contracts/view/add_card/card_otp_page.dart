@@ -146,7 +146,7 @@ class _CardOtpPageState extends State<CardOtpPage> {
   }
 
   Future<void> _showLinkErrorDialog(String message) {
-    return showDialog<void>(
+    return showDialog<void>(useRootNavigator: false, 
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
@@ -181,7 +181,7 @@ class _CardOtpPageState extends State<CardOtpPage> {
   }
 
   Future<void> _showSuccessDialog() {
-    return showDialog<void>(
+    return showDialog<void>(useRootNavigator: false, 
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(

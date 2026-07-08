@@ -10,7 +10,7 @@ class LoadingDialog {
     if (_isDialogShowing) return;
     _isDialogShowing = true;
 
-    showDialog(
+    showDialog(useRootNavigator: false, 
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.black.withAlpha(50),

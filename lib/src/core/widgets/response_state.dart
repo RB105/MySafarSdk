@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 
 class ResponseState {
   static Future<void> successState(BuildContext context, String success, void Function() onPressed) async {
-    showDialog(
+    showDialog(useRootNavigator: false, 
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
@@ -66,7 +66,7 @@ class ResponseState {
     String error,
     BuildContext context,
   ) async {
-    showDialog(
+    showDialog(useRootNavigator: false, 
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {

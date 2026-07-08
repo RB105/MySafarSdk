@@ -97,7 +97,7 @@ class _BookingAuthBottomSheetState extends State<BookingAuthBottomSheet> {
   }
 
   Future<void> _showErrorDialog(String message) async {
-    await showDialog(
+    await showDialog(useRootNavigator: false, 
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('error'.tr()),

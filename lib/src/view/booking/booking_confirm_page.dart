@@ -287,7 +287,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
 
   Future<bool> _showExitConfirmDialog(BuildContext context) async {
     if (!context.mounted) return false;
-    final result = await showDialog<bool>(
+    final result = await showDialog<bool>(useRootNavigator: false, 
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {

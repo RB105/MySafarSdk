@@ -57,7 +57,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       child: BlocConsumer<UpdateProfileCubit, UpdateProfileState>(
         listener: (context, state) {
           if (state is UpdateProfileLoading) {
-            showDialog(
+            showDialog(useRootNavigator: false, 
               context: context,
               barrierDismissible: false,
               builder: (context) => const Center(

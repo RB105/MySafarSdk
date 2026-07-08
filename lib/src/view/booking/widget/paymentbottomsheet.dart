@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
+import 'package:mysafar_sdk/src/core/tools/sdk_sheets.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/country_search_widget.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/humo_uzkard_widget.dart';
 
@@ -76,7 +76,7 @@ void showPaymentOtpBottomSheet(
 
 Future<Map<String, dynamic>?> showCitySearchPicker(BuildContext context) async {
   if (Platform.isIOS) {
-    return await showCupertinoSheet<Map<String, dynamic>>(
+    return await showSdkCupertinoSheet<Map<String, dynamic>>(
         context: context,
         builder: (context) => MediaQuery.removePadding(
               context: context,

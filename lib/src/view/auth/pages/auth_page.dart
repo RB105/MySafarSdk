@@ -350,7 +350,7 @@ class _AuthPageState extends State<AuthPage> {
   }
 
   Future<void> _showErrorDialog(String message) async {
-    await showDialog(
+    await showDialog(useRootNavigator: false, 
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('error'.tr()),

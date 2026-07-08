@@ -7,8 +7,7 @@ import 'package:flutter/cupertino.dart'
         CupertinoButton,
         CupertinoDatePicker,
         CupertinoDatePickerMode,
-        showCupertinoDialog,
-        showCupertinoSheet;
+        showCupertinoDialog;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show FontWeight, HapticFeedback;
 import 'package:flutter_svg/flutter_svg.dart';
@@ -48,6 +47,7 @@ import 'package:url_launcher/url_launcher.dart'
     show LaunchMode, canLaunchUrl, launchUrl;
 
 import 'formatters.dart';
+import 'package:mysafar_sdk/src/core/tools/sdk_sheets.dart';
 
 class ProjectDialogs {
   static BuildContext? _dialogContext;
@@ -60,7 +60,7 @@ class ProjectDialogs {
       final AirPortsModel? fromDir,
       final AirPortsModel? toDir) async {
     if (Platform.isIOS) {
-      return await showCupertinoSheet<PickerDateRange?>(
+      return await showSdkCupertinoSheet<PickerDateRange?>(
           context: context,
           builder: (context) => MediaQuery.removePadding(
                 context: context,
@@ -90,7 +90,7 @@ class ProjectDialogs {
   static Future<Map<String, dynamic>?> showPassengerCountPicker(
       BuildContext context, Map<String, dynamic>? params) async {
     if (Platform.isIOS) {
-      return await showCupertinoSheet<Map<String, dynamic>?>(
+      return await showSdkCupertinoSheet<Map<String, dynamic>?>(
           context: context,
           builder: (context) => MediaQuery.removePadding(
                 context: context,
@@ -116,7 +116,7 @@ class ProjectDialogs {
   static Future<AirPortsModel?> showCitySearchPicker(
       BuildContext context, int directionType) async {
     if (Platform.isIOS) {
-      return await showCupertinoSheet<AirPortsModel?>(
+      return await showSdkCupertinoSheet<AirPortsModel?>(
           context: context,
           builder: (context) => MediaQuery.removePadding(
                 context: context,
@@ -140,7 +140,7 @@ class ProjectDialogs {
   static Future<RecommendationRequestBody?> showTicketFilter(
       BuildContext context, RecommendationRequestBody filterBody) async {
     if (Platform.isIOS) {
-      return await showCupertinoSheet<RecommendationRequestBody?>(
+      return await showSdkCupertinoSheet<RecommendationRequestBody?>(
         context: context,
         builder: (context) => MediaQuery.removePadding(
             context: context,
@@ -246,7 +246,7 @@ class ProjectDialogs {
   static Future showVerifyOtpSheet(
       BuildContext context, final String phone, final otpToken) async {
     if (Platform.isIOS) {
-      return await showCupertinoSheet(
+      return await showSdkCupertinoSheet(
           context: context,
           builder: (dialogContext) {
             _dialogContext = dialogContext;
@@ -271,7 +271,7 @@ class ProjectDialogs {
     VoidCallback? onAuthSuccess,
   }) async {
     if (Platform.isIOS) {
-      return await showCupertinoSheet(
+      return await showSdkCupertinoSheet(
           context: context,
           builder: (dialogContext) {
             _dialogContext = dialogContext;
@@ -295,7 +295,7 @@ class ProjectDialogs {
   static Future<FlightElement?> showTariffPicker(
       BuildContext context, List<FlightTariffModel> tariffs, String tid) async {
     if (Platform.isIOS) {
-      return await showCupertinoSheet<FlightElement?>(
+      return await showSdkCupertinoSheet<FlightElement?>(
           context: context,
           builder: (context) => MediaQuery.removePadding(
               context: context,
@@ -453,7 +453,7 @@ class ProjectDialogs {
     }
   }
 
-  static void showUnavailableService(BuildContext context) => showDialog(
+  static void showUnavailableService(BuildContext context) => showDialog(useRootNavigator: false, 
       context: context,
       useSafeArea: false,
       barrierColor: Colors.black45,
@@ -484,7 +484,7 @@ class ProjectDialogs {
             // ],
           )));
 
-  static void showLogoutDialog(BuildContext context) => showAdaptiveDialog(
+  static void showLogoutDialog(BuildContext context) => showAdaptiveDialog(useRootNavigator: false, 
       context: context,
       builder: (context) => AlertDialog.adaptive(
               backgroundColor: context.color.primaryContainer,
@@ -535,7 +535,7 @@ class ProjectDialogs {
               ]));
 
   static void showDeleteAccountDialog(BuildContext context) =>
-      showAdaptiveDialog(
+      showAdaptiveDialog(useRootNavigator: false, 
           context: context,
           builder: (context) => AlertDialog(
                   backgroundColor: context.color.primaryContainer,
@@ -583,7 +583,7 @@ class ProjectDialogs {
     DateTime tempDate = initialDate ?? DateTime(2003);
 
     if (Platform.isIOS) {
-      return await showCupertinoDialog<DateTime>(
+      return await showCupertinoDialog<DateTime>(useRootNavigator: false, 
         context: context,
         barrierDismissible: true,
         builder: (context) {
@@ -1111,7 +1111,7 @@ class ProjectDialogs {
   }
 
   static void showDeleteDialog(BuildContext context) {
-    showDialog(
+    showDialog(useRootNavigator: false, 
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
@@ -1252,7 +1252,7 @@ class ProjectDialogs {
   }
 
   static void showAiSearchLoader(BuildContext context) {
-    showDialog(
+    showDialog(useRootNavigator: false, 
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.black.withAlpha(50),
@@ -1539,7 +1539,7 @@ class ProjectDialogs {
   }
 
   static void showLoader(BuildContext context) {
-    showDialog(
+    showDialog(useRootNavigator: false, 
         context: context,
         builder: (dialogContext) {
           _dialogContext = dialogContext;

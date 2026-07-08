@@ -149,7 +149,7 @@ class _UpdatedPassengerPageState extends State<UpdatedPassengerPage> {
             if (isDelete) {
               ProjectDialogs.showDeleteDialog(context);
             } else {
-              showDialog(
+              showDialog(useRootNavigator: false, 
                 context: context,
                 barrierDismissible: false,
                 builder: (context) => const Center(

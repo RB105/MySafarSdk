@@ -101,7 +101,7 @@ class _AddPassengerPageState extends State<AddPassengerPage> {
       child: BlocConsumer<UsersDataCubit, UsersDataState>(
         listener: (context, state) {
           if (state is UsersDataLoadingState) {
-            showDialog(
+            showDialog(useRootNavigator: false, 
               context: context,
               barrierDismissible: false,
               builder: (context) => const Center(
