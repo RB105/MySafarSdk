@@ -55,7 +55,7 @@ dependencies:
   permission_handler: ^11.3.1
   mrz_parser: ^2.0.1
   audio_waveforms: ^2.0.1
-  flutter_animate: ^4.5.2
+  flutter_animate: ^3.1.0
   pixel_snap: ^0.1.5
   record: '>=6.0.0 <8.0.0'
   # 5.x'da API o'zgargan (top-level funksiya -> Geocoding klassi), diapazon emas
