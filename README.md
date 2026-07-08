@@ -36,9 +36,30 @@ Host app ichida modul sifatida:
 
 ```dart
 Navigator.of(context).push(
-  MaterialPageRoute(builder: (_) => const MySafarEmbed()),
+  MaterialPageRoute(
+    builder: (_) => const MySafarEmbed(
+      // Ixtiyoriy: host user'ini telefon raqami bilan bir marta jim
+      // ro'yxatdan o'tkazadi (/auth/web-register). Raqam o'zgarsa qayta
+      // ro'yxatdan o'tadi.
+      phoneNumber: '998901234567',
+    ),
+  ),
 );
 ```
+
+Embed rejimi uchun foydali config maydonlari:
+
+```dart
+MySafarConfig(
+  ...
+  appName: 'Unired Travel',   // UI'dagi "MySafar" brendi o'rniga
+  enableServicesTab: false,   // faqat avia oqimi kerak bo'lsa
+  // enableShowcaseTour / enableVersionGate default o'chiq
+)
+```
+
+Embed ichidagi bosh ekranda host'ga qaytish tugmasi chiqadi; Android back ham
+avval SDK stack'ini yechib, oxirida host ekraniga qaytadi.
 
 Deep-link (masalan `https://mysafar.uz/payment?billing_id=...`) hostda
 tinglanadi va SDK'ga uzatiladi: `MySafarSdk.handleLink(uri)`.

@@ -69,10 +69,40 @@ class MySafarApp extends StatelessWidget {
 ///
 /// Cheklov: global `NavigationService.navigatorKey` tufayli bir vaqtda faqat
 /// BITTA `MySafarEmbed`/`MySafarApp` instance'i mavjud bo'lishi mumkin.
-class MySafarEmbed extends StatelessWidget {
-  const MySafarEmbed({super.key, this.initialRoute});
+class MySafarEmbed extends StatefulWidget {
+  const MySafarEmbed({super.key, this.initialRoute, this.phoneNumber});
 
   final String? initialRoute;
+
+  /// Berilsa, ekran ochilishidan oldin foydalanuvchi shu raqam bilan MySafar
+  /// backend'ida jim ro'yxatdan o'tkaziladi ([MySafarSdk.ensureRegistered]).
+  /// Bir marta bajariladi; raqam o'zgargan bo'lsa qayta ro'yxatdan o'tadi.
+  /// Ro'yxat muvaffaqiyatsiz bo'lsa ham ekran ochiladi (mehmon rejimi).
+  final String? phoneNumber;
+
+  @override
+  State<MySafarEmbed> createState() => _MySafarEmbedState();
+}
+
+class _MySafarEmbedState extends State<MySafarEmbed> {
+  late final Future<void> _ready = widget.phoneNumber == null
+      ? Future<void>.value()
+      : MySafarSdk.ensureRegistered(widget.phoneNumber!);
+
+  @override
+  void initState() {
+    super.initState();
+    // Home ekranidagi "orqaga" tugmasi shu orqali host route'ini yopadi.
+    MySafarSdk.attachEmbedExit(() {
+      if (mounted) Navigator.of(context).pop();
+    });
+  }
+
+  @override
+  void dispose() {
+    MySafarSdk.detachEmbedExit();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -87,24 +117,39 @@ class MySafarEmbed extends StatelessWidget {
         }
         Navigator.of(context).pop();
       },
-      child: _MySafarLocalizedShell(
-        builder: (context) => MaterialApp(
-          navigatorKey: NavigationService.navigatorKey,
-          navigatorObservers: [NavigationService.routeObserver],
-          locale: context.locale,
-          localizationsDelegates: <LocalizationsDelegate<dynamic>>[
-            ...tgFallbackDelegates,
-            ...context.localizationDelegates,
-          ],
-          supportedLocales: context.supportedLocales,
-          onGenerateRoute: RouterGenerator.router.onGenerate,
-          theme: ProjectTheme.light,
-          darkTheme: ProjectTheme.dark,
-          themeMode: context.select<ThemeNotifier, ThemeMode>(
-              (notifier) => notifier.themeMode),
-          debugShowCheckedModeBanner: false,
-          initialRoute: initialRoute ?? BottomNavBarPage.routeName,
-        ),
+      child: FutureBuilder<void>(
+        future: _ready,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            // Jim ro'yxatdan o'tish ketmoqda — host theme'iga bog'lanmagan
+            // neytral yuklanish ekrani.
+            return const ColoredBox(
+              color: Color(0xFFF5F6FA),
+              child: Center(
+                child: CircularProgressIndicator(color: Color(0xFF3E5788)),
+              ),
+            );
+          }
+          return _MySafarLocalizedShell(
+            builder: (context) => MaterialApp(
+              navigatorKey: NavigationService.navigatorKey,
+              navigatorObservers: [NavigationService.routeObserver],
+              locale: context.locale,
+              localizationsDelegates: <LocalizationsDelegate<dynamic>>[
+                ...tgFallbackDelegates,
+                ...context.localizationDelegates,
+              ],
+              supportedLocales: context.supportedLocales,
+              onGenerateRoute: RouterGenerator.router.onGenerate,
+              theme: ProjectTheme.light,
+              darkTheme: ProjectTheme.dark,
+              themeMode: context.select<ThemeNotifier, ThemeMode>(
+                  (notifier) => notifier.themeMode),
+              debugShowCheckedModeBanner: false,
+              initialRoute: widget.initialRoute ?? BottomNavBarPage.routeName,
+            ),
+          );
+        },
       ),
     );
   }

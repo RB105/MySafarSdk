@@ -206,6 +206,18 @@ class _MainPageState extends State<MainPage>
                                     Colors.transparent, const Color(0xFF3E5788), t)!,
                             ),
                         ),
+                        // Embed rejimda host app'ga (masalan Unired) qaytish
+                        // tugmasi — SDK'ning o'z stack'ida emas, host route'ini
+                        // yopadi.
+                        leading: MySafarSdk.isEmbedded
+                            ? Padding(
+                                padding: const EdgeInsets.only(left: 12),
+                                child: _circleIconButton(
+                                    null,
+                                    MySafarSdk.exitEmbed,
+                                    iconData: Icons.arrow_back_rounded),
+                              )
+                            : null,
                         actions: [
                             NewsUnreadBadge(
                                 child: _circleIconButton(
@@ -371,8 +383,11 @@ class _MainPageState extends State<MainPage>
     }
 
 
-    Widget _circleIconButton(String asset, VoidCallback onTap,
-        {GlobalKey? showcaseKey, String? showcaseTitle, String? showcaseDesc})
+    Widget _circleIconButton(String? asset, VoidCallback onTap,
+        {IconData? iconData,
+        GlobalKey? showcaseKey,
+        String? showcaseTitle,
+        String? showcaseDesc})
     {
         final Widget button = InkWell(
             borderRadius: BorderRadius.circular(22),
@@ -388,12 +403,14 @@ class _MainPageState extends State<MainPage>
                 child: SizedBox(
                     width: 20,
                     height: 20,
-                    child: SvgPicture.asset(
-                        asset,
-                        colorFilter:  ColorFilter.mode(
-                            Colors.white, BlendMode.srcIn
+                    child: asset != null
+                        ? SvgPicture.asset(
+                            asset,
+                            colorFilter: ColorFilter.mode(
+                                Colors.white, BlendMode.srcIn
+                            )
                         )
-                    )
+                        : Icon(iconData, size: 20, color: Colors.white)
                 )
             )
         );

@@ -113,6 +113,34 @@ class AuthService with RequestConfig {
     return response;
   }
 
+  /// Host app foydalanuvchisini telefon raqami bilan tez (parolsiz/OTPsiz)
+  /// ro'yxatdan o'tkazadi — embed stsenariysi uchun. Muvaffaqiyatda tokenlar
+  /// saqlanadi va sessiya ochiladi.
+  Future<NetworkResponse> webRegister({required String phoneNumber}) async {
+    final response = await postRequest(
+        endPoint: EndPoints.auth_web_register,
+        params: {"phone_number": phoneNumber});
+
+    if (response is NetworkSuccessResponse) {
+      await MySafarSdk.tokens.saveTokens(
+        access: '${response.data["jwt_token"]["access"]}',
+        refresh: '${response.data["jwt_token"]["refresh"]}',
+      );
+      MySafarSdk.callbacks.onLoggedIn?.call();
+
+      setRegId();
+
+      _analyticsService.trackUserRegisteredPhone(phoneNumber: phoneNumber);
+      _analyticsService.setUser(userId: phoneNumber, attributes: {
+        'auth_provider': 'web_register',
+        'lang': _db.read<String>('lang') ?? 'uz',
+      });
+
+      return NetworkSuccessResponse(data: response.data);
+    }
+    return response;
+  }
+
   // Future<NetworkResponse> login({
   //   required String phoneNum,
   //   required String password,

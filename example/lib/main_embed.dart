@@ -51,7 +51,15 @@ class HostHomePage extends StatelessWidget {
           label: const Text('MySafar — aviabilet'),
           onPressed: () {
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const MySafarEmbed()),
+              MaterialPageRoute(
+                builder: (_) => const MySafarEmbed(
+                  // Host user'ining raqami — SDK bir marta jim ro'yxatdan
+                  // o'tkazadi (--dart-define=USER_PHONE=998... bilan bering).
+                  phoneNumber: String.fromEnvironment('USER_PHONE') == ''
+                      ? null
+                      : String.fromEnvironment('USER_PHONE'),
+                ),
+              ),
             );
           },
         ),

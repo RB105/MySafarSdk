@@ -3,10 +3,18 @@ import 'dart:async' show unawaited;
 import 'package:easy_localization/easy_localization.dart'
     show EasyLocalization;
 import 'package:firebase_core/firebase_core.dart' show Firebase;
+import 'package:flutter/foundation.dart' show VoidCallback, debugPrint;
 import 'package:flutter/widgets.dart' show WidgetsFlutterBinding;
 import 'package:get_storage/get_storage.dart' show GetStorage;
+import 'package:mysafar_sdk/src/core/config/response_config.dart'
+    show NetworkErrorResponse, NetworkSuccessResponse;
 import 'package:mysafar_sdk/src/core/config/sdk_storage.dart'
-    show kMySafarStorageContainer;
+    show kMySafarStorageContainer, sdkStorage;
+import 'package:mysafar_sdk/src/service/auth_service.dart' show AuthService;
+import 'package:mysafar_sdk/src/service/profile/profile_cache.dart'
+    show ProfileCache;
+import 'package:mysafar_sdk/src/service/profile/tickets_cache.dart'
+    show TicketsCache;
 import 'package:mysafar_sdk/src/api/analytics.dart';
 import 'package:mysafar_sdk/src/api/callbacks.dart';
 import 'package:mysafar_sdk/src/api/config.dart';
@@ -95,4 +103,57 @@ class MySafarSdk {
   /// `https://mysafar.uz/payment?billing_id=...`). SDK navigatori tayyor
   /// bo'lsa darhol ochadi, bo'lmasa pending saqlab keyin ochadi.
   static void handleLink(Uri uri) => DeepLinkGateway.handleLink(uri);
+
+  // ── Tez ro'yxatdan o'tish (web-register) ─────────────────────────────────
+
+  static const String _kRegisteredPhoneKey = 'web_registered_phone';
+
+  /// Host user'ini telefon raqami bilan MySafar backend'ida jim ro'yxatdan
+  /// o'tkazadi (`/auth/web-register`) va tokenlarni saqlaydi.
+  ///
+  /// Idempotent: shu raqam bilan allaqachon ro'yxatdan o'tilgan va sessiya
+  /// tirik bo'lsa hech narsa qilmaydi. Raqam o'zgargan bo'lsa (host'da boshqa
+  /// user kirgan) — eski sessiya/keshlar tozalanib, yangi raqam bilan qayta
+  /// ro'yxatdan o'tiladi.
+  static Future<bool> ensureRegistered(String phoneNumber) async {
+    final phone = phoneNumber.trim();
+    if (phone.isEmpty) return false;
+
+    final store = sdkStorage();
+    final registeredPhone = store.read<String>(_kRegisteredPhoneKey);
+
+    if (registeredPhone == phone && tokens.isLoggedIn) return true;
+
+    if (registeredPhone != null && registeredPhone != phone) {
+      // Boshqa user — oldingi sessiya va PII keshlari qoldirilmaydi.
+      await tokens.clear();
+      await ProfileCache().clear();
+      await TicketsCache().clear();
+      await store.remove(_kRegisteredPhoneKey);
+    }
+
+    final response = await AuthService().webRegister(phoneNumber: phone);
+    if (response is NetworkSuccessResponse) {
+      await store.write(_kRegisteredPhoneKey, phone);
+      return true;
+    }
+    debugPrint('MySafarSdk.ensureRegistered failed: '
+        '${(response as NetworkErrorResponse).getError()}');
+    return false;
+  }
+
+  // ── Embed rejimi ─────────────────────────────────────────────────────────
+
+  static VoidCallback? _embedExit;
+
+  /// Hozir `MySafarEmbed` ichida ishlayapmizmi (host'ga qaytish tugmasi shu
+  /// bayroqqa qarab ko'rsatiladi).
+  static bool get isEmbedded => _embedExit != null;
+
+  /// Embed'dan chiqib host ekraniga qaytadi. `MySafarEmbed` o'rnatadi.
+  static void exitEmbed() => _embedExit?.call();
+
+  // MySafarEmbed uchun ichki API.
+  static void attachEmbedExit(VoidCallback onExit) => _embedExit = onExit;
+  static void detachEmbedExit() => _embedExit = null;
 }
