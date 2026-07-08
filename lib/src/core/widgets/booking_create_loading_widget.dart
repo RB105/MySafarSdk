@@ -49,7 +49,11 @@ class LoadingDialog {
 
   static void dismiss(BuildContext context) {
     if (_isDialogShowing) {
-      Navigator.of(context, rootNavigator: true).pop();
+      // Dialog SDK navigatorida ochilgan (show'da useRootNavigator: false) —
+      // yopish ham o'sha navigatorda bo'lishi shart. rootNavigator: true embed
+      // rejimda HOST (Unired) route'ini yopib yuborardi: booking xatosida
+      // foydalanuvchi to'satdan host to'lovlar ekraniga otilib ketardi.
+      Navigator.of(context).pop();
       _isDialogShowing = false;
     }
   }
