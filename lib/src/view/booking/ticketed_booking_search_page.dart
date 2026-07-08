@@ -22,7 +22,7 @@ import 'package:mysafar_sdk/src/view/booking/booking_confirm_page.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/custom_input_field_widget.dart';
 import 'package:mysafar_sdk/src/view/profile/src/expire_time_widget.dart';
 import 'package:mysafar_sdk/src/view/profile/src/my_ticket_widget.dart';
-import 'package:open_file/open_file.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -268,7 +268,7 @@ class _TicketResultCardState extends State<_TicketResultCard> {
       if (!await targetDir.exists()) await targetDir.create(recursive: true);
       final filePath = p.join(targetDir.path, "$fileName.pdf");
       await Dio().download(url, filePath);
-      await OpenFile.open(filePath);
+      await OpenFilex.open(filePath);
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

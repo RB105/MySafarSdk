@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
-import 'package:open_file/open_file.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -29,7 +29,7 @@ class FileDownloaderProvider extends ChangeNotifier {
         await dio.download(url, filePath);
       }
 
-      await OpenFile.open(filePath);
+      await OpenFilex.open(filePath);
     } catch (e) {
       showToastMessage(e.toString());
     } finally {

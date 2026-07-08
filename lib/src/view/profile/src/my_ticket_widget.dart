@@ -17,7 +17,7 @@ import 'package:mysafar_sdk/src/model/remote/profile/confirmed_ticket_models.dar
 import 'package:mysafar_sdk/src/view/booking/booking_confirm_page.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/dashedline.dart';
 import 'package:mysafar_sdk/src/view/profile/src/expire_time_widget.dart';
-import 'package:open_file/open_file.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -54,7 +54,7 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
       final Dio dio = Dio();
       await dio.download(url, filePath);
 
-      await OpenFile.open(filePath);
+      await OpenFilex.open(filePath);
     } catch (e) {
       // ignore: use_build_context_synchronously
       ScaffoldMessenger.of(context).showSnackBar(

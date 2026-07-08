@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
-import 'package:open_file/open_file.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -21,7 +21,7 @@ class PdfDownloadService {
         await _downloadFile(pdfUrl, filePath);
       }
 
-      await OpenFile.open(filePath);
+      await OpenFilex.open(filePath);
 
       return const PdfDownloadResult.success();
     } catch (e) {
