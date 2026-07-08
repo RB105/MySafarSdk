@@ -63,9 +63,17 @@ class MySafarEmbed extends StatefulWidget {
 }
 
 class _MySafarEmbedState extends State<MySafarEmbed> {
+  // Ro'yxatdan o'tish 10s dan oshsa kutmaymiz — mehmon rejimida ochamiz
+  // (aks holda sekin tarmoqda foydalanuvchi bo'sh ekranga qarab qoladi).
   late final Future<void> _ready = widget.phoneNumber == null
       ? Future<void>.value()
-      : MySafarSdk.ensureRegistered(widget.phoneNumber!);
+      : MySafarSdk.ensureRegistered(widget.phoneNumber!)
+          .timeout(const Duration(seconds: 10), onTimeout: () => false);
+
+  // Debug'da qora ekran o'rniga xatoni ekranda ko'rsatamiz — embed subtree'da
+  // yiqilgan har qanday exception shu yerda ushlanadi.
+  FlutterErrorDetails? _caughtError;
+  FlutterExceptionHandler? _prevOnError;
 
   @override
   void initState() {
@@ -74,16 +82,53 @@ class _MySafarEmbedState extends State<MySafarEmbed> {
     MySafarSdk.attachEmbedExit(() {
       if (mounted) Navigator.of(context).pop();
     });
+    if (kDebugMode) {
+      _prevOnError = FlutterError.onError;
+      FlutterError.onError = (details) {
+        _prevOnError?.call(details);
+        if (mounted && _caughtError == null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _caughtError = details);
+          });
+        }
+      };
+    }
   }
 
   @override
   void dispose() {
+    if (kDebugMode && _prevOnError != null) {
+      FlutterError.onError = _prevOnError;
+    }
     MySafarSdk.detachEmbedExit();
     super.dispose();
   }
 
+  Widget _debugErrorScreen(FlutterErrorDetails details) {
+    return ColoredBox(
+      color: const Color(0xFFB00020),
+      child: SafeArea(
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'MySafar SDK xatosi (faqat debug\'da ko\'rinadi):\n\n'
+              '${details.exceptionAsString()}\n\n'
+              '${details.stack ?? ''}',
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (kDebugMode && _caughtError != null) {
+      return _debugErrorScreen(_caughtError!);
+    }
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
