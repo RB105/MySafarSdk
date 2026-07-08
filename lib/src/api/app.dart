@@ -183,6 +183,12 @@ Widget _sdkMaterialApp(BuildContext context, {required String initialRoute}) {
     ],
     supportedLocales: SdkLocalization.supportedLocales,
     onGenerateRoute: RouterGenerator.router.onGenerate,
+    // MUHIM: default onGenerateInitialRoutes '/bottom_nav_bar'ni ['/','/bottom_nav_bar']
+    // zanjiriga bo'ladi; router'dagi '/' case (telegram-auth qaytishi uchun)
+    // postFrame'da pop qilib butun stack'ni bo'shatib qo'yardi — embed qora
+    // ekran bo'lib qolardi. Faqat so'ralgan route'ning o'zini quramiz.
+    onGenerateInitialRoutes: (String route) =>
+        [RouterGenerator.router.onGenerate(RouteSettings(name: route))],
     theme: ProjectTheme.light,
     darkTheme: ProjectTheme.dark,
     themeMode: context.select<ThemeNotifier, ThemeMode>(
