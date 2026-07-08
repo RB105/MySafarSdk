@@ -116,7 +116,10 @@ class MySafarSdk {
   /// user kirgan) — eski sessiya/keshlar tozalanib, yangi raqam bilan qayta
   /// ro'yxatdan o'tiladi.
   static Future<bool> ensureRegistered(String phoneNumber) async {
-    final phone = phoneNumber.trim();
+    // Normalizatsiya: "+998 90 123-45-67" ham, "998901234567" ham bitta
+    // raqam — formatlash farqi qayta-registratsiyaga sabab bo'lmasin.
+    // Backend ham raqamni +siz (998...) formatda kutadi.
+    final phone = phoneNumber.replaceAll(RegExp(r'[^0-9]'), '');
     if (phone.isEmpty) return false;
 
     final store = sdkStorage();
