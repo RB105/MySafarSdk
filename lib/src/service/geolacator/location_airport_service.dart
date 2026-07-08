@@ -119,7 +119,7 @@ class LocationAirportService {
       // Get city name from coordinates using geocoding
       List<Placemark> placemarks = [];
       try {
-        placemarks = await placemarkFromCoordinates(
+        placemarks = await Geocoding().placemarkFromCoordinates(
           locationData.latitude!,
           locationData.longitude!,
         ).timeout(
