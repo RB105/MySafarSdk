@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:io' show Platform;
-import 'package:easy_localization/easy_localization.dart';
+import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:flutter/cupertino.dart'
     show
         CupertinoAlertDialog,

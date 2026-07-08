@@ -36,9 +36,6 @@ import 'package:mysafar_sdk/src/view/profile/pages/booked_tickets_page.dart';
 import 'package:mysafar_sdk/src/view/profile/pages/updated_passenger_page.dart';
 import 'package:mysafar_sdk/src/view/profile/pages/edit_profile_page.dart';
 import 'package:mysafar_sdk/src/view/profile/profile_page.dart';
-import 'package:mysafar_sdk/src/view/splash/language_selection_page.dart';
-import 'package:mysafar_sdk/src/view/splash/onboarding_screen.dart';
-import 'package:mysafar_sdk/src/view/splash/splash_screen.dart';
 import 'package:flutter/material.dart'
     show MaterialPageRoute, Route, RouteSettings, Widget;
 import 'package:mysafar_sdk/src/view/tickets/ticket_info_page.dart';
@@ -57,14 +54,6 @@ class RouterGenerator {
   // generator
   Route onGenerate(RouteSettings settings) {
     switch (settings.name) {
-      // splashqo'shib ber
-      case SplashScreen.routeName:
-        return _navigate(const SplashScreen(), settings);
-      case LanguageSelectionPage.routeName:
-        return _navigate(const LanguageSelectionPage(), settings);
-      case OnBoardingScreen.routeName:
-        return _navigate(const OnBoardingScreen(), settings);
-
       case BottomNavBarPage.routeName:
         return _navigate(
             BottomNavBarPage(

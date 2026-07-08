@@ -1,7 +1,6 @@
 import 'dart:async' show unawaited;
 
-import 'package:easy_localization/easy_localization.dart'
-    show EasyLocalization;
+import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:firebase_core/firebase_core.dart' show Firebase;
 import 'package:flutter/foundation.dart' show VoidCallback, debugPrint;
 import 'package:flutter/widgets.dart' show WidgetsFlutterBinding;
@@ -85,12 +84,18 @@ class MySafarSdk {
 
     AppConfig.apply(config);
 
+    // SDK o'z alohida konteynerida ishlaydi — host storage'iga tegilmaydi.
     await Future.wait([
-      EasyLocalization.ensureInitialized(),
-      // SDK o'z alohida konteynerida ishlaydi — host storage'iga tegilmaydi.
       GetStorage.init(kMySafarStorageContainer),
       HiveService.init(),
     ]);
+
+    // Storage tayyor bo'lgach til yuklanadi (izolyatsiyalangan — host'ning
+    // lokalizatsiyasiga tegilmaydi).
+    await SdkLocalization.init(
+      startLocale: config.startLocale,
+      persist: config.saveLocale,
+    );
 
     // Firestore'dan recommendation endpointlarini fon rejimida yangilaymiz
     // (bloklamaydi — birinchi qidiruv kesh yoki fallback bilan ishlaydi).

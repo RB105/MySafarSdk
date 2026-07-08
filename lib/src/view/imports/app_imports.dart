@@ -1,5 +1,5 @@
 export 'package:flutter/material.dart';
-export 'package:easy_localization/easy_localization.dart' hide TextDirection;
+export 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 export 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 export 'package:mysafar_sdk/src/core/tools/lang_helper.dart';
 export 'package:mysafar_sdk/src/core/styles/theme.dart';

@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/service/image_picker_service.dart';
-import 'package:easy_localization/easy_localization.dart';
+import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 
 import 'package:flutter/material.dart';
 

@@ -1,5 +1,4 @@
-import 'package:easy_localization/easy_localization.dart'
-    show StringTranslateExtension;
+import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 
 extension DateTimeExt on DateTime {
   bool isSame(DateTime? date) {

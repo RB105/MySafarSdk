@@ -1,6 +1,6 @@
 // ignore_for_file: unused_local_variable
 
-import 'package:easy_localization/easy_localization.dart';
+import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:mysafar_sdk/src/core/tools/lang_helper.dart';
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';

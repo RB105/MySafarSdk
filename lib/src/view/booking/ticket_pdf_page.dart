@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:easy_localization/easy_localization.dart';
+import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:flutter/material.dart';
 
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';

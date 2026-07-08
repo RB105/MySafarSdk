@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:easy_localization/easy_localization.dart';
+import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mysafar_sdk/src/core/enum/currency.dart' show AppCurrency;

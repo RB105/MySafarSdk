@@ -16,7 +16,7 @@ class MySafarConfig {
     this.enableServicesTab = true,
     this.enableShowcaseTour = false,
     this.startLocale,
-    this.saveLocale = false,
+    this.saveLocale = true,
   });
 
   /// Asosiy backend (masalan `https://api.mysafar.ru`).
@@ -61,8 +61,8 @@ class MySafarConfig {
   /// Boshlang'ich til. `null` bo'lsa saqlangan til yoki `uz` ishlatiladi.
   final Locale? startLocale;
 
-  /// easy_localization tanlangan tilni saqlasinmi. Embed rejimda host'ning
-  /// o'z easy_localization'i bilan to'qnashmaslik uchun default `false`.
+  /// SDK ichida tanlangan til keyingi ochilishda eslab qolinsinmi. SDK'ning
+  /// o'z izolyatsiyalangan storage'ida saqlanadi — host'ga ta'sir qilmaydi.
   final bool saveLocale;
 }
 

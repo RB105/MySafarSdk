@@ -1,6 +1,8 @@
-import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
+import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart'
+    show SdkLocalization;
 import 'package:mysafar_sdk/src/core/localization/tg_fallback_localizations.dart';
 import 'package:mysafar_sdk/src/core/router/navigation_service.dart';
 import 'package:mysafar_sdk/src/core/router/router.dart' show RouterGenerator;
@@ -11,52 +13,24 @@ import 'package:mysafar_sdk/src/core/tools/currency_provider.dart'
     show CurrencyProvider;
 import 'package:mysafar_sdk/src/view/navbar/bottom_nav_bar.dart'
     show BottomNavBarPage;
-import 'package:mysafar_sdk/src/view/splash/splash_screen.dart'
-    show SplashScreen;
 import 'package:provider/provider.dart';
-import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
-
-const List<Locale> _supportedLocales = [
-  Locale('en'),
-  Locale('ru'),
-  Locale('uz'),
-  Locale('kk'),
-  Locale('tg'),
-  Locale('tr'),
-];
 
 /// SDK'ning to'liq app rejimi — o'zi `MaterialApp` quradi. Example app va
 /// keyinchalik MySafar app'ning o'zi shundan foydalanadi.
 ///
 /// `MySafarSdk.init` chaqirilgan bo'lishi shart.
 class MySafarApp extends StatelessWidget {
-  const MySafarApp({super.key, this.initialRoute, this.showSplash = false});
+  const MySafarApp({super.key, this.initialRoute});
 
-  /// Boshlang'ich route. Berilmasa: [showSplash] `true` bo'lsa splash/
-  /// onboarding oqimi, aks holda to'g'ridan-to'g'ri asosiy sahifa.
+  /// Boshlang'ich route. Berilmasa asosiy sahifa.
   final String? initialRoute;
-  final bool showSplash;
 
   @override
   Widget build(BuildContext context) {
-    return _MySafarLocalizedShell(
-      builder: (context) => MaterialApp(
-        navigatorKey: NavigationService.navigatorKey,
-        navigatorObservers: [NavigationService.routeObserver],
-        locale: context.locale,
-        localizationsDelegates: <LocalizationsDelegate<dynamic>>[
-          ...tgFallbackDelegates,
-          ...context.localizationDelegates,
-        ],
-        supportedLocales: context.supportedLocales,
-        onGenerateRoute: RouterGenerator.router.onGenerate,
-        theme: ProjectTheme.light,
-        darkTheme: ProjectTheme.dark,
-        themeMode: context.select<ThemeNotifier, ThemeMode>(
-            (notifier) => notifier.themeMode),
-        debugShowCheckedModeBanner: false,
-        initialRoute: initialRoute ??
-            (showSplash ? SplashScreen.routeName : BottomNavBarPage.routeName),
+    return _MySafarShell(
+      builder: (context) => _sdkMaterialApp(
+        context,
+        initialRoute: initialRoute ?? BottomNavBarPage.routeName,
       ),
     );
   }
@@ -66,6 +40,10 @@ class MySafarApp extends StatelessWidget {
 /// push qiladi. Ichkarida o'z Navigator/theme/lokalizatsiyasiga ega nested
 /// `MaterialApp` quriladi; Android back tugmasi avval ichki stack'ni yechadi,
 /// ichki stack tugagach host'ga qaytadi.
+///
+/// Izolyatsiya kafolati: SDK host'ning theme'i, lokalizatsiyasi, MediaQuery
+/// sozlamalari yoki storage'iga TEGMAYDI va ularga bog'lanmaydi — hammasi
+/// nested MaterialApp ichida, SDK'ning o'z resurslari bilan ishlaydi.
 ///
 /// Cheklov: global `NavigationService.navigatorKey` tufayli bir vaqtda faqat
 /// BITTA `MySafarEmbed`/`MySafarApp` instance'i mavjud bo'lishi mumkin.
@@ -130,22 +108,9 @@ class _MySafarEmbedState extends State<MySafarEmbed> {
               ),
             );
           }
-          return _MySafarLocalizedShell(
-            builder: (context) => MaterialApp(
-              navigatorKey: NavigationService.navigatorKey,
-              navigatorObservers: [NavigationService.routeObserver],
-              locale: context.locale,
-              localizationsDelegates: <LocalizationsDelegate<dynamic>>[
-                ...tgFallbackDelegates,
-                ...context.localizationDelegates,
-              ],
-              supportedLocales: context.supportedLocales,
-              onGenerateRoute: RouterGenerator.router.onGenerate,
-              theme: ProjectTheme.light,
-              darkTheme: ProjectTheme.dark,
-              themeMode: context.select<ThemeNotifier, ThemeMode>(
-                  (notifier) => notifier.themeMode),
-              debugShowCheckedModeBanner: false,
+          return _MySafarShell(
+            builder: (context) => _sdkMaterialApp(
+              context,
               initialRoute: widget.initialRoute ?? BottomNavBarPage.routeName,
             ),
           );
@@ -155,25 +120,44 @@ class _MySafarEmbedState extends State<MySafarEmbed> {
   }
 }
 
-/// Umumiy qobiq: EasyLocalization + provider'lar (theme, valyuta).
-/// [builder] EasyLocalization/provider'lar OSTIDAGI context bilan chaqiriladi —
-/// `context.locale` va `context.select<ThemeNotifier, ...>` shu yerda ishlaydi.
-class _MySafarLocalizedShell extends StatelessWidget {
-  const _MySafarLocalizedShell({required this.builder});
+/// SDK'ning yagona MaterialApp fabrikasi — theme, router va lokalizatsiya
+/// to'liq SDK'niki. easy_localization YO'Q: `SdkLocalization` global holatga
+/// tegmaydi, shuning uchun host app'ning tarjimalari buzilmaydi.
+Widget _sdkMaterialApp(BuildContext context, {required String initialRoute}) {
+  return MaterialApp(
+    navigatorKey: NavigationService.navigatorKey,
+    navigatorObservers: [NavigationService.routeObserver],
+    locale: SdkLocalization.locale,
+    localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+      ...tgFallbackDelegates,
+      GlobalMaterialLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+      GlobalCupertinoLocalizations.delegate,
+    ],
+    supportedLocales: SdkLocalization.supportedLocales,
+    onGenerateRoute: RouterGenerator.router.onGenerate,
+    theme: ProjectTheme.light,
+    darkTheme: ProjectTheme.dark,
+    themeMode: context.select<ThemeNotifier, ThemeMode>(
+        (notifier) => notifier.themeMode),
+    debugShowCheckedModeBanner: false,
+    initialRoute: initialRoute,
+  );
+}
+
+/// Umumiy qobiq: SDK til notifier'i + provider'lar (theme, valyuta).
+/// [builder] provider'lar OSTIDAGI context bilan chaqiriladi; til o'zgarsa
+/// butun SDK subtree qayta quriladi.
+class _MySafarShell extends StatelessWidget {
+  const _MySafarShell({required this.builder});
 
   final WidgetBuilder builder;
 
   @override
   Widget build(BuildContext context) {
-    final config = MySafarSdk.config;
-    return EasyLocalization(
-      saveLocale: config.saveLocale,
-      startLocale: config.startLocale ??
-          Locale(sdkStorage().read('lang') ?? 'uz'),
-      supportedLocales: _supportedLocales,
-      fallbackLocale: const Locale('uz'),
-      path: 'packages/mysafar_sdk/assets/lang',
-      child: MultiProvider(
+    return ValueListenableBuilder<Locale>(
+      valueListenable: SdkLocalization.localeNotifier,
+      builder: (context, _, __) => MultiProvider(
         providers: [
           ChangeNotifierProvider<ThemeNotifier>(create: (_) => ThemeNotifier()),
           ChangeNotifierProvider<CurrencyProvider>(

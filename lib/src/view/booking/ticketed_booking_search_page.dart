@@ -17,7 +17,7 @@ import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_m
     show FlightPrice, FluffyUzs;
 import 'package:mysafar_sdk/src/model/remote/booking/booking_create_model.dart';
 import 'package:mysafar_sdk/src/model/remote/profile/confirmed_ticket_models.dart';
-import 'package:easy_localization/easy_localization.dart';
+import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:mysafar_sdk/src/view/booking/booking_confirm_page.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/custom_input_field_widget.dart';
 import 'package:mysafar_sdk/src/view/profile/src/expire_time_widget.dart';

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:easy_localization/easy_localization.dart';
+import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:flutter/services.dart'
     show HapticFeedback, SystemUiOverlayStyle;
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart' show SizeContext;

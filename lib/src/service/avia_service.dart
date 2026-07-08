@@ -4,7 +4,7 @@ import 'package:mysafar_sdk/src/model/centrum/get_centrum_recommendation_model.d
 import 'package:mysafar_sdk/src/model/local/recom_req_model.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_model.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/ticket_date_price_model.dart';
-import 'package:easy_localization/easy_localization.dart';
+import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:mysafar_sdk/src/core/config/response_config.dart'
     show
         ErrorType,
