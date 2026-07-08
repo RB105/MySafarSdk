@@ -208,14 +208,15 @@ class _ProfilePageState extends State<ProfilePage> {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white.withOpacity(0.22)),
       ),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.flight_takeoff_rounded, color: Colors.white, size: 14),
-          SizedBox(width: 6),
+          const Icon(Icons.flight_takeoff_rounded,
+              color: Colors.white, size: 14),
+          const SizedBox(width: 6),
           Text(
-            "MySafar",
-            style: TextStyle(
+            MySafarSdk.brandName,
+            style: const TextStyle(
               color: Colors.white,
               fontSize: 12,
               fontWeight: FontWeight.w800,

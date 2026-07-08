@@ -10,6 +10,7 @@ import 'package:mysafar_sdk/src/view/main/main_page.dart';
 import 'package:mysafar_sdk/src/view/main/showcase_keys.dart';
 import 'package:mysafar_sdk/src/view/profile/pages/booked_tickets_page.dart';
 import 'package:mysafar_sdk/src/view/profile/profile_page.dart';
+import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 
 
@@ -26,13 +27,19 @@ class BottomNavBarPage extends StatefulWidget {
 
 class _BottomNavBarPageState extends State<BottomNavBarPage> {
   int _pageIndex = 0;
-  final _pages = const [
-    MainPage(),
-    BookedTicketsPage(),
-    ServicesPage(),
-    ProfilePage(),
+
+  // "Xizmatlar" tab'i host config'iga bog'liq — o'chiq bo'lsa sahifa ham,
+  // pastki tugma ham qurilmaydi.
+  late final bool _servicesEnabled = MySafarSdk.config.enableServicesTab;
+
+  late final List<Widget> _pages = [
+    const MainPage(),
+    const BookedTicketsPage(),
+    if (_servicesEnabled) const ServicesPage(),
+    const ProfilePage(),
   ];
 
+  int get _profileIndex => _servicesEnabled ? 3 : 2;
 
   late final List<bool> _loaded = List<bool>.filled(_pages.length, false);
 
@@ -42,11 +49,12 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
 
   @override
   void initState() {
-    _pageIndex = widget.pageIndex ?? 0;
+    _pageIndex = (widget.pageIndex ?? 0).clamp(0, _pages.length - 1);
     _loaded[_pageIndex] = true;
     super.initState();
-    _shouldShowcase =
-        _pageIndex == 0 && sdkStorage().read(_showcaseSeenKey) != true;
+    _shouldShowcase = MySafarSdk.config.enableShowcaseTour &&
+        _pageIndex == 0 &&
+        sdkStorage().read(_showcaseSeenKey) != true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       DeepLinkGateway.consumePendingLink();
     });
@@ -70,7 +78,7 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
               HomeShowcaseKeys.hot,
               HomeShowcaseKeys.popular,
               HomeShowcaseKeys.tabOrders,
-              HomeShowcaseKeys.tabServices,
+              if (_servicesEnabled) HomeShowcaseKeys.tabServices,
               HomeShowcaseKeys.tabProfile,
             ]);
           });
@@ -131,19 +139,20 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
                   showcaseTitle: "showcase_orders_title".tr(),
                   showcaseDesc: "showcase_orders_desc".tr()),
             ),
+            if (_servicesEnabled)
+              Expanded(
+                child: _navItem(
+                    index: 2,
+                    asset: Assets.homeHomeService,
+                    label: "services".tr(),
+                    isDark: isDark,
+                    showcaseKey: HomeShowcaseKeys.tabServices,
+                    showcaseTitle: "showcase_services_title".tr(),
+                    showcaseDesc: "showcase_services_desc".tr()),
+              ),
             Expanded(
               child: _navItem(
-                  index: 2,
-                  asset: Assets.homeHomeService,
-                  label: "services".tr(),
-                  isDark: isDark,
-                  showcaseKey: HomeShowcaseKeys.tabServices,
-                  showcaseTitle: "showcase_services_title".tr(),
-                  showcaseDesc: "showcase_services_desc".tr()),
-            ),
-            Expanded(
-              child: _navItem(
-                  index: 3,
+                  index: _profileIndex,
                   iconData: Icons.person_outline_rounded,
                   label: "profile".tr(),
                   isDark: isDark,

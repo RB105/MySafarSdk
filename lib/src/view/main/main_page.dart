@@ -1,5 +1,6 @@
 // ignore_for_file: depend_on_referenced_packages, deprecated_member_use
 
+import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'dart:async';
 import 'dart:ui' show ImageFilter;
 
@@ -350,7 +351,7 @@ class _MainPageState extends State<MainPage>
             child: SizedBox(
                 width: double.infinity,
                 child: Text(
-                    "home_slogan".tr(),
+                    MySafarSdk.brandify("home_slogan".tr()),
                     textAlign: TextAlign.left,
                     style: const TextStyle(
                         color: Colors.white,

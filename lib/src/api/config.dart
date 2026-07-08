@@ -8,10 +8,13 @@ class MySafarConfig {
     required this.baseUrl,
     required this.skoteBaseUrl,
     this.partnerToken = '',
+    this.appName,
     this.myId,
     this.socialAuth,
     this.enableFirestoreConfig = false,
     this.enableVersionGate = false,
+    this.enableServicesTab = true,
+    this.enableShowcaseTour = false,
     this.startLocale,
     this.saveLocale = false,
   });
@@ -24,6 +27,10 @@ class MySafarConfig {
 
   /// Partner-token auth uchun (`Authorization: Token ...`).
   final String partnerToken;
+
+  /// UI'da ko'rinadigan brend nomi. `null` bo'lsa "MySafar" ishlatiladi —
+  /// host app o'z nomini berishi mumkin (masalan home sarlavhasida).
+  final String? appName;
 
   /// MyID identifikatsiya sozlamalari. `null` bo'lsa identifikatsiya kirish
   /// nuqtalari ko'rsatilmaydi.
@@ -41,6 +48,15 @@ class MySafarConfig {
   /// Faqat MySafar app'ning o'zida ma'noga ega — SDK embed qilingan hostda
   /// versiya siyosati host'niki, shu sabab default o'chiq.
   final bool enableVersionGate;
+
+  /// Pastki navigatsiyadagi "Xizmatlar" (visa, ban-check, destinations) tab'i.
+  /// `false` bo'lsa tab ko'rsatilmaydi — host faqat avia oqimini xohlasa.
+  final bool enableServicesTab;
+
+  /// Bosh sahifadagi birinchi-ochilish showcase (tutorial) turi. Embed
+  /// rejimda odatda keraksiz, shu sabab default o'chiq; MySafar app'ning o'zi
+  /// `true` qiladi.
+  final bool enableShowcaseTour;
 
   /// Boshlang'ich til. `null` bo'lsa saqlangan til yoki `uz` ishlatiladi.
   final Locale? startLocale;

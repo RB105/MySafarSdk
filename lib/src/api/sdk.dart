@@ -39,6 +39,16 @@ class MySafarSdk {
     return c!;
   }
 
+  /// UI'da ko'rinadigan brend nomi (host bergan bo'lsa o'shaniki).
+  static String get brandName => config.appName ?? 'MySafar';
+
+  /// [text] ichidagi "MySafar"/"Mysafar" so'zini host brendi bilan almashtiradi
+  /// (appName berilmagan bo'lsa matn o'zgarmaydi). Tarjima satrlari uchun.
+  static String brandify(String text) {
+    if (config.appName == null) return text;
+    return text.replaceAll(RegExp('mysafar', caseSensitive: false), brandName);
+  }
+
   static MySafarTokenStore get tokens => _tokens;
   static MySafarAnalytics get analytics => _analytics;
   static MySafarCallbacks get callbacks => _callbacks;
