@@ -17,14 +17,15 @@ dependencies:
   get_storage: ^2.1.1
   provider: ^6.0.5
   dio: ^5.9.0
-  bloc: ^7.0.0
+  # bloc 7.2+ (on<Event> API) dan 9.x gacha — Unired hozircha 7/9 oralig'ida.
+  bloc: '>=7.2.0 <10.0.0'
   mask_text_input_formatter: ^2.9.0
   google_sign_in: ^7.2.0
   webview_flutter: ^4.2.4
-  flutter_bloc: ^7.0.0
+  flutter_bloc: '>=7.3.0 <10.0.0'
   intl: ^0.20.2
   # Diapazon keng — host app (masalan Unired 32.x) bilan to'qnashmasligi uchun.
-  syncfusion_flutter_datepicker: 32.1.21
+  syncfusion_flutter_datepicker: '>=29.1.35 <35.0.0'
   firebase_core: '>=3.13.0 <5.0.0'
   firebase_auth: '>=5.7.0 <7.0.0'
   easy_localization: ^3.0.8
@@ -52,10 +53,10 @@ dependencies:
   flutter_staggered_grid_view: ^0.7.0
   expandable_page_view: ^1.0.17
   latlong2: '>=0.9.0 <0.11.0'
-  permission_handler: ^11.3.1
+  permission_handler: '>=11.3.1 <13.0.0'
   mrz_parser: ^2.0.1
   audio_waveforms: ^2.0.1
-  flutter_animate: ^3.1.0
+  flutter_animate: ^4.5.2
   pixel_snap: ^0.1.5
   record: '>=6.0.0 <8.0.0'
   # 5.x'da API o'zgargan (top-level funksiya -> Geocoding klassi), diapazon emas
@@ -115,3 +116,4 @@ flutter:
           weight: 400
         - asset: assets/fonts/Gilroy/SemiBold.ttf
           weight: 600
+
