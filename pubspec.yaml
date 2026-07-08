@@ -59,9 +59,9 @@ dependencies:
   flutter_animate: ^4.5.2
   pixel_snap: ^0.1.5
   record: '>=6.0.0 <8.0.0'
-  # 5.x'da API o'zgargan (top-level funksiya -> Geocoding klassi), diapazon emas
-  # aynan shu major — kod ikkala majorga birdek mos bo'lolmaydi.
-  geocoding: ^5.0.0
+  # 4.x'da qoladi: 5.x runtime'da pigeon->analyzer tortadi va host applarning
+  # codegen to'plami (hive_generator, analyzer pin) bilan to'qnashadi.
+  geocoding: ^4.0.0
   location: ^8.0.1
   google_maps_flutter: ^2.12.3
   google_places_flutter: ^2.1.1

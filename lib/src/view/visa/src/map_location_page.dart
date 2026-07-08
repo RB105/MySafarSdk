@@ -68,8 +68,8 @@ class _MapLocationPickerPageState extends State<MapLocationPickerPage> {
   Future<void> _getAddressFromLatLng(LatLng position) async {
     setState(() => isLoading = true);
     try {
-      List<Placemark> placemarks = await Geocoding()
-          .placemarkFromCoordinates(position.latitude, position.longitude);
+      List<Placemark> placemarks =
+      await placemarkFromCoordinates(position.latitude, position.longitude);
       if (placemarks.isNotEmpty) {
         final place = placemarks.first;
         setState(() {
