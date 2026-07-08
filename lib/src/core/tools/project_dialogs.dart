@@ -11,7 +11,6 @@ import 'package:flutter/cupertino.dart'
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show FontWeight, HapticFeedback;
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:get_storage/get_storage.dart';
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/service/profile/profile_cache.dart';
 import 'package:mysafar_sdk/src/service/profile/tickets_cache.dart';
@@ -48,6 +47,7 @@ import 'package:url_launcher/url_launcher.dart'
 
 import 'formatters.dart';
 import 'package:mysafar_sdk/src/core/tools/sdk_sheets.dart';
+import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 
 class ProjectDialogs {
   static BuildContext? _dialogContext;
@@ -495,7 +495,7 @@ class ProjectDialogs {
               actions: [
                 TextButton(
                     onPressed: () async {
-                      final box = GetStorage();
+                      final box = sdkStorage();
                       final isFirstTime = box.read('isFirstTime');
                       final lang = box.read('lang');
 
@@ -546,7 +546,7 @@ class ProjectDialogs {
                   actions: [
                     TextButton(
                         onPressed: () async {
-                          final box = GetStorage();
+                          final box = sdkStorage();
                           final isFirstTime = box.read('isFirstTime');
                           final lang = box.read('lang');
 

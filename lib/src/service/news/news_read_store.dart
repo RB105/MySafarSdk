@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:mysafar_sdk/src/model/remote/news/news_model.dart';
 import 'package:mysafar_sdk/src/service/news/news_repository.dart';
+import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 
 /// Qaysi yangiliklar o'qilganini qurilmada saqlaydi (per-device).
 ///
@@ -13,7 +14,7 @@ class NewsReadStore {
   factory NewsReadStore() => instance;
 
   static const String _key = 'read_news_ids';
-  final GetStorage _storage = GetStorage();
+  final GetStorage _storage = sdkStorage();
 
   /// Bell ikonkasidagi o'qilmagan soni — global kuzatiladi (badge shu orqali
   /// yangilanadi).

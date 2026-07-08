@@ -1,4 +1,5 @@
 import 'package:get_storage/get_storage.dart';
+import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 
 /// Auth tokenlarini saqlash chegarasi. SDK ichidagi barcha token o'qish/yozish
 /// shu interfeys orqali o'tadi — host app o'z xohishiga ko'ra secure storage
@@ -26,7 +27,7 @@ abstract class MySafarTokenStore {
 /// Default implementatsiya — app'ning hozirgi xatti-harakati bilan bir xil
 /// (GetStorage, `access_token`/`refresh_token` kalitlari).
 class GetStorageTokenStore extends MySafarTokenStore {
-  GetStorageTokenStore({GetStorage? storage}) : _db = storage ?? GetStorage();
+  GetStorageTokenStore({GetStorage? storage}) : _db = storage ?? sdkStorage();
 
   static const String accessKey = 'access_token';
   static const String refreshKey = 'refresh_token';

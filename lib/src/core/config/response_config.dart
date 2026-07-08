@@ -1,5 +1,5 @@
-import 'package:get_storage/get_storage.dart';
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
+import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 
 abstract class NetworkResponse {
   const NetworkResponse();
@@ -20,7 +20,7 @@ final class NetworkErrorResponse<T> extends NetworkResponse {
 
   String getError() {
     final err = error;
-    final locale = GetStorage().read<String>('lang') ?? 'uz';
+    final locale = sdkStorage().read<String>('lang') ?? 'uz';
 
     if (err is Map) {
       final extracted = _extractErrorMessage(err, locale);

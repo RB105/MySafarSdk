@@ -1,6 +1,5 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:get_storage/get_storage.dart' show GetStorage;
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/core/localization/tg_fallback_localizations.dart';
 import 'package:mysafar_sdk/src/core/router/navigation_service.dart';
@@ -15,6 +14,7 @@ import 'package:mysafar_sdk/src/view/navbar/bottom_nav_bar.dart'
 import 'package:mysafar_sdk/src/view/splash/splash_screen.dart'
     show SplashScreen;
 import 'package:provider/provider.dart';
+import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 
 const List<Locale> _supportedLocales = [
   Locale('en'),
@@ -124,7 +124,7 @@ class _MySafarLocalizedShell extends StatelessWidget {
     return EasyLocalization(
       saveLocale: config.saveLocale,
       startLocale: config.startLocale ??
-          Locale(GetStorage().read('lang') ?? 'uz'),
+          Locale(sdkStorage().read('lang') ?? 'uz'),
       supportedLocales: _supportedLocales,
       fallbackLocale: const Locale('uz'),
       path: 'packages/mysafar_sdk/assets/lang',

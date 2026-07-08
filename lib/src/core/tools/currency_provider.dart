@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:get_storage/get_storage.dart';
 import 'package:mysafar_sdk/src/core/enum/currency.dart'
     show AppCurrency, AppCurrencyExtension;
 import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_model.dart'
@@ -7,12 +6,13 @@ import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_m
 import 'package:mysafar_sdk/src/model/remote/avia/top_city_model.dart'
     show TopCityModel;
 import 'package:mysafar_sdk/src/model/remote/fornex/hot_tickets_model.dart' show HotTicketPrice;
+import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 
 class CurrencyProvider extends ChangeNotifier {
   CurrencyProvider() {
     loadCurrency();
   }
-  final storage = GetStorage();
+  final storage = sdkStorage();
   static const _key = 'selected_currency';
 
   AppCurrency _currency = AppCurrency.uzs;

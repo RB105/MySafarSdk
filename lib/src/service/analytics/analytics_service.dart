@@ -1,10 +1,10 @@
 import 'dart:async' show unawaited;
 
 import 'package:flutter/foundation.dart';
-import 'package:get_storage/get_storage.dart' show GetStorage;
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/core/router/navigation_service.dart';
 import 'package:mysafar_sdk/src/core/tools/project_utils.dart' show ProjectUtils;
+import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 
 /// Analytics service for tracking events.
 /// Centralized service for all analytics tracking in the SDK — konkret
@@ -56,7 +56,7 @@ class AnalyticsService {
   Future<void> initGlobalEnvironment() async {
     try {
       await _ensureVersionLoaded();
-      final lang = GetStorage().read<String>('lang') ?? 'uz';
+      final lang = sdkStorage().read<String>('lang') ?? 'uz';
       final analytics = MySafarSdk.analytics;
       await analytics.setEnvironmentValue('app_version', _appVersion);
       await analytics.setEnvironmentValue('app_build', '$_appBuild');
@@ -104,7 +104,7 @@ class AnalyticsService {
         await MySafarSdk.analytics.setUserId(userId);
         // Sessiyalararo eslab qolamiz — keyingi launchda restoreUserProfile()
         // shu ID'ni qayta qo'yadi (aks holda qaytuvchi user'da profil_id bo'sh).
-        await GetStorage().write(_kProfileIdKey, userId);
+        await sdkStorage().write(_kProfileIdKey, userId);
       }
       if (attributes != null && attributes.isNotEmpty) {
         await MySafarSdk.analytics.setUserAttributes(attributes);
@@ -118,7 +118,7 @@ class AnalyticsService {
   Future<void> clearUser() async {
     try {
       await MySafarSdk.analytics.setUserId(null);
-      await GetStorage().remove(_kProfileIdKey);
+      await sdkStorage().remove(_kProfileIdKey);
     } catch (e) {
       debugPrint('Analytics: clearUser failed: $e');
     }
@@ -130,7 +130,7 @@ class AnalyticsService {
   /// eventlari ham real profilga bog'lanadi.
   Future<void> restoreUserProfile() async {
     try {
-      final userId = GetStorage().read<String>(_kProfileIdKey);
+      final userId = sdkStorage().read<String>(_kProfileIdKey);
       if (userId != null && userId.isNotEmpty) {
         await MySafarSdk.analytics.setUserId(userId);
         debugPrint('Analytics: profile ID restored ($userId)');

@@ -1,8 +1,8 @@
 import 'dart:io';
 
-import 'package:get_storage/get_storage.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart' show Assets;
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
+import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 
 class LangOptionsWidget extends StatefulWidget {
   const LangOptionsWidget({super.key});
@@ -86,7 +86,7 @@ class _LangOptionsWidgetState extends State<LangOptionsWidget> {
         highlightColor: Colors.transparent,
         splashColor: Colors.transparent,
         onTap: () {
-          GetStorage().write("lang", code);
+          sdkStorage().write("lang", code);
           context.setLocale(Locale(code));
           Navigator.pop(context);
         },

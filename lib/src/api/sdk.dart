@@ -5,6 +5,8 @@ import 'package:easy_localization/easy_localization.dart'
 import 'package:firebase_core/firebase_core.dart' show Firebase;
 import 'package:flutter/widgets.dart' show WidgetsFlutterBinding;
 import 'package:get_storage/get_storage.dart' show GetStorage;
+import 'package:mysafar_sdk/src/core/config/sdk_storage.dart'
+    show kMySafarStorageContainer;
 import 'package:mysafar_sdk/src/api/analytics.dart';
 import 'package:mysafar_sdk/src/api/callbacks.dart';
 import 'package:mysafar_sdk/src/api/config.dart';
@@ -67,7 +69,8 @@ class MySafarSdk {
 
     await Future.wait([
       EasyLocalization.ensureInitialized(),
-      GetStorage.init(),
+      // SDK o'z alohida konteynerida ishlaydi — host storage'iga tegilmaydi.
+      GetStorage.init(kMySafarStorageContainer),
       HiveService.init(),
     ]);
 

@@ -7,10 +7,11 @@ import 'package:mysafar_sdk/src/core/constants/end_points.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get_storage/get_storage.dart' show GetStorage;
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart';
+import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 
 class AuthService with RequestConfig {
   /// GetStorage instance
-  final GetStorage _db = GetStorage();
+  final GetStorage _db = sdkStorage();
 
   /// Analytics service instance
   final AnalyticsService _analyticsService = AnalyticsService();

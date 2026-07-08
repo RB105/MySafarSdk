@@ -2,13 +2,13 @@ import 'dart:io';
 
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:get_storage/get_storage.dart';
 import 'package:lottie/lottie.dart';
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart';
 import 'package:mysafar_sdk/src/view/navbar/bottom_nav_bar.dart';
+import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 
 class OnBoardingScreen extends StatefulWidget {
   const OnBoardingScreen({super.key});
@@ -126,7 +126,7 @@ class _OnBoardingScreenState extends State<OnBoardingScreen>
   }
 
   void _finishOnboarding() {
-    GetStorage().write('isFirstTime', false);
+    sdkStorage().write('isFirstTime', false);
     Navigator.of(context).pushNamedAndRemoveUntil(
       BottomNavBarPage.routeName,
       (route) => false,

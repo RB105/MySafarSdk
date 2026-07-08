@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get_storage/get_storage.dart';
+import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 
 /// Pexels API kaliti.
 ///
@@ -31,7 +32,7 @@ class PexelsService {
     ),
   );
 
-  final GetStorage _storage = GetStorage();
+  final GetStorage _storage = sdkStorage();
   final Map<String, List<String>> _memoryCache = {};
 
 

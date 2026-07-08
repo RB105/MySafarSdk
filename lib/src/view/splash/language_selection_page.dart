@@ -3,13 +3,13 @@ import 'dart:io';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:get_storage/get_storage.dart';
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/styles/grarient_box_border.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart';
 import 'package:mysafar_sdk/src/view/splash/onboarding_screen.dart';
+import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 
 class LanguageSelectionPage extends StatefulWidget {
   const LanguageSelectionPage({super.key});
@@ -145,7 +145,7 @@ class _LanguageSelectionPageState extends State<LanguageSelectionPage>
                   onPressed: () {
                     AnalyticsService().trackButtonTap('language_continue',
                         extra: {'lang': selectedLang});
-                    GetStorage().write("lang", selectedLang);
+                    sdkStorage().write("lang", selectedLang);
                     context.setLocale(Locale(selectedLang));
                     Navigator.of(context).pushNamedAndRemoveUntil(
                         OnBoardingScreen.routeName, (route) => false);

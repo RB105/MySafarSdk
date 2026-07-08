@@ -1,7 +1,7 @@
-import 'package:get_storage/get_storage.dart';
+import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 
 /// Language code currently selected for the app UI (matches the active locale).
-String currentLang() => GetStorage().read('lang') ?? 'uz';
+String currentLang() => sdkStorage().read('lang') ?? 'uz';
 
 /// Maps the selected UI language to a language code that the app's static and
 /// back-end data actually ship. Localized data (country names, destination

@@ -1,11 +1,12 @@
 import 'package:get_storage/get_storage.dart';
 import 'package:mysafar_sdk/src/model/local/passenger_model.dart';
+import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 
 /// Yo'lovchi ma'lumotlarini saqlash uchun service
 class PassengerStorageService {
   final GetStorage _box;
 
-  PassengerStorageService() : _box = GetStorage();
+  PassengerStorageService() : _box = sdkStorage();
 
   /// Yo'lovchi maydonlarini cache'ga saqlash
   void savePassengerFields(List<PassengerModel> passengers, String phone) {

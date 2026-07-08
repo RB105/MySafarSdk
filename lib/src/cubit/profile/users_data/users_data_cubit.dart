@@ -1,11 +1,11 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:get_storage/get_storage.dart';
 import 'package:mysafar_sdk/src/core/config/response_config.dart';
 
 import 'package:mysafar_sdk/src/model/remote/profile/users_model.dart';
 import 'package:mysafar_sdk/src/service/profile/profile_service.dart'
     show ProfileService;
+import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 part 'users_data_state.dart';
 
 
@@ -17,7 +17,7 @@ class UsersDataCubit extends Cubit<UsersDataState> {
   }
 
   final _profileService = ProfileService();
-  final _box = GetStorage();
+  final _box = sdkStorage();
   final String _cacheKey = "cached_users";
 
   Future<void> getFromCacheOrFetch() async {

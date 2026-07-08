@@ -5,7 +5,7 @@ import 'package:flutter/material.dart'
         ThemeMode,
         WidgetsBinding,
         WidgetsBindingObserver;
-import 'package:get_storage/get_storage.dart' show GetStorage;
+import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 
 class ThemeNotifier extends ChangeNotifier with WidgetsBindingObserver {
   static const _key = 'theme_mode';
@@ -29,12 +29,12 @@ class ThemeNotifier extends ChangeNotifier with WidgetsBindingObserver {
 
   void setTheme(ThemeMode mode) {
     _currentMode = mode;
-    GetStorage().write(_key, mode.index);
+    sdkStorage().write(_key, mode.index);
     notifyListeners();
   }
 
   Future<void> _loadThemeMode() async {
-    final index = GetStorage().read(_key) ?? 0;
+    final index = sdkStorage().read(_key) ?? 0;
     _currentMode = ThemeMode.values[index];
     notifyListeners();
   }

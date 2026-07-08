@@ -1,7 +1,6 @@
 // ignore_for_file: deprecated_member_use
 
 import 'package:flutter/services.dart' show HapticFeedback;
-import 'package:get_storage/get_storage.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/service/deep_link_gateway.dart';
@@ -11,6 +10,7 @@ import 'package:mysafar_sdk/src/view/main/main_page.dart';
 import 'package:mysafar_sdk/src/view/main/showcase_keys.dart';
 import 'package:mysafar_sdk/src/view/profile/pages/booked_tickets_page.dart';
 import 'package:mysafar_sdk/src/view/profile/profile_page.dart';
+import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 
 
 class BottomNavBarPage extends StatefulWidget {
@@ -46,7 +46,7 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
     _loaded[_pageIndex] = true;
     super.initState();
     _shouldShowcase =
-        _pageIndex == 0 && GetStorage().read(_showcaseSeenKey) != true;
+        _pageIndex == 0 && sdkStorage().read(_showcaseSeenKey) != true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       DeepLinkGateway.consumePendingLink();
     });
@@ -56,13 +56,13 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
   Widget build(BuildContext context) {
     return ShowCaseWidget(
       enableAutoScroll: true,
-      onFinish: () => GetStorage().write(_showcaseSeenKey, true),
+      onFinish: () => sdkStorage().write(_showcaseSeenKey, true),
       builder: (showcaseContext) {
         if (_shouldShowcase && !_showcaseStarted) {
           _showcaseStarted = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
-            GetStorage().write(_showcaseSeenKey, true);
+            sdkStorage().write(_showcaseSeenKey, true);
             ShowCaseWidget.of(showcaseContext).startShowCase([
               HomeShowcaseKeys.notif,
               HomeShowcaseKeys.support,

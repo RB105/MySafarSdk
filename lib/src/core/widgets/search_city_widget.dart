@@ -19,6 +19,7 @@ import 'package:mysafar_sdk/src/model/remote/avia/airports_model.dart';
 import 'package:mysafar_sdk/src/model/remote/fornex/pop_destinations.dart';
 import 'package:provider/provider.dart' show Provider;
 import 'package:shimmer/shimmer.dart';
+import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 
 class SearchCityWidget extends StatefulWidget {
   final int directionType;
@@ -31,7 +32,7 @@ class SearchCityWidget extends StatefulWidget {
 
 class _SearchCityWidgetState extends State<SearchCityWidget> {
   late String title;
-  final GetStorage _getStorage = GetStorage();
+  final GetStorage _getStorage = sdkStorage();
   List<AirPortsModel> _recentSearches = [];
 
   /// Debounce timer for airport search to avoid a network request per keystroke.

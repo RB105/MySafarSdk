@@ -1,5 +1,6 @@
 import 'package:get_storage/get_storage.dart';
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
+import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 
 /// In-App Review service
 ///
@@ -13,7 +14,7 @@ class InAppReviewService {
 
   final GetStorage _storage;
 
-  InAppReviewService({GetStorage? storage}) : _storage = storage ?? GetStorage();
+  InAppReviewService({GetStorage? storage}) : _storage = storage ?? sdkStorage();
 
   /// Review so'rash kerakmi tekshirish va so'rash
   Future<void> requestReviewIfNeeded() async {

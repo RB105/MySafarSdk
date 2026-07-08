@@ -1,12 +1,12 @@
 // ignore_for_file: use_build_context_synchronously
 
-import 'package:get_storage/get_storage.dart' show GetStorage;
 import 'package:mysafar_sdk/src/generated/assets.dart' show Assets;
 
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
 import 'package:mysafar_sdk/src/view/navbar/bottom_nav_bar.dart';
 import 'package:mysafar_sdk/src/view/splash/language_selection_page.dart';
 import 'package:flutter/services.dart';
+import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 
 class SplashScreen extends StatefulWidget {
   /// splash screen where user navigated to onboarding or home
@@ -48,7 +48,7 @@ class _SplashScreenState extends State<SplashScreen>
   Future<void> _navigate() async {
     if (!mounted) return;
 
-    final storage = GetStorage();
+    final storage = sdkStorage();
     final isFirstTime = storage.read<bool>("isFirstTime") ?? true;
 
     if (isFirstTime) {
