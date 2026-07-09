@@ -23,9 +23,14 @@ void main() {
     late GetStorage storage;
     late GetStorageTokenStore store;
 
+    var testIndex = 0;
+
     setUp(() async {
-      storage = GetStorage('token_store_test');
-      await storage.erase();
+      // Har test o'z konteynerida — get_storage'ning async flush'i testlar
+      // orasida to'qnashmasligi uchun (erase paytidagi flaky FileSystemException).
+      final container = 'token_store_test_${testIndex++}';
+      await GetStorage.init(container);
+      storage = GetStorage(container);
       store = GetStorageTokenStore(storage: storage);
     });
 

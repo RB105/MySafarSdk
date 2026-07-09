@@ -41,7 +41,7 @@ else
   shift || true
 fi
 PATHS=("$@")
-if [ ${#PATHS[@]} -eq 0 ]; then PATHS=(lib assets); fi
+if [ ${#PATHS[@]} -eq 0 ]; then PATHS=(lib); fi
 
 PATCH="$(mktemp -t sdk_port).patch"
 git diff "$RANGE" -- "${PATHS[@]}" > "$PATCH.raw"
@@ -76,6 +76,20 @@ else
   echo "⚠️  Ba'zi hunk'lar tushmadi — *.rej fayllarni ko'ring:"
   find lib -name '*.rej' 2>/dev/null || true
   echo "Rej'larni qo'lda ko'chiring (yoki Claude'ga bering), keyin rm bilan o'chiring."
+fi
+
+# Asset fayllar (rasm/JSON) text-patch bilan emas, bevosita app rev'idan
+# olinadi — binary diff'ni sed buzishi mumkin edi.
+END_REV="${RANGE##*..}"; [ "$END_REV" = "$RANGE" ] && END_REV="$RANGE"
+CHANGED_ASSETS=$(git diff --name-only --diff-filter=ACMR "$RANGE" -- assets || true)
+if [ -n "$CHANGED_ASSETS" ]; then
+  echo "Asset fayllar ko'chirilmoqda ($(echo "$CHANGED_ASSETS" | wc -l | tr -d ' ') ta)..."
+  git checkout "$END_REV" -- $CHANGED_ASSETS
+fi
+DELETED_ASSETS=$(git diff --name-only --diff-filter=D "$RANGE" -- assets || true)
+if [ -n "$DELETED_ASSETS" ]; then
+  echo "⚠️  App'da o'chirilgan assetlar (qo'lda ko'rib chiqing):"
+  echo "$DELETED_ASSETS"
 fi
 
 # Keyingi safar shu nuqtadan davom etish uchun marker yangilanadi
