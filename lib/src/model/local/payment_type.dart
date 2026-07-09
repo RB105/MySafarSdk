@@ -76,7 +76,7 @@ class PaymentConstants {
         return const PaymentType(
           id: click,
           imagePath: ProjectAssets.bookingClicklogo,
-          cardName: 'click',
+          cardName: '',
           subtitle: "Click orqali to'lash",
         );
       case visa:

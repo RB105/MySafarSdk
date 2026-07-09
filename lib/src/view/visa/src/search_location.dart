@@ -26,7 +26,7 @@ class _AddressSearchPageState extends State<AddressSearchPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.backgroundColor,
       appBar: AppBar(title: const Text("Yetkazib berish manzilini kiriting")),
       body: Padding(
         padding: const EdgeInsets.all(16),

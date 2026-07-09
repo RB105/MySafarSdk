@@ -395,6 +395,14 @@ class _RecentSearchesWidgetState extends State<RecentSearchesWidget> {
   void initState() {
     super.initState();
     _load();
+    // Yangi qidiruv qo'shilganda (foydalanuvchi qaytib kelganda) yangilanadi.
+    RecentSearchCache().revision.addListener(_load);
+  }
+
+  @override
+  void dispose() {
+    RecentSearchCache().revision.removeListener(_load);
+    super.dispose();
   }
 
   DateTime? _parseDotDate(String? d) {
@@ -408,15 +416,12 @@ class _RecentSearchesWidgetState extends State<RecentSearchesWidget> {
     }
   }
 
-  Future<void> _load() async {
-    final res = await AviaService().getSearchHistory();
-    if (!mounted || res is! NetworkSuccessResponse) return;
-
-    final list = (res.data as List).cast<RecommendationRequestBody>();
+  /// Lokal Hive keshdan o'qiydi (kesh allaqachon takrorlanmas holatda saqlaydi).
+  void _load() {
+    final list = RecentSearchCache().read();
     final today = DateTime.now();
     final startOfDay = DateTime(today.year, today.month, today.day);
-    final seen = <String>{};
-    final unique = <RecommendationRequestBody>[];
+    final visible = <RecommendationRequestBody>[];
 
     for (final p in list) {
       final s = p.segments;
@@ -424,13 +429,12 @@ class _RecentSearchesWidgetState extends State<RecentSearchesWidget> {
       // O'tib ketgan sanadagi qidiruvni ko'rsatmaymiz.
       final date = _parseDotDate(s.first.date);
       if (date == null || date.isBefore(startOfDay)) continue;
-      final key =
-          '${s.first.from?.cityIataCode}-${s.first.to?.cityIataCode}-${s.first.date}-${s.length}';
-      if (seen.add(key)) unique.add(p);
-      if (unique.length >= 3) break;
+      visible.add(p);
+      if (visible.length >= 3) break;
     }
 
-    if (unique.isNotEmpty) setState(() => _items = unique);
+    if (!mounted) return;
+    setState(() => _items = visible);
   }
 
   String _dates(RecommendationRequestBody p) {
@@ -453,38 +457,39 @@ class _RecentSearchesWidgetState extends State<RecentSearchesWidget> {
   Widget build(BuildContext context) {
     if (_items.isEmpty) return const SizedBox.shrink();
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+    // Konteyner ekran chetlariga yopishadi (yon padding yo'q); sarlavha ham
+    // konteyner ICHIDA joylashadi.
+    return Container(
+      margin: const EdgeInsets.only(top: 20),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: context.color.primaryContainer,
+        borderRadius:
+            const BorderRadius.vertical(bottom: Radius.circular(32)),
+        boxShadow: context.shadowDown,
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            "home_recent_searches".tr(),
-            style: context.textTheme.displayLarge
-                ?.copyWith(fontWeight: FontWeight.w800, fontSize: 19),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            decoration: BoxDecoration(
-              color: context.color.primaryContainer,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: context.shadowDown,
-            ),
-            child: Column(
-              children: [
-                for (int i = 0; i < _items.length; i++) ...[
-                  if (i > 0)
-                    Divider(
-                        height: 1,
-                        thickness: 1,
-                        indent: 14,
-                        endIndent: 14,
-                        color: context.color.outline.withOpacity(0.3)),
-                  _row(context, _items[i]),
-                ],
-              ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+            child: Text(
+              "home_recent_searches".tr(),
+              style: context.textTheme.displayLarge
+                  ?.copyWith(fontWeight: FontWeight.w800, fontSize: 19),
             ),
           ),
+          for (int i = 0; i < _items.length; i++) ...[
+            if (i > 0)
+              Divider(
+                  height: 1,
+                  thickness: 1,
+                  indent: 14,
+                  endIndent: 14,
+                  color: context.color.outline.withOpacity(0.3)),
+            _row(context, _items[i]),
+          ],
         ],
       ),
     );
@@ -548,37 +553,37 @@ class HomeSupportBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = context.themeProvider.isDark;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
-      child: Material(
+    // Konteyner ekran chetlariga yopishadi (yon padding/yumaloq burchak yo'q).
+    return Container(
+      margin: const EdgeInsets.only(top: 20),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
         color: context.color.primaryContainer,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: context.shadowDown,
+      ),
+      child: Material(
+        color: Colors.transparent,
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: () => ProjectDialogs.showSupportMenu(context),
-          child: Padding(
+            onTap: () => ProjectDialogs.showSupportMenu(context),
+            child: Padding(
             padding: const EdgeInsets.all(14),
             child: Row(
               children: [
                 Container(
-                  width: 52,
-                  height: 52,
+                  width: 56,
+                  height: 56,
+                  padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
                     color: isDark
                         ? Colors.white.withOpacity(0.08)
                         : ProjectTheme.swimmer200,
-                    shape: BoxShape.circle,
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                  child: Center(
-                    child: SizedBox(
-                      width: 26,
-                      height: 26,
-                      child: SvgPicture.asset(
-                        ProjectAssets.callCenterIcon,
-                        colorFilter: ColorFilter.mode(
-                            ProjectTheme.brandColor, BlendMode.srcIn),
-                      ),
-                    ),
+                  child: Image.asset(
+                    'packages/mysafar_sdk/assets/img/home/icons/support_ic.png',
+                    fit: BoxFit.contain,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -603,15 +608,15 @@ class HomeSupportBanner extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 6),
-                Icon(Icons.chevron_right_rounded,
-                    size: 24, color: ProjectTheme.secondaryTextLight),
-              ],
+                  const SizedBox(width: 6),
+                  Icon(Icons.chevron_right_rounded,
+                      size: 24, color: ProjectTheme.secondaryTextLight),
+                ],
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
   }
 }
 

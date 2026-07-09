@@ -236,6 +236,8 @@ class _MainSearchFormState extends State<MainSearchForm> {
         flight_Type: pickerDateRange?.endDate != null ? 1 : 0,
         klass: klass);
     ProjectUtils.setRecommendationParams(params);
+    // Oxirgi qidiruvni lokal Hive keshga yozamiz (bosh sahifada ko'rsatiladi).
+    RecentSearchCache().add(params);
     Navigator.of(context)
         .pushNamed(RecommendationsTicketPage.routeName, arguments: params);
   }
@@ -349,7 +351,7 @@ class _MainSearchFormState extends State<MainSearchForm> {
                             : _getDateTitle(),
                         hint: "home_departure".tr(),
                         onTap: () => _onFieldTap(_stepDate),
-                          radius: BorderRadius.vertical(bottom: Radius.circular(12))
+                          radius: BorderRadius.only(bottomLeft: Radius.circular(12))
                       ),
                     ),
                     const SizedBox(width: 4),
@@ -363,7 +365,7 @@ class _MainSearchFormState extends State<MainSearchForm> {
                           subtitle: paxKlass,
                           hint: "",
                           onTap: () => _onFieldTap(_stepPassengers),
-                            radius: BorderRadius.vertical(bottom: Radius.circular(12))
+                            radius: BorderRadius.only(bottomRight: Radius.circular(12))
                         );
                       }),
                     ),

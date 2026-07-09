@@ -241,7 +241,8 @@ class ProjectTheme {
   static final switchGreen = const Color(0xFF34C759);
 
   // Background
-  static final backgroundLight = const Color(0xFFECECEC);
+  // --bg-subtle: butun ilovaning yorug' (light) rejimidagi body/sahifa foni.
+  static final backgroundLight = const Color(0xFFEEF3FB);
   static final backgroundDark = const Color(0xFF1C1C1C);
 
   // Text

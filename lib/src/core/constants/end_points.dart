@@ -18,7 +18,7 @@ class EndPoints {
   static const String auth_user_delete = '/auth/user-delete';
 
   // avia
-  static const String avia_airports = '/avia/airports';
+  static const String avia_airports = '/avia/airports-mobile';
   static const String avia_recommendatins = '/avia/get-recommendations';
   // get-recommendations uch manbaga bo'lindi — uchchalasiga parallel so'rov ketadi.
   static const String avia_recommendations_centrum =

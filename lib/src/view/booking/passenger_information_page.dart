@@ -151,6 +151,33 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
     );
   }
 
+  // Saqlangan telefon raqamlari mamlakat kodi bilan ('998' + 9 raqam) saqlanadi.
+  // Taklif ro'yxatida va tanlanganda kodni olib tashlab, joriy mamlakat niqobiga
+  // moslab ko'rsatamiz: "998123456789" -> "12 345 67 89". Aks holda niqob butun
+  // qatorga qo'llanib "99 812 34 56" kabi noto'g'ri format chiqadi. Mamlakat
+  // o'zgarganda kesh tozalanadi (_updateMask).
+  List<String>? _phoneSuggestionsCache;
+
+  List<String> _phoneSuggestions() {
+    return _phoneSuggestionsCache ??= _buildPhoneSuggestions();
+  }
+
+  List<String> _buildPhoneSuggestions() {
+    final dialCode = _countryCode.dialCode ?? '998';
+    final seen = <String>{};
+    final result = <String>[];
+    for (final raw in _cachedSuggestions('phone')) {
+      var digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
+      if (digits.startsWith(dialCode)) {
+        digits = digits.substring(dialCode.length);
+      }
+      if (digits.isEmpty) continue;
+      final masked = _phoneFormatter.maskText(digits);
+      if (seen.add(masked)) result.add(masked);
+    }
+    return result;
+  }
+
   // Saqlangan foydalanuvchilar ham sahifa ochiq turganda o'zgarmaydi —
   // har bir qayta qurishda storage'dan o'qimaslik uchun bir marta keshlanadi.
   List<dynamic>? _cachedUsersList;
@@ -290,7 +317,13 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
     }
     if (phone.isNotEmpty) {
       String phoneDigits = phone.replaceAll(RegExp(r'[^0-9]'), '');
-      if (phoneDigits.startsWith('998')) {
+      // Joriy tanlangan mamlakat kodini olib tashlaymiz (mas. '1', '7', '998').
+      // Faqat '998' ni kesib tashlash boshqa davlat kodini ('1' kabi) input
+      // ichida qoldirar edi.
+      final dialCode = _countryCode.dialCode ?? '998';
+      if (phoneDigits.startsWith(dialCode)) {
+        phoneDigits = phoneDigits.substring(dialCode.length);
+      } else if (phoneDigits.startsWith('998')) {
         phoneDigits = phoneDigits.substring(3);
       }
       if (phoneDigits.isNotEmpty) {
@@ -451,7 +484,7 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
       showErrors: state.showErrors,
       selectedCountry: _selectedCountry,
       emailSuggestions: _cachedSuggestions('email'),
-      phoneSuggestions: _cachedSuggestions('phone'),
+      phoneSuggestions: _phoneSuggestions(),
       phoneFormatter: _phoneFormatter,
       onEmailChanged: (value) => cubit.updateEmail(value),
       onPhoneChanged: () => _updatePhoneNumber(cubit),
@@ -521,7 +554,12 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
 
   void _updatePhoneNumber(PassengerCubit cubit) {
     final unmaskedText = _phoneFormatter.getUnmaskedText();
-    final phone = '${_countryCode.dialCode}$unmaskedText';
+    // Raqam kiritilmagan bo'lsa telefonni bo'sh saqlaymiz. Aks holda phone
+    // faqat mamlakat kodidan iborat bo'lib ('998' / '1'), listener uni bo'sh
+    // input ichiga qaytadan yozib qo'yardi.
+    final phone = unmaskedText.isEmpty
+        ? ''
+        : '${_countryCode.dialCode}$unmaskedText';
     cubit.updatePhone(phone);
   }
 
@@ -542,6 +580,8 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
     setState(() {
       _countryCode = code;
       _selectedCountry = code;
+      // Yangi mamlakat kodi/niqobiga mos ravishda qayta hisoblansin.
+      _phoneSuggestionsCache = null;
     });
 
     _updatePhoneNumber(cubit);

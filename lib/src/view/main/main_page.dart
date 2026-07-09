@@ -28,7 +28,7 @@ import 'package:mysafar_sdk/src/core/extension/date_time_ext.dart';
 import 'package:mysafar_sdk/src/model/local/recom_req_model.dart'
     show RecommendationReqBodySegment, RecommendationRequestBody;
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart';
-import 'package:mysafar_sdk/src/service/avia_service.dart' show AviaService;
+import 'package:mysafar_sdk/src/service/avia/recent_search_cache.dart';
 import 'package:mysafar_sdk/src/view/main/pages/all_hot_tickets_page.dart';
 import 'package:mysafar_sdk/src/view/main/showcase_keys.dart';
 import 'package:mysafar_sdk/src/view/main/src/home_background_carousel.dart';
@@ -268,43 +268,37 @@ class _MainPageState extends State<MainPage>
     {
         final double topInset = MediaQuery.of(context).padding.top;
 
-        return Stack(
+        return ColoredBox(
+            // Rasmning yumaloq pastki burchaklari ortida oq (body) rangi ko'rinadi.
+            color: Theme.of(context).scaffoldBackgroundColor,
+            child: Stack(
             children: [
                 // Orqa fon rasmi butun header'ni qoplaydi + o'qish uchun gradient.
+                // Radius endi RASMning o'ziga beriladi (pastki burchaklar yumaloq),
+                // avvalgidek ustidagi alohida oq konteynerga emas.
                 Positioned.fill(
-                    child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                            const HomeBackgroundCarousel(),
-                            DecoratedBox(
-                                decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                        begin: Alignment.topCenter,
-                                        end: Alignment.bottomCenter,
-                                        colors: [
-                                            Colors.black.withOpacity(0.45),
-                                            Colors.black.withOpacity(0.12),
-                                            Colors.black.withOpacity(0.12),
-                                        ],
-                                        stops: const [0.0, 0.5, 1.0],
+                    child: ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                            bottom: Radius.circular(28)),
+                        child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                                const HomeBackgroundCarousel(),
+                                DecoratedBox(
+                                    decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                            begin: Alignment.topCenter,
+                                            end: Alignment.bottomCenter,
+                                            colors: [
+                                                Colors.black.withOpacity(0.45),
+                                                Colors.black.withOpacity(0.12),
+                                                Colors.black.withOpacity(0.12),
+                                            ],
+                                            stops: const [0.0, 0.5, 1.0],
+                                        ),
                                     ),
                                 ),
-                            ),
-                        ],
-                    ),
-                ),
-                // Pastki kontent bo'limi rasm ustiga yumaloq ustki burchaklar
-                // bilan chiqib turadi (Figma).
-                Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    height: 24,
-                    child: DecoratedBox(
-                        decoration: BoxDecoration(
-                            color: Theme.of(context).scaffoldBackgroundColor,
-                            borderRadius: const BorderRadius.vertical(
-                                top: Radius.circular(28)),
+                            ],
                         ),
                     ),
                 ),
@@ -336,6 +330,7 @@ class _MainPageState extends State<MainPage>
                     ],
                 ),
             ],
+        ),
         );
     }
 

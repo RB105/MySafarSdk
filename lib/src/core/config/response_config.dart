@@ -19,6 +19,17 @@ final class NetworkErrorResponse<T> extends NetworkResponse {
   const NetworkErrorResponse({required this.error, this.errorType});
 
   String getError() {
+    // Server va tarmoq darajasidagi xatoliklar (server o'chgan, ulanish yo'q,
+    // 5xx, yaroqsiz shlyuz) uchun backend qaytargan "xom" javob texnik va
+    // foydalanuvchiga tushunarsiz bo'ladi (HTML, stack trace, nginx xabari).
+    // Shu sabab bunday holatlarda body'dan xabar chiqarmasdan, tayyor va
+    // tushunarli tarjima matnini ko'rsatamiz.
+    if (_isServerOrNetworkError) {
+      return _localizedMessage();
+    }
+
+    // Client xatolari (400/401/403/404/409): backend odatda ma'noli biznes
+    // xabarini yuboradi — avval o'shani, topilmasa tarjima matnini ko'rsatamiz.
     final err = error;
     final locale = sdkStorage().read<String>('lang') ?? 'uz';
 
@@ -27,6 +38,31 @@ final class NetworkErrorResponse<T> extends NetworkResponse {
       if (extracted != null && extracted.isNotEmpty) return extracted;
     }
 
+    return _localizedMessage();
+  }
+
+  /// Server o'chishi, ulanish yo'qligi yoki 5xx kabi infratuzilma xatolarimi?
+  /// Bularda backend body foydasiz bo'lgani uchun to'g'ridan-to'g'ri tayyor
+  /// tarjima matni ko'rsatiladi.
+  bool get _isServerOrNetworkError {
+    switch (errorType) {
+      case ErrorType.connectTimeout:
+      case ErrorType.receiveTimeout:
+      case ErrorType.sendTimeout:
+      case ErrorType.connectionError:
+      case ErrorType.internalServer_500:
+      case ErrorType.badGateway_502:
+      case ErrorType.serviceUnavailable_503:
+      case ErrorType.gatewayTimeout_504:
+      case ErrorType.dio_error:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /// `errorType` bo'yicha foydalanuvchiga tushunarli tarjima matnini qaytaradi.
+  String _localizedMessage() {
     switch (errorType) {
       //
       case ErrorType.connectTimeout:
@@ -54,6 +90,8 @@ final class NetworkErrorResponse<T> extends NetworkResponse {
         return "error_500".tr();
       case ErrorType.badGateway_502:
         return "error_502".tr();
+      case ErrorType.serviceUnavailable_503:
+        return "error_503".tr();
       case ErrorType.gatewayTimeout_504:
         return "error_504".tr();
 
@@ -214,6 +252,8 @@ enum ErrorType {
   internalServer_500,
 
   badGateway_502,
+
+  serviceUnavailable_503,
 
   gatewayTimeout_504,
 

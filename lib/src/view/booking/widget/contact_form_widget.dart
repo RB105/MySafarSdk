@@ -116,24 +116,32 @@ class ContactFormWidget extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-            CustomAutocompleteInputField(
-              key: phoneKey,
-              showError: showErrors,
-              textInputAction: TextInputAction.done,
-              textCapitalization: TextCapitalization.characters,
-              controller: phoneController,
-              label: "phone".tr(),
-              onChanged: (_) => onPhoneChanged(),
-              validator: (value) {
-                if (value?.isEmpty ?? true) {
-                  return "enter_full_phone_number".tr();
-                }
-                return null;
-              },
-              perfex: _buildCountryCodePrefix(context),
-              suggestions: phoneSuggestions,
-              inputFormatters: [phoneFormatter],
-              keyboardType: TextInputType.phone,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildCountrySelector(context),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: CustomAutocompleteInputField(
+                    key: phoneKey,
+                    showError: showErrors,
+                    textInputAction: TextInputAction.done,
+                    textCapitalization: TextCapitalization.characters,
+                    controller: phoneController,
+                    label: "phone".tr(),
+                    onChanged: (_) => onPhoneChanged(),
+                    validator: (value) {
+                      if (value?.isEmpty ?? true) {
+                        return "enter_full_phone_number".tr();
+                      }
+                      return null;
+                    },
+                    suggestions: phoneSuggestions,
+                    inputFormatters: [phoneFormatter],
+                    keyboardType: TextInputType.phone,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -141,8 +149,12 @@ class ContactFormWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildCountryCodePrefix(BuildContext context) {
+  /// Telefon maydoni yonidagi mamlakat tanlagich — bosilganda davlatlar
+  /// ro'yxati ochiladi. Kiritish maydoni bilan bitta qatorda turadigan alohida
+  /// ramkali "chip"; kod endi input ichiga emas, shu tugmada ko'rinadi.
+  Widget _buildCountrySelector(BuildContext context) {
     return InkWell(
+      borderRadius: BorderRadius.circular(16),
       onTap: () async {
         final selected = await Navigator.push<CountryCode>(
           context,
@@ -152,9 +164,28 @@ class ContactFormWidget extends StatelessWidget {
           onCountrySelected(selected);
         }
       },
-      child: Padding(
-        padding: const EdgeInsets.only(top: 15, left: 12),
-        child: Text("+${selectedCountry?.dialCode ?? '998'}"),
+      child: Container(
+        height: 56,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          border: Border.all(color: context.color.outline, width: 1.5),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              "+${selectedCountry?.dialCode ?? '998'}",
+              style: context.textTheme.bodyMedium,
+            ),
+            const Icon(
+              Icons.arrow_drop_down,
+              size: 20,
+              color: Color(0xFF8E8E92),
+            ),
+          ],
+        ),
       ),
     );
   }

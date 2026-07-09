@@ -1,3 +1,4 @@
+import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mysafar_sdk/src/model/local/passenger_model.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_model.dart'
@@ -205,6 +206,25 @@ class PassengerCubit extends Cubit<PassengerState> {
     }
   }
 
+  /// Bo'sh maydon nomini tegishli tarjima yorlig'iga bog'lab, joriy tildagi
+  /// "... kiritilmagan" xabarini qaytaradi (barcha tillarda ishlaydi).
+  String _requiredFieldMessage(String field) {
+    final labelKey = switch (field) {
+      'email' => 'email',
+      'phone' => 'phone',
+      'firstname' => 'first_name',
+      'lastname' => 'last_name',
+      'middlename' => 'father',
+      'birthdate' => 'birth_date',
+      'docnum' => 'passport_data',
+      'docexp' => 'passport_validity',
+      'gender' => 'gender',
+      'citizen' => 'citizenship',
+      _ => field,
+    };
+    return 'field_not_filled'.tr(namedArgs: {'field': labelKey.tr()});
+  }
+
   void validateAndSave() {
     final currentState = state;
     if (currentState is PassengerLoaded) {
@@ -212,8 +232,8 @@ class PassengerCubit extends Cubit<PassengerState> {
 
       // Email va telefon tekshirish
       if (currentState.email.isEmpty) {
-        emit(const PassengerValidationError(
-          message: 'Email kiritilmagan',
+        emit(PassengerValidationError(
+          message: _requiredFieldMessage('email'),
           fieldName: 'email',
         ));
         emit(currentState.copyWith(showErrors: true));
@@ -221,8 +241,8 @@ class PassengerCubit extends Cubit<PassengerState> {
       }
 
       if (currentState.phone.isEmpty) {
-        emit(const PassengerValidationError(
-          message: 'Telefon raqami kiritilmagan',
+        emit(PassengerValidationError(
+          message: _requiredFieldMessage('phone'),
           fieldName: 'phone',
         ));
         emit(currentState.copyWith(showErrors: true));
@@ -232,7 +252,7 @@ class PassengerCubit extends Cubit<PassengerState> {
       final emptyField = currentState.firstEmptyField;
       if (emptyField != null) {
         emit(PassengerValidationError(
-          message: '${emptyField.$2} kiritilmagan',
+          message: _requiredFieldMessage(emptyField.$2),
           passengerIndex: emptyField.$1,
           fieldName: emptyField.$2,
         ));

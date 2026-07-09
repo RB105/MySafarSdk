@@ -39,6 +39,13 @@ class NextButtonWidget extends StatelessWidget {
         ? ProjectTheme.secondaryTextDark
         : ProjectTheme.secondaryTextLight;
     final loading = isLoading == true;
+    // onPressed null bo'lsa (mas. oferta belgilamagan) — tugma o'chirilgan:
+    // bosilmaydi va vizual ravishda ham xira ko'rinadi.
+    final bool disabled = onPressed == null;
+    final Color buttonColor = disabled
+        ? (isDark ? Colors.white.withAlpha(28) : const Color(0xffE3E7F0))
+        : brand;
+    final Color contentColor = disabled ? muted : Colors.white;
 
     return Container(
       decoration: BoxDecoration(
@@ -128,14 +135,16 @@ class NextButtonWidget extends StatelessWidget {
                     child: Ink(
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(16),
-                        color: brand,
-                        boxShadow: [
-                          BoxShadow(
-                            color: brand.withAlpha(70),
-                            blurRadius: 16,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
+                        color: buttonColor,
+                        boxShadow: disabled
+                            ? null
+                            : [
+                                BoxShadow(
+                                  color: brand.withAlpha(70),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
                       ),
                       child: Center(
                         child: loading
@@ -152,16 +161,16 @@ class NextButtonWidget extends StatelessWidget {
                                 children: [
                                   Text(
                                     nextTittle.tr(),
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontFamily: "packages/mysafar_sdk/Gilroy",
                                       fontSize: 16,
-                                      color: Colors.white,
+                                      color: contentColor,
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
                                   const SizedBox(width: 8),
-                                  const Icon(Icons.arrow_forward_rounded,
-                                      color: Colors.white, size: 19),
+                                  Icon(Icons.arrow_forward_rounded,
+                                      color: contentColor, size: 19),
                                 ],
                               ),
                       ),

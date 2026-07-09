@@ -121,6 +121,8 @@ mixin RequestConfig<T> {
         return _errorResponse(response, ErrorType.internalServer_500);
       case 502:
         return _errorResponse(response, ErrorType.badGateway_502);
+      case 503:
+        return _errorResponse(response, ErrorType.serviceUnavailable_503);
       case 504:
         return _errorResponse(response, ErrorType.gatewayTimeout_504);
       default:

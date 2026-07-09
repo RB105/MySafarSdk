@@ -46,7 +46,10 @@ class BookingCreatePage extends StatefulWidget {
 }
 
 class _BookingCreatePageState extends State<BookingCreatePage> {
-  bool isChek = false;
+  // Kirishda oferta roziligi allaqachon belgilangan — foydalanuvchi xaridni
+  // davom ettirish orqali shartlarga rozilik bildiradi (checkbox bosishi shart
+  // emas), shu sabab tugma darhol faol bo'ladi.
+  bool isChek = true;
 
   /// Booking yaratilgach kiritilgan yo'lovchilarni backend'dagi saqlangan
   /// yo'lovchilar ro'yxatiga (`/create-user-data`) fonda qo'shadi —
@@ -470,7 +473,7 @@ class _BookingCreatePageState extends State<BookingCreatePage> {
                         arguments: "https://mysafar.uz/privacy");
                   },
                   child: Text(
-                    "Oferta shartlariga roziman. Ma’lumotlar to’g’riligini tasdiqlayman.",
+                    "offer_accept_by_continue".tr(),
                     softWrap: true,
                     style: context.textTheme.bodyMedium?.copyWith(
                       fontSize: 14,

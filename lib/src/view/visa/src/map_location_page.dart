@@ -102,7 +102,7 @@ class _MapLocationPickerPageState extends State<MapLocationPickerPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.backgroundColor,
       appBar: AppBar(
         title: const Text("Yetkazib berish manzilini kiriting"),
         backgroundColor: Colors.white,

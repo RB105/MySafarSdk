@@ -34,15 +34,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
           onNavigationRequest: (NavigationRequest request) async {
             final url = request.url;
             if (_isCustomScheme(url)) {
-              final uri = Uri.parse(url);
-              if (await canLaunchUrl(uri)) {
-                await launchUrl(uri, mode: LaunchMode.externalApplication);
-              } else {
-                // ignore: use_build_context_synchronously
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Ilova topilmadi: ${uri.scheme}')),
-                );
-              }
+              await _launchExternalApp(url);
               return NavigationDecision.prevent;
             }
             return NavigationDecision.navigate;
@@ -70,6 +62,32 @@ class _WebViewScreenState extends State<WebViewScreen> {
   bool _isCustomScheme(String url) {
     final uri = Uri.parse(url);
     return uri.scheme != 'http' && uri.scheme != 'https';
+  }
+
+  /// http(s) bo'lmagan sxema — to'lov ilovasini (Click, Payme, bank ilovalari)
+  /// tashqarida ochishga urinadi.
+  ///
+  /// `canLaunchUrl` ATAYIN ishlatilmaydi: Android 11+ da u package-visibility
+  /// cheklovi tufayli ilova o'rnatilgan bo'lsa ham `false` qaytarishi mumkin
+  /// ("ilova topilmadi"). `launchUrl` esa to'g'ridan-to'g'ri `startActivity`
+  /// chaqiradi — bu cheklovga tushmaydi va ilova haqiqatan o'rnatilmagan
+  /// bo'lsagina `false`/xatolik qaytaradi.
+  Future<void> _launchExternalApp(String url) async {
+    bool launched = false;
+    try {
+      launched = await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (_) {
+      launched = false;
+    }
+    if (!mounted || launched) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Ilova o'rnatilmagan yoki ochib bo'lmadi"),
+      ),
+    );
   }
 
   /// Ortga qaytish logikasi — back tugmasi, system back va chetdan swipe

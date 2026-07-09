@@ -23,12 +23,25 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-RANGE="${1:?range yoki commit kerak, masalan: app/home~1..app/home}"
-shift || true
+MARKER=".port_marker"
+
+# App clone'ini yangilab olamiz (u gitlab.cloudgate.uz'dan tortadi), keyin fetch.
+APP_DIR="$(git remote get-url app)"
+git -C "$APP_DIR" pull origin home --quiet 2>/dev/null \
+  || echo "⚠️  app clone'ini pull qilib bo'lmadi (offline?), lokal holat ishlatiladi"
+git fetch app home --quiet
+
+# Range berilmasa: oxirgi port qilingan joydan app/home gacha (marker fayldan).
+if [ $# -eq 0 ] || [[ "${1:-}" == lib* ]] || [[ "${1:-}" == assets* ]]; then
+  LAST="$(cat "$MARKER" 2>/dev/null || echo 16841ea)"
+  RANGE="$LAST..app/home"
+  echo "Range berilmadi — marker'dan: $RANGE"
+else
+  RANGE="$1"
+  shift || true
+fi
 PATHS=("$@")
 if [ ${#PATHS[@]} -eq 0 ]; then PATHS=(lib assets); fi
-
-git fetch app home --quiet
 
 PATCH="$(mktemp -t sdk_port).patch"
 git diff "$RANGE" -- "${PATHS[@]}" > "$PATCH.raw"
@@ -62,5 +75,10 @@ else
   echo ""
   echo "⚠️  Ba'zi hunk'lar tushmadi — *.rej fayllarni ko'ring:"
   find lib -name '*.rej' 2>/dev/null || true
-  echo "Rej'larni qo'lda ko'chiring, keyin rm bilan o'chiring."
+  echo "Rej'larni qo'lda ko'chiring (yoki Claude'ga bering), keyin rm bilan o'chiring."
 fi
+
+# Keyingi safar shu nuqtadan davom etish uchun marker yangilanadi
+# (rej bo'lsa ham — o'sha hunk'lar baribir qo'lda hal qilinadi).
+git rev-parse app/home > "$MARKER"
+echo "Marker yangilandi: $(cat "$MARKER" | head -c 8) (keyingi port shu yerdan boshlanadi)"

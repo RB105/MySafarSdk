@@ -1,4 +1,5 @@
 import 'package:hive_ce_flutter/hive_ce_flutter.dart';
+import 'package:mysafar_sdk/src/service/avia/recent_search_cache.dart';
 import 'package:mysafar_sdk/src/service/config/remote_config_service.dart';
 import 'package:mysafar_sdk/src/service/payment/payment_type_cache.dart';
 import 'package:mysafar_sdk/src/service/profile/profile_cache.dart';
@@ -18,6 +19,7 @@ class HiveService {
       Hive.openBox(ProfileCache.boxName),
       Hive.openBox(TicketsCache.boxName),
       Hive.openBox(PaymentTypeCache.boxName),
+      Hive.openBox(RecentSearchCache.boxName),
     ]);
   }
 }

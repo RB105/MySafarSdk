@@ -409,16 +409,35 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
     final isPriceChanged = bookData['is_search_price_changed'] == true ||
         bookData['is_price_changed'] == true;
 
-    if (isPriceChanged) {
-      final newPrice = bookData['agent_mode_prices']?['total_amount_for_active_agent_mode'];
-      if (newPrice != null) {
-        ProjectDialogs.changeAmountPrice(
-          context,
-          double.parse(widget.bookingCreateModel.amount ?? 0),
-          double.parse(newPrice.toString()),
-        );
-      }
-    }
+    if (!isPriceChanged) return;
+
+    // Qiymatlar backenddan dynamic (null, son yoki matn) bo'lib kelishi mumkin.
+    // double.parse to'g'ridan-to'g'ri ishlatilsa, mas. null qiymatda
+    // "Invalid double" (FormatException) beradi. Xavfsiz konvertatsiya qilamiz.
+    final newPrice = _toDouble(
+        bookData['agent_mode_prices']?['total_amount_for_active_agent_mode']);
+    if (newPrice == null) return;
+
+    // Eski narx aniqlanmasa (mas. amount null), yangi narxga tayanamiz — shunda
+    // dialog xato ravishda "0 dan" katta farqni ko'rsatib qo'ymaydi.
+    final oldPrice = _toDouble(widget.bookingCreateModel.amount) ?? newPrice;
+
+    // Backend bayrog'i (is_price_changed) yoqilgan bo'lsa-da, haqiqiy summa
+    // o'zgarmagan bo'lishi mumkin. Bunday holda "X dan X ga o'zgardi" degan
+    // chalg'ituvchi dialogni ko'rsatmaymiz.
+    if ((oldPrice - newPrice).abs() < 0.5) return;
+
+    ProjectDialogs.changeAmountPrice(context, oldPrice, newPrice);
+  }
+
+  /// Backenddan keladigan dynamic qiymatni (null, num yoki matn) xavfsiz
+  /// double'ga o'giradi; imkonsiz bo'lsa null qaytaradi.
+  double? _toDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    final cleaned = value.toString().trim().replaceAll(' ', '');
+    if (cleaned.isEmpty) return null;
+    return double.tryParse(cleaned);
   }
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {
@@ -495,6 +514,52 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: _buildBillingIdInfo(context),
+          ),
+          context.szBoxHeight16,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _buildOfferAgreement(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Oferta roziligi qatori — doim belgilangan (yongan), informativ.
+  /// Foydalanuvchi bosishi shart emas: "Xaridni davom ettirish orqali oferta
+  /// shartlarini qabul qilgan bo'lasiz". Davom etish tugmasini bloklamaydi.
+  Widget _buildOfferAgreement(BuildContext context) {
+    final isDark = context.themeProvider.isDark;
+    final brand = ProjectTheme.brandColor;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: brand.withAlpha(isDark ? 38 : 16),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: brand.withAlpha(120)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              gradient:
+                  LinearGradient(colors: [brand, ProjectTheme.accentLight]),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.check_rounded,
+                color: Colors.white, size: 16),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'offer_accept_by_continue'.tr(),
+              softWrap: true,
+              style: context.textTheme.bodyMedium?.copyWith(fontSize: 14),
+            ),
           ),
         ],
       ),
@@ -725,14 +790,22 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
             bookData['is_price_changed'] == true;
 
         if (isPriceChanged) {
-          final newPrice = bookData['agent_mode_prices']
-              ?['total_amount_for_active_agent_mode'];
+          final newPrice = _toDouble(bookData['agent_mode_prices']
+              ?['total_amount_for_active_agent_mode']);
+          final oldPrice = _toDouble(widget.bookingCreateModel.amount);
 
-          if (newPrice != null) {
+          // Faqat summa haqiqatan o'zgargandagina yangi narxni ko'rsatamiz;
+          // aks holda to'liq asl narx obyektini (widget.price) qaytaramiz.
+          if (newPrice != null &&
+              (oldPrice == null || (oldPrice - newPrice).abs() >= 0.5)) {
+            // `FluffyRub/FluffyUzs.amount` — String?; int berilsa
+            // "int is not a subtype of type 'String?'" runtime xatosi chiqadi,
+            // shuning uchun har uchala valyutaga ham matn beramiz.
+            final amountStr = newPrice.toStringAsFixed(0);
             return FlightPrice(
-              rub: FluffyRub(amount: newPrice),
-              uzs: FluffyUzs(amount: newPrice.toString()),
-              usd: FluffyRub(amount: newPrice.toString()),
+              rub: FluffyRub(amount: amountStr),
+              uzs: FluffyUzs(amount: amountStr),
+              usd: FluffyRub(amount: amountStr),
             );
           }
         }
