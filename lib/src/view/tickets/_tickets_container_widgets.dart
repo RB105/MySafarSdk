@@ -114,6 +114,16 @@ class _FigmaTicketCardState extends State<_FigmaTicketCard> {
     final price =
         Provider.of<CurrencyProvider>(context).getElementPrice(f.price);
 
+    // Narx faqat birinchi (borish) yo'nalishda ko'rsatiladi — shu yo'nalish
+    // indeksini topamiz (odatda 0, lekin bo'sh bo'lsa keyingisiga o'tadi).
+    int firstIdx = -1;
+    for (int i = 0; i < directions.length; i++) {
+      if (directions[i].isNotEmpty) {
+        firstIdx = i;
+        break;
+      }
+    }
+
     return AnimatedScale(
       scale: _pressed ? 0.977 : 1.0,
       duration: const Duration(milliseconds: 140),
@@ -143,32 +153,22 @@ class _FigmaTicketCardState extends State<_FigmaTicketCard> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Logolar + narx.
-                  Row(
-                    children: [
-                      _LogoStack(segments: f.segments ?? const []),
-                      const Spacer(),
-                      Flexible(
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            price,
-                            maxLines: 1,
-                            style: _TixTheme.style(
-                                17.5, FontWeight.w800, t.hi),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
+                  // Har bir yo'nalish o'z logo+nomi bilan; narx faqat birinchi
+                  // (borish) yo'nalishda, logo yonida ko'rsatiladi. Borish va
+                  // qaytish orasi divider bilan ajratiladi.
                   for (int i = 0; i < directions.length; i++)
                     if (directions[i].isNotEmpty) ...[
-                      if (i > 0) const SizedBox(height: 14),
+                      if (i > firstIdx)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          child: Divider(
+                              height: 1, thickness: 1, color: t.line),
+                        ),
                       _LegBlock(
                         flight: f,
                         dirIndex: i,
                         segments: directions[i],
+                        price: i == firstIdx ? price : null,
                       ),
                     ],
                   if (f.isVtrip == true) ...[
@@ -192,10 +192,15 @@ class _LegBlock extends StatelessWidget {
   final int dirIndex;
   final List<FlightSegment> segments;
 
+  /// Faqat birinchi (borish) yo'nalishda beriladi — logo yonida narx
+  /// ko'rsatiladi. Qaytish yo'nalishida `null` (narx ko'rsatilmaydi).
+  final String? price;
+
   const _LegBlock({
     required this.flight,
     required this.dirIndex,
     required this.segments,
+    this.price,
   });
 
   /// Yo'nalishdagi almashishlar (layover) umumiy davomiyligi, daqiqada.
@@ -233,12 +238,31 @@ class _LegBlock extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Shu yo'nalishning aviakompaniya logosi + nomi (vaqtlar tepasida);
+        // narx faqat birinchi yo'nalishda, o'ng tomonda.
+        Row(
+          children: [
+            Expanded(child: _LogoStack(segments: segments)),
+            if (price != null) ...[
+              const SizedBox(width: 8),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  price!,
+                  maxLines: 1,
+                  style: _TixTheme.style(17.5, FontWeight.w800, t.hi),
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 10),
         // Vaqtlar va davomiylik.
         Row(
           children: [
             Expanded(
               child: Text(
-                '${first.dep.time ?? ''} - ${last.arr.time ?? ''}',
+                '${ElementFormatter.formatTime(first.dep.time ?? '')} - ${ElementFormatter.formatTime(last.arr.time ?? '')}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: _TixTheme.style(16.5, FontWeight.w800, t.hi),
@@ -296,7 +320,12 @@ class _LegBlock extends StatelessWidget {
   }
 }
 
-/// Ustma-ust joylashgan aviakompaniya logolari (noyob, max 3).
+/// Aviakompaniya sarlavhasi (Figma standarti):
+///  • Reysdagi barcha bo'laklar (segment) BITTA aviakompaniyaga tegishli bo'lsa
+///    (to'g'ri yoki transferli, bir yoki ikki tomonlama — farqi yo'q) →
+///    yakka logo + aviakompaniya NOMI ko'rsatiladi.
+///  • Bir nechta har xil aviakompaniya bo'lsa → faqat ustma-ust logolar
+///    (noyob, max 3), nom yozilmaydi.
 class _LogoStack extends StatelessWidget {
   final List<FlightSegment> segments;
 
@@ -304,17 +333,44 @@ class _LogoStack extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = _TixTheme.of(context);
+
+    // Noyob aviakompaniyalarni (kod → nom) kelish tartibida yig'amiz.
     final seen = <String>{};
     final codes = <String>[];
+    String firstTitle = '';
     for (final s in segments) {
-      if (seen.add(s.carrier.code)) codes.add(s.carrier.code);
+      if (seen.add(s.carrier.code)) {
+        codes.add(s.carrier.code);
+        if (codes.length == 1) firstTitle = s.carrier.title;
+      }
     }
     if (codes.isEmpty) return const SizedBox.shrink();
 
-    final shown = codes.take(3).toList();
     const double size = 30;
-    const double step = 20;
 
+    // Bitta aviakompaniya — logo + nom.
+    if (codes.length == 1) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _AirlineCircle(code: codes.first, size: size),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              firstTitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _TixTheme.style(14, FontWeight.w700, t.hi),
+            ),
+          ),
+        ],
+      );
+    }
+
+    // Bir nechta aviakompaniya — faqat ustma-ust logolar.
+    const double step = 20;
+    final shown = codes.take(3).toList();
     return SizedBox(
       height: size,
       width: size + (shown.length - 1) * step,
@@ -674,7 +730,7 @@ class _DirectFlightsCardState extends State<_DirectFlightsCard> {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
-                cheapTime,
+                ElementFormatter.formatTime(cheapTime),
                 style:
                     _TixTheme.style(12.5, FontWeight.w700, _TixTheme.green),
               ),
@@ -682,7 +738,7 @@ class _DirectFlightsCardState extends State<_DirectFlightsCard> {
           for (final time in others.take(2)) ...[
             const SizedBox(width: 12),
             Text(
-              time,
+              ElementFormatter.formatTime(time),
               style: _TixTheme.style(
                   12.5, FontWeight.w600, t.hi.withAlpha(200)),
             ),
