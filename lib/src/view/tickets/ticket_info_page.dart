@@ -1,3 +1,5 @@
+// ignore_for_file: unused_element
+
 import 'dart:math' as math;
 
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
@@ -181,8 +183,6 @@ class _TicketInfoPageState extends State<TicketInfoPage> {
                             ),
                           ),
                         ),
-                        context.szBoxHeight16,
-                        _MapRouteButton(onTap: () => _openRouteMap(context)),
                         context.szBoxHeight16,
                         ..._buildDirections(context),
                       ],
