@@ -843,8 +843,8 @@ class _ProfilePageState extends State<ProfilePage> {
                             child: SvgPicture.asset(ProjectAssets.logoProfile),
                           ),
                         ),
-                        context.szBoxHeight8,
-                        GetAppVersion(),
+                        // Versiya yozuvi olib tashlandi — embed'da package_info
+                        // HOST app versiyasini qaytarib chalg'itardi.
                         context.szBoxHeight16,
                       ],
                     ),
