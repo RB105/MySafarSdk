@@ -1,6 +1,13 @@
 // ignore_for_file: unused_local_variable
 
+import 'dart:async' show unawaited;
+
+import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
+import 'package:mysafar_sdk/src/core/config/response_config.dart'
+    show NetworkSuccessResponse;
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
+import 'package:mysafar_sdk/src/service/profile/profile_service.dart'
+    show ProfileService;
 import 'package:mysafar_sdk/src/core/tools/lang_helper.dart';
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
@@ -40,6 +47,63 @@ class BookingCreatePage extends StatefulWidget {
 
 class _BookingCreatePageState extends State<BookingCreatePage> {
   bool isChek = false;
+
+  /// Booking yaratilgach kiritilgan yo'lovchilarni backend'dagi saqlangan
+  /// yo'lovchilar ro'yxatiga (`/create-user-data`) fonda qo'shadi —
+  /// AddPassengerPage'dagi bilan bir xil API. Dublikat bo'lmasligi uchun
+  /// mavjud ro'yxat `docnum` bo'yicha tekshiriladi; ro'yxatni olib
+  /// bo'lmasa (network) umuman saqlamaymiz — dublikat xavfsizroq yo'q.
+  Future<void> _savePassengersInBackground() async {
+    if (!MySafarSdk.tokens.isLoggedIn) return;
+    try {
+      final service = ProfileService();
+
+      final existingRes = await service.getUserDate();
+      if (existingRes is! NetworkSuccessResponse) return;
+      final existingDocnums = <String>{
+        for (final u in (existingRes.data as List? ?? const []))
+          if (u is Map && u['docnum'] != null)
+            u['docnum'].toString().trim().toUpperCase(),
+      };
+
+      for (final p in widget.passenger) {
+        final docnum = (p['docnum'] ?? '').toString().trim();
+        if (docnum.isEmpty) continue;
+        if (existingDocnums.contains(docnum.toUpperCase())) continue;
+
+        final birthdate = _toApiDate((p['birthdate'] ?? '').toString());
+        final docexp = _toApiDate((p['docexp'] ?? '').toString());
+        if (birthdate == null || docexp == null) continue;
+
+        await service.createUser(params: {
+          'firstname': (p['firstname'] ?? '').toString().trim(),
+          'lastname': (p['lastname'] ?? '').toString().trim(),
+          'middlename': (p['middlename'] ?? '').toString().trim(),
+          'birthdate': birthdate,
+          'docnum': docnum,
+          'docexp': docexp,
+          'gender': (p['gender'] ?? 'M').toString(),
+          'citizen': (p['citizen'] ?? '').toString(),
+        });
+        existingDocnums.add(docnum.toUpperCase());
+      }
+    } catch (e) {
+      // Fon jarayoni — foydalanuvchi oqimiga ta'sir qilmaydi.
+      debugPrint('Passenger background save failed: $e');
+    }
+  }
+
+  /// `dd.MM.yyyy` yoki `yyyy-MM-dd` ko'rinishidagi sanani API formatiga
+  /// (`yyyy-MM-dd`) keltiradi; noto'g'ri format bo'lsa `null`.
+  String? _toApiDate(String raw) {
+    final value = raw.trim();
+    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value)) return value;
+    if (RegExp(r'^\d{2}\.\d{2}\.\d{4}$').hasMatch(value)) {
+      final parts = value.split('.');
+      return '${parts[2]}-${parts[1]}-${parts[0]}';
+    }
+    return null;
+  }
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
@@ -51,6 +115,9 @@ class _BookingCreatePageState extends State<BookingCreatePage> {
         } else if (state is BookingcreateSuccessState) {
           LoadingDialog.dismiss(context);
           ProjectUtils.setCalendarEventByLastSearch();
+          // Kiritilgan yo'lovchilarni fonda "Ma'lumotlarim"ga saqlaymiz —
+          // to'lov oynasiga o'tishni bloklamaydi, xatosi ham jim o'tadi.
+          unawaited(_savePassengersInBackground());
           _handleBookingCreated(context, state.data);
         } else if (state is BookingcreateErrorState) {
           LoadingDialog.dismiss(context);
