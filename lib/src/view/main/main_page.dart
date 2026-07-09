@@ -245,14 +245,8 @@ class _MainPageState extends State<MainPage>
                                                         tooltipBackgroundColor: ProjectTheme.brandColor,
                                                         textColor: Colors.white,
                                                         child: const MainHotTickets()),
-                                                    Showcase(
-                                                        key: HomeShowcaseKeys.popular,
-                                                        title: "showcase_popular_title".tr(),
-                                                        description: "showcase_popular_desc".tr(),
-                                                        targetBorderRadius: BorderRadius.circular(16),
-                                                        tooltipBackgroundColor: ProjectTheme.brandColor,
-                                                        textColor: Colors.white,
-                                                        child: const PopularDestinationsWidget()),
+                                                    // "Mashhur yo'nalishlar" olib tashlandi —
+                                                    // widget ham, /destinations so'rovi ham yo'q.
                                                     // Figma: so'ngi qidiruvlar va 24/7 yordam.
                                                     const RecentSearchesWidget(),
                                                     const HomeSupportBanner(),

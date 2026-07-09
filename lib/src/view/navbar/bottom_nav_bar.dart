@@ -76,7 +76,6 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
               HomeShowcaseKeys.support,
               HomeShowcaseKeys.search,
               HomeShowcaseKeys.hot,
-              HomeShowcaseKeys.popular,
               HomeShowcaseKeys.tabOrders,
               if (_servicesEnabled) HomeShowcaseKeys.tabServices,
               HomeShowcaseKeys.tabProfile,
