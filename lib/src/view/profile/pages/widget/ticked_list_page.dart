@@ -1,3 +1,4 @@
+import 'package:flutter/rendering.dart';
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
@@ -48,11 +49,10 @@ class TicketList extends StatelessWidget {
         removeTop: true,
         removeBottom: true,
         child: ListView.builder(
-            physics: const AlwaysScrollableScrollPhysics(),
+            scrollCacheExtent: ScrollCacheExtent.pixels(100), physics: const AlwaysScrollableScrollPhysics(),
             padding:
                 const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 16),
             itemCount: tickets.length,
-            cacheExtent: 100,
             itemBuilder: (context, index) => Padding(
                   padding: EdgeInsets.only(
                     top: index == 0 ? 0 : 8,

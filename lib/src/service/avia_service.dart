@@ -21,17 +21,22 @@ import 'package:mysafar_sdk/src/model/remote/avia/top_city_model.dart'
 class AviaService with RequestConfig {
   Future<NetworkResponse> getAirports(
       {required String part, String? lang}) async {
+    // sorov yuboriladi success bolsa AirPortsModelga parse qilinadi
     NetworkResponse response = await postRequest(
       partnerToken: true,
       endPoint: EndPoints.avia_airports,
       params: {"lang": lang ?? "ru", "part": part},
     );
+    
     if (response is NetworkSuccessResponse) {
+
       if (response.data['success'] == true) {
         final data = response.data['data'];
         if (data is List && data.isEmpty) {
+
           return NetworkErrorResponse(error: "nothingFound".tr());
         } else if (data is Map && data['cities'] is Map) {
+        
           return NetworkSuccessResponse(
               data: (data['cities'] as Map)
                   .values
@@ -39,11 +44,15 @@ class AviaService with RequestConfig {
                   .toList());
         }
       }
+
+      
       return const NetworkErrorResponse(
         error: "Unexpected airports response",
         errorType: ErrorType.other,
       );
-
+    }
+    if(response is NetworkErrorResponse) {
+      debugPrint(response.error);
     }
     return response;
   }
@@ -97,9 +106,8 @@ class AviaService with RequestConfig {
         await postRequest(endPoint: EndPoints.main_pop_cities);
 
     if (response is NetworkSuccessResponse) {
-      final result = (response.data as List)
-          .map((e) => TopCityModel.fromJson(e))
-          .toList();
+      final result =
+          (response.data as List).map((e) => TopCityModel.fromJson(e)).toList();
       _topCitiesCache = result;
       _topCitiesCachedAt = DateTime.now();
       return NetworkSuccessResponse(data: result);
@@ -130,12 +138,12 @@ class AviaService with RequestConfig {
   }
 
   Future<NetworkResponse> getPriceByMonth(String from, String to) async {
-    final response =
-        await postRequest(
-            partnerToken: true,
-            endPoint: EndPoints.ticket_price_by_month, params: {
-      "segments": {"from": from, "to": to}
-    });
+    final response = await postRequest(
+        partnerToken: true,
+        endPoint: EndPoints.ticket_price_by_month,
+        params: {
+          "segments": {"from": from, "to": to}
+        });
 
     if (response is NetworkSuccessResponse) {
       return NetworkSuccessResponse(
@@ -210,9 +218,7 @@ class AviaService with RequestConfig {
   Future<NetworkResponse> createCentrum(
       {required Map<String, dynamic> params}) async {
     NetworkResponse response = await postRequest(
-        endPoint: "/centrum/create-ticket",
-        params: params,
-        partnerToken: true);
+        endPoint: "/centrum/create-ticket", params: params, partnerToken: true);
     if (response is NetworkSuccessResponse) {
       if (response.data["tr_id"] != null) {
         return NetworkSuccessResponse(data: response.data);

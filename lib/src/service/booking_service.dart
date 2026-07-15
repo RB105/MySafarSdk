@@ -59,6 +59,8 @@ class BookingService with RequestConfig {
     }
   }
 
+  partnerTickets() {}
+
   Future<NetworkResponse> confirmPayment({
     required String trId,
     required String otpToken,
@@ -91,7 +93,7 @@ class BookingService with RequestConfig {
           orderId: billingNumber?.toString(),
         );
       }
-      
+
       return NetworkSuccessResponse(data: response.data);
     } else if (response is NetworkErrorResponse) {
       // Track failed payment

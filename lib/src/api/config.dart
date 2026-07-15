@@ -12,7 +12,7 @@ class MySafarConfig {
     this.myId,
     this.socialAuth,
     this.enableVersionGate = false,
-    this.enableServicesTab = true,
+    this.enableServicesTab = false, // true edi false qilindi Xizmatlar bolimini berkitish uchun 
     this.enableShowcaseTour = false,
     this.enableFullProfile = false,
     this.startLocale,

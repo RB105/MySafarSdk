@@ -115,7 +115,7 @@ class _CustomInputFieldState extends State<CustomInputField> {
                   suffixIcon: widget.suffix,
                   isDense: true,
                   contentPadding: const EdgeInsets.only(
-                      bottom: 16, left: 16, right: 16, top: 28),
+                      bottom: 16, left: 16, right: 16, top: 20), // top 28 edi 20 ga tushirdim sabab : email sigishi uchun 
                   prefixIcon: shouldShowLabel
                       ? widget.perfex != null
                           ? Padding(

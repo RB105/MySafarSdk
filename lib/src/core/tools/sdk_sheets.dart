@@ -12,6 +12,9 @@ Future<T?> showSdkCupertinoSheet<T>({
   bool enableDrag = true,
 }) {
   return Navigator.of(context).push<T>(
-    CupertinoSheetRoute<T>(builder: builder, enableDrag: enableDrag),
+    CupertinoSheetRoute<T>(enableDrag: enableDrag, scrollableBuilder: (BuildContext context, ScrollController controller) {
+      WidgetBuilder widgetBuilder = builder;
+      return widgetBuilder(context);
+    }),
   );
 }
