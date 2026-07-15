@@ -8,6 +8,7 @@ import 'package:mysafar_sdk/src/service/profile/profile_service.dart'
     show ProfileService;
 import 'package:mysafar_sdk/src/service/profile/tickets_cache.dart';
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
+import 'package:mysafar_sdk/src/service/profile/profile_cache.dart';
 part 'confirmed_tickets_state.dart';
 
 class ConfirmedTicketsCubit extends Cubit<ConfirmedTicketsState> {
@@ -61,10 +62,20 @@ class ConfirmedTicketsCubit extends Cubit<ConfirmedTicketsState> {
       return;
     }
 
+    // Partner API qaysi userni so'rashini bilishi uchun telefon kerak.
+    // Hardcode emas: embed → ensureRegistered, OTP login → profil kesh.
+    final phone = _resolvePhone();
+    if (phone == null) {
+      if (cached == null) emit(ConfirmedTicketsEmptyState());
+      return;
+    }
+
     // Butun server bo'limi try/catch ostida — malformed javob yoki parse xatosi
     // Loading spinnerni osib qo'ymasligi uchun (har doim terminal holatga o'tadi).
     try {
-      final response = await _profileService.getTickets();
+      final response = await _profileService.getTickets(
+        params: {'phone_number': phone},
+      );
       if (isClosed) return;
 
       if (response is NetworkSuccessResponse) {
@@ -113,6 +124,18 @@ class ConfirmedTicketsCubit extends Cubit<ConfirmedTicketsState> {
       .whereType<Map>()
       .map((e) => ConfirmedTicketsModel.fromJson(Map<String, dynamic>.from(e)))
       .toList();
+
+  /// Partner tickets uchun telefon: avval embed registered phone, yo'q bo'lsa
+  /// profil keshidagi `phone_number` (faqat raqamlar).
+  String? _resolvePhone() {
+    final registered = MySafarSdk.registeredPhone;
+    if (registered != null && registered.isNotEmpty) return registered;
+
+    final raw = ProfileCache().read()?['phone_number'] as String?;
+    if (raw == null || raw.isEmpty) return null;
+    final digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
+    return digits.isEmpty ? null : digits;
+  }
 
   /// Booking yaratilgach keshni bekor qiladi — keyingi ochilishda biletlar
   /// serverdan qayta yuklanadi.

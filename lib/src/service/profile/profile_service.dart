@@ -40,29 +40,56 @@ class ProfileService with RequestConfig {
     return response;
   }
 
-  Future<NetworkResponse> getTickets() async {
-    if (!hasAccessToken) {
-      return NetworkErrorResponse(
-          error: 'unauthorized', errorType: ErrorType.unAuthorized_401);
-    }
-    await TokenVerificationCache.ensureVerified(apiService);
-    final NetworkResponse response = await getRequest(
-        endPoint: EndPoints.user_confirmed_tickets, headers: true);
+  // task uchun yopib turdim
+
+  //---------------------//
+
+  // Future<NetworkResponse> getTickets() async {
+  //   if (!hasAccessToken) {
+  //     return NetworkErrorResponse(
+  //         error: 'unauthorized', errorType: ErrorType.unAuthorized_401);
+  //   }
+  //   await TokenVerificationCache.ensureVerified(apiService);
+
+  // final NetworkResponse response = await getRequest(
+  //     endPoint: EndPoints.user_confirmed_tickets, headers: true);
+  //   if (response is NetworkSuccessResponse) {
+  //     // Xom JSON ro'yxatini qaytaramiz — cubit uni ham keshlaydi, ham parse
+  //     // qiladi. Bu keshni serverdagi javob bilan bir xil saqlaydi (model
+  //     // toJson to'liq bo'lmagani uchun round-trip'da maydonlar yo'qolmaydi).
+  //     // Javob Map bo'lmasa (204, bo'sh yoki kutilmagan format) — bo'sh ro'yxat.
+  //     final body = response.data;
+  //     final List rawTickets =
+  //         (body is Map ? body['confirmed_tickets'] : null) as List? ?? const [];
+  //     return NetworkSuccessResponse(data: rawTickets);
+  //   } else if (response is NetworkErrorResponse) {
+  //     return NetworkErrorResponse(
+  //         error: response.getError(), errorType: response.errorType);
+  //   }
+  //   return response;
+  //  }
+  //-------------------------//
+  Future<NetworkResponse> getTickets(
+      {required Map<String, dynamic> params}) async {
+    final NetworkResponse response = await postRequest(
+      params: params,
+      endPoint: EndPoints.partner_tickets,
+      partnerToken: true,
+    );
     if (response is NetworkSuccessResponse) {
-      // Xom JSON ro'yxatini qaytaramiz — cubit uni ham keshlaydi, ham parse
-      // qiladi. Bu keshni serverdagi javob bilan bir xil saqlaydi (model
-      // toJson to'liq bo'lmagani uchun round-trip'da maydonlar yo'qolmaydi).
-      // Javob Map bo'lmasa (204, bo'sh yoki kutilmagan format) — bo'sh ro'yxat.
       final body = response.data;
       final List rawTickets =
-          (body is Map ? body['confirmed_tickets'] : null) as List? ?? const [];
+          (body is Map ? body['result'] : null) as List? ?? const [];
       return NetworkSuccessResponse(data: rawTickets);
     } else if (response is NetworkErrorResponse) {
       return NetworkErrorResponse(
           error: response.getError(), errorType: response.errorType);
+    } else {
+      return response;
     }
-    return response;
   }
+
+  //-------------------------//
 
   Future<NetworkResponse> getUserDate() async {
     await TokenVerificationCache.ensureVerified(apiService);

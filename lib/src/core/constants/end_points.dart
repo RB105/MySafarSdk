@@ -18,7 +18,7 @@ class EndPoints {
   static const String auth_user_delete = '/auth/user-delete';
 
   // avia
-  static const String avia_airports = '/avia/airports-mobile';
+  static const String avia_airports = '/avia/airports-mobile'; // base url
   static const String avia_recommendatins = '/avia/get-recommendations';
   // get-recommendations uch manbaga bo'lindi — uchchalasiga parallel so'rov ketadi.
   static const String avia_recommendations_centrum =
@@ -43,13 +43,15 @@ class EndPoints {
   static const String get_card_info = '/avia/card-info'; // hearder
 
   static const String getPaymentType = '/get-payment-type';
-  static const String avia_ticketed_booking_info = '/avia/ticketed-booking-info';
+  static const String avia_ticketed_booking_info =
+      '/avia/ticketed-booking-info';
 
   // account
+  static const String partner_tickets = '/partner/tickets'; // taskniki hearder
   static const String profile = '/profile'; // hearder
   static const String updateProfile = '/auth/update-profile'; // hearder
   static const String user_confirmed_tickets =
-      '/avia/user-confirmed-tickets'; // hearder
+      '/avia/user-confirmed-tickets'; // hearder 
   static const String user_ofd_cheques = '/main/cheques'; // hearder
   static const String get_user_date = '/get-user-data'; // hearder
   static const String create_user_date = '/create-user-data'; // hearder

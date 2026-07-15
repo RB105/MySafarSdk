@@ -99,6 +99,11 @@ class MySafarSdk {
 
   static const String _kRegisteredPhoneKey = 'web_registered_phone';
 
+  /// [ensureRegistered] orqali saqlangan host user telefoni (`998...`).
+  /// Ro'yxatdan o'tilmagan bo'lsa `null`.
+  static String? get registeredPhone =>
+      sdkStorage().read<String>(_kRegisteredPhoneKey);
+
   /// Host user'ini telefon raqami bilan MySafar backend'ida jim ro'yxatdan
   /// o'tkazadi (`/auth/web-register`) va tokenlarni saqlaydi.
   ///
