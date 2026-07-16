@@ -169,6 +169,7 @@ class _MainPageState extends State<MainPage>
     @override
     Widget build(BuildContext context)
     {
+        final bool isDark = context.isDarkMode;
 
         return BlocProvider(
             create: (context) => CheckVersionCubit(),
@@ -213,13 +214,15 @@ class _MainPageState extends State<MainPage>
                                 child: _circleIconButton(
                                     null,
                                     MySafarSdk.exitEmbed,
-                                    iconData: Icons.arrow_back_rounded),
+                                    iconData: Icons.arrow_back_rounded,
+                                    isDark: isDark),
                               )
                             : null,
                         actions: [
                             _circleIconButton(
                                 ProjectAssets.callCenterIcon,
                                 () => ProjectDialogs.showSupportMenu(context),
+                                isDark: isDark,
                                 showcaseKey: HomeShowcaseKeys.support,
                                 showcaseTitle: "showcase_support_title".tr(),
                                 showcaseDesc: "showcase_support_desc".tr()),
@@ -364,10 +367,16 @@ class _MainPageState extends State<MainPage>
 
     Widget _circleIconButton(String? asset, VoidCallback onTap,
         {IconData? iconData,
+        required bool isDark,
         GlobalKey? showcaseKey,
         String? showcaseTitle,
         String? showcaseDesc})
     {
+        // Light: brend ko'k; dark: yarim-shaffof oq (fon rasmi ustida ko'rinadi).
+        final Color bg = isDark
+            ? Colors.white.withOpacity(0.22)
+            : ProjectTheme.brandColor;
+
         final Widget button = InkWell(
             borderRadius: BorderRadius.circular(22),
             onTap: onTap,
@@ -377,7 +386,7 @@ class _MainPageState extends State<MainPage>
                 padding: const EdgeInsets.all(9),
                 decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: ProjectTheme.brandColor,
+                    color: bg,
                 ),
                 child: SizedBox(
                     width: 20,

@@ -62,6 +62,8 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = context.isDarkMode;
+
     return ShowCaseWidget(
       enableAutoScroll: true,
       onFinish: () => sdkStorage().write(_showcaseSeenKey, true),
@@ -83,6 +85,9 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
           });
         }
         return Scaffold(
+          backgroundColor: isDark
+              ? ProjectTheme.backgroundDark
+              : ProjectTheme.backgroundLight,
           body: IndexedStack(
             index: _pageIndex,
             children: [
@@ -90,7 +95,7 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
                 _loaded[i] ? _pages[i] : const SizedBox.shrink(),
             ],
           ),
-          bottomNavigationBar: _buildBottomBar(context),
+          bottomNavigationBar: _buildBottomBar(context, isDark),
         );
       },
     );
@@ -98,9 +103,7 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
 
   /// Figma: chetlardan ajralib suzib turuvchi yumaloq panel — har bir tab
   /// ikonka + doimiy yozuv; aktiv tab ikonkasi oq doira ichida.
-  Widget _buildBottomBar(BuildContext context) {
-    final bool isDark = context.themeProvider.isDark;
-
+  Widget _buildBottomBar(BuildContext context, bool isDark) {
     return SafeArea(
       top: false,
       minimum: const EdgeInsets.only(bottom: 10),
@@ -108,8 +111,8 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
         margin: const EdgeInsets.symmetric(horizontal: 14),
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
-          // Figma: oq suzuvchi panel, yumshoq soya.
-          color: isDark ? ProjectTheme.cardColorDark : Colors.white,
+          // Light: oq panel; dark: card (qora-kulrang) panel.
+          color: isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight,
           borderRadius: BorderRadius.circular(40),
           boxShadow: [
             BoxShadow(

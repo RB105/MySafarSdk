@@ -1,5 +1,7 @@
 import 'dart:ui' show Locale;
 
+import 'package:flutter/material.dart' show ThemeMode;
+
 /// SDK'ning tashqi konfiguratsiyasi. Host app `MySafarSdk.init` orqali beradi —
 /// ilgari native `MySafarChannel` (BuildConfig/xcconfig) dan o'qilgan qiymatlar
 /// endi shu yerdan keladi.
@@ -17,6 +19,7 @@ class MySafarConfig {
     this.enableFullProfile = false,
     this.startLocale,
     this.saveLocale = true,
+    this.themeMode,
   });
 
   /// Asosiy backend (masalan `https://api.mysafar.ru`).
@@ -65,6 +68,12 @@ class MySafarConfig {
   /// SDK ichida tanlangan til keyingi ochilishda eslab qolinsinmi. SDK'ning
   /// o'z izolyatsiyalangan storage'ida saqlanadi — host'ga ta'sir qilmaydi.
   final bool saveLocale;
+
+  /// Boshlang'ich tema (oq / qora fon). Host app o'z light/dark rejimini
+  /// beradi — masalan Unired dark bo'lsa `ThemeMode.dark`.
+  /// `null` bo'lsa `ThemeMode.system` (platform brightness). Foydalanuvchi
+  /// Sozlamalardan o'zi tanlagan bo'lsa, o'sha tanlov saqlanadi.
+  final ThemeMode? themeMode;
 }
 
 /// MyID SDK kirish ma'lumotlari (nomi `myid` paketidagi `MyIdConfig` bilan

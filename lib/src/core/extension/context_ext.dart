@@ -4,11 +4,21 @@ import 'package:flutter/material.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
 import 'package:mysafar_sdk/src/core/styles/theme_notifier.dart' show ThemeNotifier;
 import 'package:mysafar_sdk/src/core/tools/currency_provider.dart';
-import 'package:provider/provider.dart' show ReadContext;
+import 'package:provider/provider.dart' show ReadContext, WatchContext;
 
 extension SizeContext on BuildContext {
+  /// Listen qilmaydi — callback / showModal ichida ham xavfsiz.
   ThemeNotifier get themeProvider => read<ThemeNotifier>();
+
+  /// Faqat `build` ichida: tema o'zgarsa widget qayta chiziladi.
+  ThemeNotifier get themeWatcher => watch<ThemeNotifier>();
+
   CurrencyProvider get currencyProvider => read<CurrencyProvider>();
+
+  /// MaterialApp joriy temasidan — `ThemeMode.system` + terminal `b` da avtomatik
+  /// yangilanadi (IndexedStack ichidagi sahifalar ham qayta chiziladi).
+  bool get isDarkMode => Theme.of(this).brightness == Brightness.dark;
+
   double get height => MediaQuery.of(this).size.height;
   double get width => MediaQuery.of(this).size.width;
 
