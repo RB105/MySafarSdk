@@ -13,7 +13,6 @@ import 'package:mysafar_sdk/src/view/profile/profile_page.dart';
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 
-
 class BottomNavBarPage extends StatefulWidget {
   final int? pageIndex;
 
@@ -104,21 +103,27 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
   /// Figma: chetlardan ajralib suzib turuvchi yumaloq panel — har bir tab
   /// ikonka + doimiy yozuv; aktiv tab ikonkasi oq doira ichida.
   Widget _buildBottomBar(BuildContext context, bool isDark) {
+    final style = MySafarSdk.config.bottomBarStyle;
+    final shadowOpacity = isDark
+        ? (style?.shadowOpacityDark ?? 0.45)
+        : (style?.shadowOpacityLight ?? 0.12);
+
     return SafeArea(
       top: false,
       minimum: const EdgeInsets.only(bottom: 10),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 14),
-        padding: const EdgeInsets.all(6),
+        padding: style?.padding ?? const EdgeInsets.all(6),
         decoration: BoxDecoration(
-          // Light: oq panel; dark: card (qora-kulrang) panel.
-          color: isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight,
-          borderRadius: BorderRadius.circular(40),
+          color: isDark
+              ? (style?.backgroundColorDark ?? ProjectTheme.cardColorDark)
+              : (style?.backgroundColorLight ?? ProjectTheme.cardColorLight),
+          borderRadius: BorderRadius.circular(style?.borderRadius ?? 40),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.45 : 0.12),
-              blurRadius: 24,
-              offset: const Offset(0, 8),
+              color: Colors.black.withOpacity(shadowOpacity),
+              blurRadius: style?.shadowBlurRadius ?? 24,
+              offset: style?.shadowOffset ?? const Offset(0, 8),
             ),
           ],
         ),

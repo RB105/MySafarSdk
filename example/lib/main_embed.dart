@@ -17,7 +17,21 @@ Future<void> main() async {
         'SKOTE_BASE_URL',
         defaultValue: 'https://cms.mysafar.uz/api',
       ),
-      partnerToken: String.fromEnvironment('PARTNER_TOKEN'),
+      partnerToken: String.fromEnvironment(
+        'PARTNER_TOKEN',
+        defaultValue: '4db739d3f2b17970972189a9b133c28e43474480',
+      ),
+
+      // MUHIM — terminal `b` bilan sinash uchun themeMode YOZMASLIK kerak!
+      // themeMode: ThemeMode.dark  ← bu qator bo'lsa `b` ishlamaydi.
+      // Production (Unired): themeMode: ThemeMode.dark yoki .light
+      bottomBarStyle: MySafarBottomBarStyle(
+        backgroundColorLight: Colors.amber,
+        borderRadius: 0,
+       
+        backgroundColorDark: Colors.blue,
+
+      ),
     ),
   );
 
@@ -55,9 +69,10 @@ class HostHomePage extends StatelessWidget {
                 builder: (_) => const MySafarEmbed(
                   // Host user'ining raqami — SDK bir marta jim ro'yxatdan
                   // o'tkazadi (--dart-define=USER_PHONE=998... bilan bering).
-                  phoneNumber: String.fromEnvironment('USER_PHONE') == ''
-                      ? null
-                      : String.fromEnvironment('USER_PHONE'),
+                  // phoneNumber: String.fromEnvironment('USER_PHONE') == ''
+                  //     ? null
+                  //     : String.fromEnvironment('USER_PHONE'),
+                  phoneNumber: '998939691500',
                 ),
               ),
             );
