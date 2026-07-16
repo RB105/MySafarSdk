@@ -1,26 +1,27 @@
-import 'dart:ui' show Locale;
+import 'dart:ui' show Locale, Offset;
 
-import 'package:flutter/material.dart' show ThemeMode;
+import 'package:flutter/material.dart' show Color, EdgeInsets, ThemeMode;
 
 /// SDK'ning tashqi konfiguratsiyasi. Host app `MySafarSdk.init` orqali beradi —
 /// ilgari native `MySafarChannel` (BuildConfig/xcconfig) dan o'qilgan qiymatlar
 /// endi shu yerdan keladi.
 class MySafarConfig {
-  const MySafarConfig({
-    required this.baseUrl,
-    required this.skoteBaseUrl,
-    this.partnerToken = '',
-    this.appName,
-    this.myId,
-    this.socialAuth,
-    this.enableVersionGate = false,
-    this.enableServicesTab = false, // true edi false qilindi Xizmatlar bolimini berkitish uchun 
-    this.enableShowcaseTour = false,
-    this.enableFullProfile = false,
-    this.startLocale,
-    this.saveLocale = true,
-    this.themeMode,
-  });
+  const MySafarConfig(
+      {required this.baseUrl,
+      required this.skoteBaseUrl,
+      this.partnerToken = '',
+      this.appName,
+      this.myId,
+      this.socialAuth,
+      this.enableVersionGate = false,
+      this.enableServicesTab =
+          false, // true edi false qilindi Xizmatlar bolimini berkitish uchun
+      this.enableShowcaseTour = false,
+      this.enableFullProfile = false,
+      this.startLocale,
+      this.saveLocale = true,
+      this.themeMode,
+      this.bottomBarStyle});
 
   /// Asosiy backend (masalan `https://api.mysafar.ru`).
   final String baseUrl;
@@ -74,6 +75,51 @@ class MySafarConfig {
   /// `null` bo'lsa `ThemeMode.system` (platform brightness). Foydalanuvchi
   /// Sozlamalardan o'zi tanlagan bo'lsa, o'sha tanlov saqlanadi.
   final ThemeMode? themeMode;
+
+  /// Pastki navbar paneli (Container) ko'rinishi. `null` bo'lsa
+  /// [BottomNavBarPage] ichidagi default dizayn ishlatiladi.
+  final MySafarBottomBarStyle? bottomBarStyle;
+}
+
+/// Pastki navbar panelining tashqi ko'rinishi (faqat Container qatlami).
+/// Barcha maydonlar ixtiyoriy — berilmaganlari SDK default qiymatini oladi.
+class MySafarBottomBarStyle {
+  const MySafarBottomBarStyle({
+    // this.margin,
+    this.padding,
+    this.backgroundColorLight,
+    this.backgroundColorDark,
+    this.borderRadius,
+    this.shadowOpacityLight,
+    this.shadowOpacityDark,
+    this.shadowBlurRadius,
+    this.shadowOffset,
+  });
+
+  // /// 1 — panelning gorizontal margini (default: horizontal 14).
+  // final EdgeInsets? margin;
+
+  /// 2 — panel ichki padding (default: 6).
+  final EdgeInsets? padding;
+
+  /// 3 — panel foni (default: light/dark card rangi).
+  final Color? backgroundColorLight;
+  final Color? backgroundColorDark;
+
+  /// 4 — burchak radiusi (default: 40).
+  final double? borderRadius;
+
+  /// 5 — soyа rangi opacity (light rejim, default: 0.12).
+  final double? shadowOpacityLight;
+
+  /// 5 — soyа rangi opacity (dark rejim, default: 0.45).
+  final double? shadowOpacityDark;
+
+  /// 6 — soyа blur radius (default: 24).
+  final double? shadowBlurRadius;
+
+  /// 7 — soyа offset (default: Offset(0, 8)).
+  final Offset? shadowOffset;
 }
 
 /// MyID SDK kirish ma'lumotlari (nomi `myid` paketidagi `MyIdConfig` bilan
