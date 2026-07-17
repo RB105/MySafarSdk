@@ -38,6 +38,7 @@ import 'package:mysafar_sdk/src/view/booking/passenger_information_page.dart';
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
 import 'package:mysafar_sdk/src/view/destinations/destinations_info_map_page.dart';
 import 'package:mysafar_sdk/src/view/booking/ticketed_booking_search_page.dart';
+import 'package:mysafar_sdk/src/view/search/route_search_page.dart';
 import 'package:mysafar_sdk/src/view/tickets/ticket_page.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';

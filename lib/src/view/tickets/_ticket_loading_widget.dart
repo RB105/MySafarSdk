@@ -210,7 +210,7 @@ class __AirlinesAnimatorState extends State<_AirlinesAnimator>
 
   int _index = 0;
   late Timer _timer;
-  final _airlinesDir = 'packages/mysafar_sdk/assets/img/tickets/airlines';
+  final _airlinesDir = 'assets/img/tickets/airlines';
 
   @override
   void initState() {

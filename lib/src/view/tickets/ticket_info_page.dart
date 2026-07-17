@@ -174,9 +174,17 @@ class _TicketInfoPageState extends State<TicketInfoPage> {
                                               },
                                             ),
                                           )
-                                        : const SizedBox.shrink(
-                                            key: ValueKey('emptyState'),
-                                          ),
+                                        : state is TicketTariffUnavailableState
+                                            ? const Padding(
+                                                key: ValueKey(
+                                                    'unavailableState'),
+                                                padding:
+                                                    EdgeInsets.only(top: 12.0),
+                                                child: _TariffUnavailableTile(),
+                                              )
+                                            : const SizedBox.shrink(
+                                                key: ValueKey('emptyState'),
+                                              ),
                                   );
                                 },
                               ),
@@ -285,6 +293,8 @@ class _TicketInfoPageState extends State<TicketInfoPage> {
     );
   }
 }
+
+
 
 // ════════════════════════════════════════════════════════════════════
 //  HERO
@@ -903,6 +913,48 @@ class _TariffPickerTile extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _TariffUnavailableTile extends StatelessWidget {
+  const _TariffUnavailableTile();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = context.themeProvider.isDark;
+    final warn = ProjectTheme.warning;
+    final bg = isDark ? warn.withAlpha(38) : warn.withAlpha(28);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: warn.withAlpha(isDark ? 80 : 45),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(Icons.warning_amber_rounded, color: warn, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              "no_other_tariff".tr(),
+              style: context.textTheme.bodyMedium?.copyWith(
+                color: warn,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

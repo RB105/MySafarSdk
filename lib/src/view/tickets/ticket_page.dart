@@ -4,10 +4,16 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:flutter/services.dart'
     show HapticFeedback, SystemUiOverlayStyle;
+import 'package:mysafar_sdk/src/core/config/response_config.dart'
+    show NetworkSuccessResponse;
+import 'package:mysafar_sdk/src/core/enum/currency.dart' show AppCurrency;
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart' show SizeContext;
 import 'package:mysafar_sdk/src/core/styles/theme.dart' show ProjectTheme;
 import 'package:mysafar_sdk/src/core/tools/currency_provider.dart'
     show CurrencyProvider;
+import 'package:mysafar_sdk/src/model/remote/avia/ticket_date_price_model.dart'
+    show TicketDatePriceModel, DatePrice;
+import 'package:mysafar_sdk/src/service/avia_service.dart' show AviaService;
 import 'package:mysafar_sdk/src/core/tools/app_cache_manager.dart' show AppCacheManager;
 import 'package:mysafar_sdk/src/core/tools/formatters.dart';
 import 'package:mysafar_sdk/src/core/tools/project_assets.dart' show ProjectAssets;
@@ -31,6 +37,8 @@ import 'my_safar_ticket_shimmer.dart';
 part '_tickets_container_widgets.dart';
 
 part '_ticket_loading_widget.dart';
+
+part '_ticket_summary_widgets.dart';
 
 class RecommendationsTicketPage extends StatefulWidget {
   final RecommendationRequestBody requestBody;
@@ -68,6 +76,161 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
   static const Duration _visibilityRecheck = Duration(milliseconds: 500);
   Timer? _priceRefreshTimer;
   bool _refreshDialogOpen = false;
+
+  // ── Sana-narx lentasi (web mobil dizayni) ─────────────────────────────
+  // Qo'shni kunlarning eng arzon narxlari appbar ostidagi to'q ko'k lentada
+  // ko'rsatiladi; boshqa kun bosilsa, o'sha sana bilan qayta qidiriladi.
+  // Narxlar mavjud oylik-kalendar API'sidan olinadi; kelmasa lenta faqat
+  // sanalar bilan ishlayveradi. Faqat bir tomonlama (one-way) qidiruvda.
+  TicketDatePriceModel? _monthPrices;
+
+  bool get _showDateStrip =>
+      (widget.requestBody.flight_Type ?? 0) == 0 &&
+      _selectedStripDate() != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMonthPrices();
+  }
+
+  Future<void> _loadMonthPrices() async {
+    if ((widget.requestBody.flight_Type ?? 0) != 0) return;
+    final segments = widget.requestBody.segments;
+    if (segments == null || segments.isEmpty) return;
+    final from = segments.first.from?.cityIataCode ?? '';
+    final to = segments.first.to?.cityIataCode ?? '';
+    if (from.isEmpty || to.isEmpty) return;
+    try {
+      final response = await AviaService().getPriceByMonth(from, to);
+      if (!mounted) return;
+      if (response is NetworkSuccessResponse) {
+        setState(
+            () => _monthPrices = response.data as TicketDatePriceModel);
+      }
+    } catch (_) {
+      // Narxlarsiz ham lenta ishlayveradi.
+    }
+  }
+
+  /// Birinchi segment sanasi ("24.7.2026" yoki "24-07-2026" ko'rinishida).
+  DateTime? _selectedStripDate() {
+    final segments = widget.requestBody.segments;
+    final raw =
+        (segments == null || segments.isEmpty) ? '' : segments.first.date ?? '';
+    if (raw.isEmpty) return null;
+    final parts = raw.contains('-') ? raw.split('-') : raw.split('.');
+    if (parts.length != 3) return null;
+    // yyyy-MM-dd formati ham qo'llab-quvvatlanadi.
+    final bool yearFirst = parts[0].length == 4;
+    final day = int.tryParse(yearFirst ? parts[2] : parts[0]);
+    final month = int.tryParse(parts[1]);
+    final year = int.tryParse(yearFirst ? parts[0] : parts[2]);
+    if (day == null || month == null || year == null) return null;
+    return DateTime(year, month, day);
+  }
+
+  // ── Web-uslub ko'rinish filtrlari (chiplar qatori) ────────────────────
+  // Saytdagi kabi appbar ostidagi chiplar: Saralash / Almashishlar / Bagaj /
+  // Tarif qoidalari. Serverga qayta so'rov YUBORILMAYDI — yuklangan ro'yxatga
+  // darhol qo'llanadi (web ham shunday ishlaydi). To'liq server filtri esa
+  // avvalgidek appbar'dagi filter tugmasida qoladi.
+  final _ViewFilterValues _viewFilters = _ViewFilterValues();
+
+  int get _viewSort => _viewFilters.sort;
+
+  void _clearViewFilters() {
+    setState(() => _viewFilters.reset());
+    AnalyticsService()
+        .trackButtonTap('filter_reset', extra: {'source': 'empty_view'});
+  }
+
+  /// Reys barcha yo'nalishlarda almashishsizmi.
+  static bool _isDirectFlight(FlightElement f) {
+    final dirs = f.segmentsDirection?.length ?? 1;
+    for (int i = 0; i < dirs; i++) {
+      if (f.getTransferCount(i) > 0) return false;
+    }
+    return true;
+  }
+
+  /// Reysning kun ichidagi jo'nash/qo'nish daqiqasi (birinchi yo'nalish).
+  /// Aniqlab bo'lmasa `null` — bunday reys vaqt filtridan chiqarilmaydi.
+  static int? _minutesOfDay(String? time) {
+    final t = (time ?? '').split(':');
+    if (t.length < 2) return null;
+    final h = int.tryParse(t[0]);
+    final m = int.tryParse(t[1]);
+    if (h == null || m == null) return null;
+    return h * 60 + m;
+  }
+
+  static bool _inTimeRange(int? minutes, RangeValues range) {
+    if (range.start <= 0 && range.end >= _ViewFilterValues.dayMinutes) {
+      return true;
+    }
+    if (minutes == null) return true;
+    return minutes >= range.start && minutes <= range.end;
+  }
+
+  /// Ko'rinish filtrlarini yuklangan ro'yxatga qo'llaydi (saralash emas —
+  /// u [_AnimatedFlightList] ichida, FLIP animatsiyasi bilan bajariladi).
+  List<FlightElement> _applyViewFilters(List<FlightElement> src) {
+    final v = _viewFilters;
+    if (!v.hasAnyFilter) return src;
+    return [
+      for (final f in src)
+        if ((!v.directOnly || _isDirectFlight(f)) &&
+            (!v.baggageOnly || (f.isBaggage ?? false)) &&
+            (!v.refundable || f.isRefund == true) &&
+            (!v.exchangeable || f.isExchangeable()) &&
+            _matchesTimeAndAirline(f, v))
+          f
+    ];
+  }
+
+  static bool _matchesTimeAndAirline(FlightElement f, _ViewFilterValues v) {
+    final segs = f.getSegmentsByDirection(0);
+    if (segs.isEmpty) return true;
+    if (v.excludedAirlines.contains(segs.first.carrier.code)) return false;
+    return _inTimeRange(_minutesOfDay(segs.first.dep.time), v.depRange) &&
+        _inTimeRange(_minutesOfDay(segs.last.arr.time), v.arrRange);
+  }
+
+  /// Chip yoki appbar'dagi filter tugmasi bosilganda web'dagi kabi TO'LIQ
+  /// "Filtr" sheet'i ochiladi — chip bosilganda o'sha bo'lim ochiq holda,
+  /// filter tugmasida esa barcha bo'limlar yig'ilgan holda ([section] `null`).
+  /// Qo'llash bosilgandagina qiymatlar ro'yxatga qo'llanadi.
+  Future<void> _openViewFilters(
+      TicketCubit cubit, _ViewFilterSection? section) async {
+    HapticFeedback.lightImpact();
+    AnalyticsService().trackButtonTap('ticket_view_filters');
+    final airlines = _groupFlightsByAirline(
+        cubit.overAllData?.recommedations?.flights ?? const []);
+    final result = await _showViewFiltersSheet(
+      context,
+      initial: _viewFilters,
+      initialSection: section,
+      airlines: airlines,
+    );
+    if (result != null && mounted) {
+      setState(() => _viewFilters.copyFrom(result));
+    }
+  }
+
+  /// Lentada boshqa kun tanlandi: segment sanasini (asl ajratkich uslubini
+  /// saqlagan holda) yangilab, xuddi shu parametrlar bilan qayta qidiramiz.
+  void _onStripDateTap(TicketCubit cubit, DateTime date) {
+    final segments = widget.requestBody.segments;
+    if (segments == null || segments.isEmpty) return;
+    final segment = segments.first;
+    final bool dashed = (segment.date ?? '').contains('-');
+    segment.date = dashed
+        ? "${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}-${date.year}"
+        : "${date.day}.${date.month}.${date.year}";
+    setState(() {});
+    cubit.add(GetRecommendationsEvent(cubit.filterReqBody));
+  }
 
   // ── Har saralanishda eng arzonni ko'rsatish ───────────────────────────
   // Natijalar 3 ta manbadan bosqichma-bosqich keladi va ro'yxat har safar narx
@@ -157,7 +320,8 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-        create: (context) => TicketCubit(widget.requestBody, false),
+        create: (context) =>
+            TicketCubit(widget.requestBody, false),
         child: BlocConsumer<TicketCubit, TicketsState>(
           listener: (context, state) {
             // Yangi qidiruv boshlanganda taymerni to'xtatamiz; natija to'liq
@@ -202,42 +366,13 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
                       final bool isDark = context.themeProvider.isDark;
                       final showFilters =
                           state is TicketSuccessState || ticketCubit.isFiltered;
-                      final _RecHeroFilterBar? filterBar = showFilters
-                          ? _RecHeroFilterBar(
-                              isDirect: ticketCubit.filterReqBody.isDirect(),
-                              isBaggage:
-                                  ticketCubit.filterReqBody.isBaggage ?? false,
-                              onCheapestTap: () {
-                                // Ro'yxat doim eng arzondan saralangan —
-                                // tepasiga silliq qaytaramiz.
-                                HapticFeedback.lightImpact();
-                                final c = _innerScroll;
-                                if (c != null && c.hasClients) {
-                                  c.animateTo(0,
-                                      duration:
-                                          const Duration(milliseconds: 400),
-                                      curve: Curves.easeOutCubic);
-                                }
-                              },
-                              onDirectTap: () {
-                                HapticFeedback.lightImpact();
-                                final filterBody = ticketCubit.filterReqBody;
-                                setState(() =>
-                                    ticketCubit.filterReqBody.isDirectOnly =
-                                        ticketCubit.filterReqBody.isDirect()
-                                            ? 0
-                                            : 1);
-                                ticketCubit.add(SendFilterEvent(filterBody));
-                              },
-                              onBaggageTap: () {
-                                HapticFeedback.lightImpact();
-                                final filterBody = ticketCubit.filterReqBody;
-                                setState(() =>
-                                    ticketCubit.filterReqBody.isBaggage =
-                                        !(ticketCubit.filterReqBody.isBaggage ??
-                                            false));
-                                ticketCubit.add(SendFilterEvent(filterBody));
-                              },
+                      // Web-uslub chiplar: har biri o'z filtrining joriy
+                      // qiymatini ko'rsatadi, bosilganda tanlov sheet ochiladi.
+                      final _RecViewFilterBar? filterBar = showFilters
+                          ? _RecViewFilterBar(
+                              values: _viewFilters,
+                              onOpen: (section) =>
+                                  _openViewFilters(ticketCubit, section),
                             )
                           : null;
                       return [
@@ -279,49 +414,72 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
                               onTap: () =>
                                   ProjectDialogs.showCurrencyMenu(context),
                             ),
+                            // Valyuta yonidagi filter tugmasi ham xuddi
+                            // chiplar kabi web-uslub to'liq "Filtr" sheet'ini
+                            // ochadi (hech bir bo'lim ochilmagan holda).
                             _RecHeroIconButton(
                               asset: Assets.ticketsFilterIcon,
-                              onTap: () async {
-                                final filterBody = ticketCubit.filterReqBody;
-                                final response =
-                                    await ProjectDialogs.showTicketFilter(
-                                        context, filterBody);
-                                if (response != null) {
-                                  ticketCubit.add(SendFilterEvent(filterBody));
-                                }
-                              },
+                              onTap: () =>
+                                  _openViewFilters(ticketCubit, null),
                             ),
                             const SizedBox(width: 4),
                           ],
-                          bottom: (filterBar != null || showLoadingBar)
+                          bottom: (filterBar != null ||
+                                  showLoadingBar ||
+                                  _showDateStrip)
                               ? _RecHeroAppBarBottom(
                                   showLoadingBar: showLoadingBar,
                                   isLoading: isLoading,
                                   onLoadingCompleted: _onLoadingBarCompleted,
                                   filterBar: filterBar,
+                                  // Sana-narx lentasi appbar tarkibida —
+                                  // appbar pinned bo'lgani uchun scroll'da
+                                  // KAFOLATLI qadalib turadi.
+                            dateStrip: _showDateStrip
+                                      ? _DatePriceStrip(
+                                          selected: _selectedStripDate()!,
+                                          monthPrices: _monthPrices,
+                                          onDateTap: (date) => _onStripDateTap(
+                                              ticketCubit, date),
+                                        )
+                                      : null,
                                 )
                               : null,
                         )
                       ];
                     }, body: Builder(builder: (context) {
                       _innerScroll = PrimaryScrollController.maybeOf(context);
+                      // Chiplardagi ko'rinish filtrlari yuklangan ro'yxatga
+                      // shu yerda qo'llanadi (web'dagi kabi — darhol).
+                      final List<FlightElement> viewFlights =
+                          state is TicketSuccessState
+                              ? _applyViewFilters(state
+                                  .recommendationRes.recommedations!.flights)
+                              : const [];
                       return CustomScrollView(
                         slivers: [
-                          // "To'g'ri reyslar" bloki (Figma) — transfersiz
-                          // reyslar aviakompaniya kesimida, eng arzoni bilan.
+                          // "Aviakompaniyalar bo'yicha" jamlama kartasi.
                           if (state is TicketSuccessState)
                             SliverToBoxAdapter(
-                              child: _DirectFlightsCard(
-                                flights: state
-                                    .recommendationRes.recommedations!.flights,
-                                flightType:
-                                    widget.requestBody.flight_Type ?? 0,
+                              child: _AirlinesSummaryCard(
+                                flights: viewFlights,
                               ),
                             ),
                           switch (state) {
+                            // Filtrlar hech narsa qoldirmadi — xabar +
+                            // filtrlarni tozalash tugmasi.
+                            TicketSuccessState() when viewFlights.isEmpty =>
+                              SliverPadding(
+                                padding: context.k16horizontalPadding,
+                                sliver: SliverToBoxAdapter(
+                                  child: _FilteredEmptyView(
+                                    onClear: _clearViewFilters,
+                                  ),
+                                ),
+                              ),
                             TicketSuccessState() => _AnimatedFlightList(
-                                flights: state
-                                    .recommendationRes.recommedations!.flights,
+                                flights: viewFlights,
+                                sortMode: _viewSort,
                                 isLoadingMore: state.isLoadingMore,
                                 flightType: widget.requestBody.flight_Type ?? 0,
                                 animateReorder: !_reorderSuppressed,
@@ -499,20 +657,18 @@ class _RecHeroTitle extends StatelessWidget {
   }
 }
 
-/// Appbar ostidagi chip'lar qatori (Figma): [Eng arzon] [Yuk bilan] [To'g'ri].
-class _RecHeroFilterBar extends StatelessWidget implements PreferredSizeWidget {
-  final bool isDirect;
-  final bool isBaggage;
-  final VoidCallback onCheapestTap;
-  final VoidCallback onDirectTap;
-  final VoidCallback onBaggageTap;
+/// Appbar ostidagi web-uslub filter chiplari qatori (mysafar.uz mobil):
+/// [⇅ Saralash] [✈ Almashishlar] [🧳 Bagaj] [🛡 Tarif] [🕐 Vaqt] [✈ Avia].
+/// Har bir chip o'z filtrining JORIY qiymatini ko'rsatadi; bosilganda
+/// web'dagi kabi to'liq "Filtr" sheet'i o'sha bo'lim ochiq holda ochiladi.
+/// Qiymat standartdan farq qilsa chip ko'k tusda.
+class _RecViewFilterBar extends StatelessWidget implements PreferredSizeWidget {
+  final _ViewFilterValues values;
+  final void Function(_ViewFilterSection section) onOpen;
 
-  const _RecHeroFilterBar({
-    required this.isDirect,
-    required this.isBaggage,
-    required this.onCheapestTap,
-    required this.onDirectTap,
-    required this.onBaggageTap,
+  const _RecViewFilterBar({
+    required this.values,
+    required this.onOpen,
   });
 
   @override
@@ -520,51 +676,73 @@ class _RecHeroFilterBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-      child: SizedBox(
-        height: 44,
-        child: Row(
-          children: [
-            Expanded(
-              child: _RecHeroChip(
-                active: true,
-                label: "ticket_chip_cheapest".tr(),
-                onTap: onCheapestTap,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _RecHeroChip(
-                active: isBaggage,
-                label: "ticket_chip_baggage".tr(),
-                onTap: onBaggageTap,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _RecHeroChip(
-                active: isDirect,
-                label: "ticket_chip_direct".tr(),
-                onTap: onDirectTap,
-              ),
-            ),
-          ],
-        ),
+    final v = values;
+    return SizedBox(
+      height: 56,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+        children: [
+          _RecFilterChip(
+            icon: Icons.swap_vert_rounded,
+            label: v.sortLabel(),
+            active: v.sort != 0,
+            onTap: () => onOpen(_ViewFilterSection.sort),
+          ),
+          const SizedBox(width: 8),
+          _RecFilterChip(
+            icon: Icons.flight_takeoff_rounded,
+            label: v.transferLabel(),
+            active: v.directOnly,
+            onTap: () => onOpen(_ViewFilterSection.transfer),
+          ),
+          const SizedBox(width: 8),
+          _RecFilterChip(
+            icon: Icons.luggage_rounded,
+            label: v.baggageLabel(),
+            active: v.baggageOnly,
+            onTap: () => onOpen(_ViewFilterSection.baggage),
+          ),
+          const SizedBox(width: 8),
+          // Web'dagi kabi: tarif/vaqt/aviakompaniya chiplari qiymat emas,
+          // BO'LIM NOMINI ko'rsatadi (qiymat ro'yxat emas, murakkab).
+          _RecFilterChip(
+            icon: Icons.verified_user_outlined,
+            label: "filter_tariff_title".tr(),
+            active: v.refundable || v.exchangeable,
+            onTap: () => onOpen(_ViewFilterSection.tariff),
+          ),
+          const SizedBox(width: 8),
+          _RecFilterChip(
+            icon: Icons.schedule_rounded,
+            label: "filter_time_title".tr(),
+            active: v.hasTimeFilter,
+            onTap: () => onOpen(_ViewFilterSection.time),
+          ),
+          const SizedBox(width: 8),
+          _RecFilterChip(
+            icon: Icons.airplane_ticket_outlined,
+            label: "airlines_tab".tr(),
+            active: v.excludedAirlines.isNotEmpty,
+            onTap: () => onOpen(_ViewFilterSection.airlines),
+          ),
+        ],
       ),
     );
   }
 }
 
-/// Stadion shaklidagi chip: faol — ko'k to'ldirilgan (oq matn); nofaol — oq.
-class _RecHeroChip extends StatelessWidget {
-  final bool active;
+/// Bitta filter chipi: ikonka + joriy qiymat + pastga strelka (web'dagi kabi).
+class _RecFilterChip extends StatelessWidget {
+  final IconData icon;
   final String label;
+  final bool active;
   final VoidCallback onTap;
 
-  const _RecHeroChip({
-    required this.active,
+  const _RecFilterChip({
+    required this.icon,
     required this.label,
+    required this.active,
     required this.onTap,
   });
 
@@ -572,40 +750,40 @@ class _RecHeroChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool isDark = context.themeProvider.isDark;
     final Color bg = active
-        ? ProjectTheme.brandColor
-        : (isDark ? Colors.white.withAlpha(26) : Colors.white);
-    final Color fg =
-        active ? Colors.white : (isDark ? Colors.white : const Color(0xFF16244A));
+        ? ProjectTheme.brandColor.withAlpha(isDark ? 60 : 26)
+        : (isDark ? Colors.white.withAlpha(20) : const Color(0xFFF1F4F9));
+    final Color fg = active
+        ? (isDark ? Colors.white : ProjectTheme.brandColor)
+        : (isDark ? Colors.white : const Color(0xFF16244A));
 
     return Material(
       color: bg,
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.circular(12),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: onTap,
-        child: Container(
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            border: active
-                ? null
-                : Border.all(
-                    color:
-                        isDark ? Colors.white24 : const Color(0xFFE3E7F0),
-                    width: 1),
-          ),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              label,
-              maxLines: 1,
-              style: TextStyle(
-                color: fg,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w700,
+        onTap: () {
+          HapticFeedback.lightImpact();
+          onTap();
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: fg),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                maxLines: 1,
+                style: TextStyle(
+                  color: fg,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ),
+              const SizedBox(width: 3),
+              Icon(Icons.keyboard_arrow_down_rounded, size: 17, color: fg),
+            ],
           ),
         ),
       ),
@@ -626,21 +804,28 @@ class _RecHeroAppBarBottom extends StatelessWidget
   /// Indikator tugallanish animatsiyasini yakunlaganda chaqiriladi.
   final VoidCallback onLoadingCompleted;
 
-  final _RecHeroFilterBar? filterBar;
+  final _RecViewFilterBar? filterBar;
+
+  /// Sana-narx lentasi — appbar tarkibida bo'lgani uchun scroll'da
+  /// qadalib turadi (web'dagi kabi chiplar ostida).
+  final Widget? dateStrip;
 
   const _RecHeroAppBarBottom({
     required this.showLoadingBar,
     required this.isLoading,
     required this.onLoadingCompleted,
     this.filterBar,
+    this.dateStrip,
   });
 
-  /// Yuklash indikatori egallaydigan balandlik (chiziq + pastki bo'shliq).
-  static const double _loadingHeight = 11;
+  /// Yuklash indikatori egallaydigan balandlik (chiziq + foiz qatori +
+  /// pastki bo'shliq).
+  static const double _loadingHeight = 22;
 
   @override
   Size get preferredSize => Size.fromHeight(
         (filterBar?.preferredSize.height ?? 0) +
+            (dateStrip != null ? _DatePriceStrip.height : 0) +
             (showLoadingBar ? _loadingHeight : 0),
       );
 
@@ -650,6 +835,7 @@ class _RecHeroAppBarBottom extends StatelessWidget
       mainAxisSize: MainAxisSize.min,
       children: [
         if (filterBar != null) filterBar!,
+        if (dateStrip != null) dateStrip!,
         if (showLoadingBar)
           _RecHeroLoadingBar(
             key: const ValueKey('rec-hero-loading-bar'),
@@ -665,7 +851,8 @@ class _RecHeroAppBarBottom extends StatelessWidget
 ///
 /// Natija kutilayotganda sekinlik bilan ~90% gacha to'ladi (tobora sekinlashib);
 /// natija kelganda ([isLoading] `false` bo'lganda) tezda 100% ga to'lib, so'ng
-/// o'chadi va [onCompleted] chaqiriladi.
+/// o'chadi va [onCompleted] chaqiriladi. Chiziq yonida joriy to'lish foizi
+/// ham ko'rsatiladi.
 class _RecHeroLoadingBar extends StatefulWidget {
   final bool isLoading;
   final VoidCallback onCompleted;
@@ -755,24 +942,60 @@ class _RecHeroLoadingBarState extends State<_RecHeroLoadingBar>
 
   @override
   Widget build(BuildContext context) {
+    // Foiz matni qorong'u temada oq (brand ko'k fon bilan qo'shilib
+    // ketmasligi uchun), yorug'ida brand ko'k.
+    final Color percentColor = Theme.of(context).brightness == Brightness.dark
+        ? Colors.white
+        : ProjectTheme.brandColor;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       child: SizedBox(
-        height: 3,
+        height: 14,
         width: double.infinity,
         child: RepaintBoundary(
           child: AnimatedBuilder(
             animation: Listenable.merge([_progress, _opacity]),
-            builder: (_, __) => Opacity(
-              opacity: _opacity.value,
-              child: CustomPaint(
-                painter: _LoadingBarPainter(
-                  fillFraction: _progress.value,
-                  track: ProjectTheme.brandColor.withAlpha(40),
-                  fill: ProjectTheme.brandColor,
+            builder: (_, __) {
+              final int percent =
+                  (_progress.value * 100).clamp(0, 100).round();
+              return Opacity(
+                opacity: _opacity.value,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 3,
+                        child: CustomPaint(
+                          painter: _LoadingBarPainter(
+                            fillFraction: _progress.value,
+                            track: ProjectTheme.brandColor.withAlpha(40),
+                            fill: ProjectTheme.brandColor,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Kenglik qat'iy — foiz o'sganda qator "sakramaydi".
+                    SizedBox(
+                      width: 36,
+                      child: Text(
+                        "$percent%",
+                        textAlign: TextAlign.right,
+                        maxLines: 1,
+                        style: TextStyle(
+                          fontFamily: 'Gilroy',
+                          fontSize: 11,
+                          height: 1.0,
+                          fontWeight: FontWeight.w800,
+                          color: percentColor,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ),
       ),
@@ -888,6 +1111,57 @@ double _flightPriceUzs(FlightElement f) {
   return _parseAmount(f.price?.rub?.amount);
 }
 
+/// Sana ("24.07.2026" / "24-07-2026" / "2026-07-24") va vaqt ("19:10")
+/// satrlaridan monotonik saralash kaliti yasaydi. Ba'zi manbalarda `ts`
+/// (epoch) kelmagani uchun kartada ko'rinadigan sana/vaqtdan hisoblaymiz.
+double _dateTimeKey(String? date, String? time) {
+  final raw = (date ?? '').trim();
+  if (raw.isEmpty) return double.infinity;
+  final parts = raw.contains('-') ? raw.split('-') : raw.split('.');
+  if (parts.length != 3) return double.infinity;
+  final bool yearFirst = parts[0].length == 4;
+  final day = int.tryParse(yearFirst ? parts[2] : parts[0]);
+  final month = int.tryParse(parts[1]);
+  final year = int.tryParse(yearFirst ? parts[0] : parts[2]);
+  if (day == null || month == null || year == null) return double.infinity;
+
+  int minutes = 0;
+  final t = (time ?? '').split(':');
+  if (t.length >= 2) {
+    minutes = (int.tryParse(t[0]) ?? 0) * 60 + (int.tryParse(t[1]) ?? 0);
+  }
+  // Kun kaliti * 1440 + kun ichidagi daqiqa.
+  final dayKey = year * 10000 + month * 100 + day;
+  return dayKey * 1440.0 + minutes;
+}
+
+/// Birinchi yo'nalishning jo'nash sana-vaqti — "uchish vaqti bo'yicha"
+/// saralash uchun.
+double _flightDepTs(FlightElement f) {
+  final segs = f.getSegmentsByDirection(0);
+  if (segs.isEmpty) return double.infinity;
+  return _dateTimeKey(segs.first.dep.date, segs.first.dep.time);
+}
+
+/// Birinchi yo'nalishning yetib borish sana-vaqti.
+double _flightArrTs(FlightElement f) {
+  final segs = f.getSegmentsByDirection(0);
+  if (segs.isEmpty) return double.infinity;
+  return _dateTimeKey(segs.last.arr.date, segs.last.arr.time);
+}
+
+/// Umumiy parvoz davomiyligi (daqiqa) — barcha yo'nalishlar yig'indisi.
+double _flightDurationMin(FlightElement f) {
+  final total = f.duration ?? 0;
+  if (total > 0) return total.toDouble();
+  double sum = 0;
+  final dirs = f.segmentsDirection?.length ?? 1;
+  for (int i = 0; i < dirs; i++) {
+    sum += f.getDirDuration(i);
+  }
+  return sum > 0 ? sum : double.infinity;
+}
+
 /// Reys natijalari ro'yxati.
 ///
 /// • Manbalar hali kelayotganda ([isLoadingMore] `true`) — kelish (merge)
@@ -901,6 +1175,10 @@ class _AnimatedFlightList extends StatefulWidget {
   final bool isLoadingMore;
   final int flightType;
 
+  /// Chiplardagi saralash rejimi: 0-narx, 1-uchish, 2-qo'nish, 3-davomiylik.
+  /// O'zgarganda kartalar FLIP animatsiyasi bilan yangi tartibga suriladi.
+  final int sortMode;
+
   /// `false` bo'lsa, bu yangilanishda kartalarni qayta tartiblovchi FLIP
   /// animatsiyasi o'tkazib yuboriladi (ro'yxat tepaga scroll qilinayotganda,
   /// ikki animatsiya to'qnashmasligi uchun).
@@ -910,6 +1188,7 @@ class _AnimatedFlightList extends StatefulWidget {
     required this.flights,
     required this.isLoadingMore,
     required this.flightType,
+    this.sortMode = 0,
     this.animateReorder = true,
   });
 
@@ -937,35 +1216,28 @@ class _AnimatedFlightListState extends State<_AnimatedFlightList> {
     if (_active[id] == s) _active.remove(id);
   }
 
-  /// Ko'rsatiladigan tartibni hisoblaydi. Tugagach — narx bo'yicha barqaror
-  /// (teng narxlarda kelish tartibini saqlovchi) saralash.
+  /// Saralash kaliti — chiplarda tanlangan rejimga qarab.
+  double _sortKey(FlightElement f) => switch (widget.sortMode) {
+        1 => _flightDepTs(f),
+        2 => _flightArrTs(f),
+        3 => _flightDurationMin(f),
+        _ => _flightPriceUzs(f),
+      };
+
+  /// Ko'rsatiladigan tartibni hisoblaydi: tanlangan rejim bo'yicha barqaror
+  /// (teng qiymatlarda kelish tartibini saqlovchi) saralash. Manbalar
+  /// bosqichma-bosqich kelsa ham (2-, 3-...) eng yaxshisi darhol tepaga
+  /// chiqadi, oxirgi manbani kutmasdan.
   List<FlightElement> _computeDisplay() {
-    // Har doim narx bo'yicha saralaymiz — manbalar bosqichma-bosqich kelsa ham
-    // (2-, 3-...) eng arzon darhol tepaga chiqsin, oxirgi manbani kutmasdan.
     final indexed = <MapEntry<int, FlightElement>>[
       for (int i = 0; i < widget.flights.length; i++)
         MapEntry(i, widget.flights[i]),
     ];
     indexed.sort((a, b) {
-      final c = _flightPriceUzs(a.value).compareTo(_flightPriceUzs(b.value));
+      final c = _sortKey(a.value).compareTo(_sortKey(b.value));
       return c != 0 ? c : a.key.compareTo(b.key);
     });
-    final sorted = [for (final e in indexed) e.value];
-    // ── VAQTINCHA DIAGNOSTIKA — saralash ishladimi tekshirish uchun ──
-    // (Muammo hal bo'lgach o'chiriladi.)
-    assert(() {
-      final before = widget.flights
-          .take(5)
-          .map((f) => '${f.price?.uzs?.amount}->${_flightPriceUzs(f)}')
-          .toList();
-      final after = sorted.take(5).map((f) => _flightPriceUzs(f)).toList();
-      debugPrint('SORT: count=${widget.flights.length} '
-          'isLoadingMore=${widget.isLoadingMore}');
-      debugPrint('SORT: rawFirst5=$before');
-      debugPrint('SORT: sortedFirst5=$after');
-      return true;
-    }());
-    return sorted;
+    return [for (final e in indexed) e.value];
   }
 
   @override
@@ -1077,15 +1349,28 @@ class _AnimatedFlightListState extends State<_AnimatedFlightList> {
             return const _MoreResultsLoading();
           }
           final flight = flights[index];
+          // Belgilar faqat narx bo'yicha saralashda ma'noli: "Eng arzon" —
+          // 1-kartada (logo yonida), "Ekonom" — 1- va 2-kartalarda (tepada).
+          final bool isCheapest = index == 0 && widget.sortMode == 0;
+          final bool economBadge = index < 2 && widget.sortMode == 0;
           return _FlipItem(
             key: ValueKey(flight.id),
             id: flight.id,
             controller: this,
             child: RepaintBoundary(
               child: switch (widget.flightType) {
-                1 => _ReturnDateFlightContainer(flightElement: flight),
-                2 => _MultipleDateFlightContainer(flightElement: flight),
-                _ => _SingleDateFlightContainer(flightElement: flight),
+                1 => _ReturnDateFlightContainer(
+                    flightElement: flight,
+                    isCheapest: isCheapest,
+                    showEconomBadge: economBadge),
+                2 => _MultipleDateFlightContainer(
+                    flightElement: flight,
+                    isCheapest: isCheapest,
+                    showEconomBadge: economBadge),
+                _ => _SingleDateFlightContainer(
+                    flightElement: flight,
+                    isCheapest: isCheapest,
+                    showEconomBadge: economBadge),
               },
             ),
           );

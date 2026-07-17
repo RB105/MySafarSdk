@@ -68,6 +68,8 @@ class EndPoints {
   */
   static const hot_tickets = '/hot-recommendations';
   static const destinations = '/destinations';
+  static const destination_detail = '/v1/destination/detail';
+  static const destination_list = '/v1/destination/list';
   static const contacts = '/contacts';
   static const payment_methods = '/payment-methods';
   static const get_quick_recommendations = '/get-quick-recommendations';

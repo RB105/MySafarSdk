@@ -93,23 +93,46 @@ class _DateCalendarWidgetState extends State<DateCalendarWidget> {
               height: 56,
               child: ElevatedButton(
                   onPressed: () => Navigator.of(context).pop(pickerDateRange),
-                  style: ProjectTheme.greenButtonStyle,
-                  child: Text("done".tr())),
+                  style: ProjectTheme.blueButtonStyle,
+                  child: Text(
+                    "done".tr(),
+                    style: context.textTheme.bodyMedium?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  )),
             ),
           ),
           appBar: AppBar(
             leading: SizedBox.fromSize(),
-            centerTitle: true,
+            leadingWidth: 0,
+            centerTitle: false,
+            titleSpacing: 16,
             title: Text(
               "date_calendar_title".tr(),
-              style: context.textTheme.bodyMedium,
+              style: context.textTheme.displayLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                fontSize: 20,
+              ),
             ),
             actions: [
-              IconButton(
-                  onPressed: () => Navigator.pop(
-                        context,
-                      ),
-                  icon: Icon(Icons.close))
+              Padding(
+                padding: const EdgeInsets.only(right: 10),
+                child: Material(
+                  color: ProjectTheme.borderLight.withAlpha(120),
+                  shape: const CircleBorder(),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () => Navigator.pop(context),
+                    child: const SizedBox(
+                      width: 36,
+                      height: 36,
+                      child: Icon(Icons.close_rounded, size: 20),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
           body: Padding(
@@ -136,8 +159,12 @@ class _DateCalendarWidgetState extends State<DateCalendarWidget> {
                     headerStyle: DateRangePickerHeaderStyle(
                       backgroundColor:
                           Theme.of(context).scaffoldBackgroundColor,
-                      textStyle:
-                          TextStyle(fontWeight: FontWeight.w500, fontSize: 16),
+                      textStyle: TextStyle(
+                        fontFamily: "Gilroy",
+                        fontWeight: FontWeight.w800,
+                        fontSize: 17,
+                        color: context.textTheme.bodyMedium?.color,
+                      ),
                     ),
                     navigationDirection:
                         DateRangePickerNavigationDirection.vertical,
@@ -183,7 +210,11 @@ class _DateCalendarWidgetState extends State<DateCalendarWidget> {
                         viewHeaderHeight: 36,
                         viewHeaderStyle: DateRangePickerViewHeaderStyle(
                           textStyle: TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w400),
+                            fontFamily: "Gilroy",
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: context.textTheme.headlineSmall?.color,
+                          ),
                         )),
                     view: DateRangePickerView.month,
                     minDate: DateTime.now(),
@@ -242,7 +273,7 @@ class _DateCalendarWidgetState extends State<DateCalendarWidget> {
         width: double.infinity,
         child: DecoratedBox(
           decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(14),
               border: getBorderColor(true)),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -310,7 +341,7 @@ class _DateCalendarWidgetState extends State<DateCalendarWidget> {
             height: 48,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(14),
                   border: getBorderColor(true)),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -374,7 +405,7 @@ class _DateCalendarWidgetState extends State<DateCalendarWidget> {
               visible: widget.type == 1,
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(14),
                     border: getBorderColor(false)),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -453,7 +484,7 @@ class _DateCalendarWidgetState extends State<DateCalendarWidget> {
               child: Container(
                 decoration: BoxDecoration(
                   color: getCellBgColor(isSelected, isInRange, isBefore),
-                  borderRadius: BorderRadius.circular(6.0),
+                  borderRadius: BorderRadius.circular(10.0),
                 ),
                 child: Center(
                   child: Text(
@@ -479,7 +510,11 @@ class _DateCalendarWidgetState extends State<DateCalendarWidget> {
     if (isSelected) {
       return ProjectTheme.brandColor;
     } else if (isInRange) {
-      return context.disabledBgColor;
+      // Oraliq (between) kunlar — tanlangan kunlar bilan uyg'un bo'lishi uchun
+      // brand ko'kning och tusi. Avvalgi `disabledBgColor` light temada
+      // "o'chirilgan" kulrang bo'lib, noto'g'ri ko'rinardi.
+      final bool isDark = Theme.of(context).brightness == Brightness.dark;
+      return ProjectTheme.brandColor.withAlpha(isDark ? 70 : 28);
     } else {
       return Colors.transparent;
     }

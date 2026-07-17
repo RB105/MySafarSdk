@@ -129,6 +129,8 @@ class _TariffPickerWidgetState extends State<TariffPickerWidget> {
 
   // ── Pinned bottom bar ────────────────────────────────────────────────
   Widget _bottomBar(BuildContext context, CurrencyProvider currencyProvider) {
+    if (tariffs.isEmpty) return const SizedBox.shrink();
+
     final brand = ProjectTheme.brandColor;
     final secondary = context.themeProvider.isDark
         ? ProjectTheme.secondaryTextDark
