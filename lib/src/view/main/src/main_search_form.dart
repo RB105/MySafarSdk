@@ -188,6 +188,14 @@ class _MainSearchFormState extends State<MainSearchForm> {
         final r = await ProjectDialogs.showCitySearchPicker(context, 1);
         if (!mounted || r == null) return false;
         setState(() => toDir = r);
+        if (fromDir != null) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => RouteSearchPage(from: fromDir!, to: r),
+            ),
+          );
+          return false;
+        }
         return true;
       case _stepDate:
         final r = await ProjectDialogs.showCalendartPicker(

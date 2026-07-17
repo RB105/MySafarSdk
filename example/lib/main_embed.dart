@@ -26,10 +26,10 @@ Future<void> main() async {
       // themeMode: ThemeMode.dark  ← bu qator bo'lsa `b` ishlamaydi.
       // Production (Unired): themeMode: ThemeMode.dark yoki .light
       bottomBarStyle: MySafarBottomBarStyle(
-        backgroundColorLight: Colors.amber,
-        borderRadius: 0,
+        // backgroundColorLight: Colors.amber,
+        // borderRadius: 0,
        
-        backgroundColorDark: Colors.blue,
+        // backgroundColorDark: Colors.blue,
 
       ),
     ),

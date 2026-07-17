@@ -410,6 +410,21 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
                       segments[index].provider?.supplier?.code ?? ""),
                   cacheWidth: 100,
                   fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [brand, ProjectTheme.blueBg],
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.flight_takeoff_rounded,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                  ),
                 ),
               ),
             ),

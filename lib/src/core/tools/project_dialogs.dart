@@ -293,6 +293,8 @@ class ProjectDialogs {
 
   static Future<FlightElement?> showTariffPicker(
       BuildContext context, List<FlightTariffModel> tariffs, String tid) async {
+    if (tariffs.isEmpty) return null;
+
     if (Platform.isIOS) {
       return await showSdkCupertinoSheet<FlightElement?>(
           context: context,

@@ -25,14 +25,19 @@ class TicketTariffCubit extends Cubit<TicketTariffState> {
       if (isClosed) return;
 
       if (response is NetworkSuccessResponse) {
-        emit(TicketTariffSuccessState(response.data));
+        final tariffs = response.data as List<FlightTariffModel>;
+        if (tariffs.isEmpty) {
+          emit(TicketTariffUnavailableState());
+        } else {
+          emit(TicketTariffSuccessState(tariffs));
+        }
       } else {
-        emit(TicketTariffInitState());
+        emit(TicketTariffUnavailableState());
       }
     } catch (e) {
       debugPrint(e.toString());
       if (isClosed) return;
-      emit(TicketTariffInitState());
+      emit(TicketTariffUnavailableState());
     }
   }
 }

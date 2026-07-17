@@ -1,6 +1,8 @@
 import 'dart:io' show InternetAddressType, NetworkInterface;
 
 import 'package:dio/dio.dart';
+import 'package:mysafar_sdk/src/model/remote/destination/destination_detail_model.dart';
+import 'package:mysafar_sdk/src/model/remote/destination/destination_list_model.dart';
 import 'package:mysafar_sdk/src/model/remote/fornex/destinations_info_model.dart';
 import 'package:mysafar_sdk/src/model/local/recom_req_model.dart';
 import 'package:mysafar_sdk/src/model/remote/fornex/hot_tickets_model.dart';
@@ -18,6 +20,8 @@ class FornexRepository with RequestConfig {
   static _TtlEntry? _hotTicketsCache;
   static _TtlEntry? _popDestCache;
   static final Map<String, _TtlEntry> _popDestInfoCache = {};
+  static final Map<String, _TtlEntry> _destDetailCache = {};
+  static _TtlEntry? _allDestCache;
   static const Duration _hotTicketsTtl = Duration(minutes: 5);
   static const Duration _popDestTtl = Duration(minutes: 30);
 
@@ -26,6 +30,80 @@ class FornexRepository with RequestConfig {
     _hotTicketsCache = null;
     _popDestCache = null;
     _popDestInfoCache.clear();
+    _destDetailCache.clear();
+    _allDestCache = null;
+  }
+
+  Future<List<DestinationListItem>> _fetchAllDestinations() async {
+    final cached = _allDestCache;
+    if (cached != null && cached.isFresh(_popDestTtl)) {
+      return cached.data as List<DestinationListItem>;
+    }
+
+    final response = await postRequest(
+      endPoint: EndPoints.destination_list,
+      params: const <String, dynamic>{"page": 1, "page_size": 20},
+    );
+    if (response is NetworkSuccessResponse &&
+        response.data is Map<String, dynamic>) {
+      final page =
+          DestinationListPageResult.fromJson(response.data as Map<String, dynamic>);
+      if (page.items.isNotEmpty) {
+        _allDestCache = _TtlEntry(page.items);
+        return page.items;
+      }
+    }
+    return const [];
+  }
+
+  Future<NetworkResponse> getDestinationDetail(String slug,
+      {bool forceRefresh = false}) async {
+    final resolved = slug.trim();
+    if (resolved.isEmpty) {
+      return const NetworkErrorResponse(error: 'empty destination');
+    }
+
+    if (!forceRefresh) {
+      final cached = _destDetailCache[resolved];
+      if (cached != null && cached.isFresh(_popDestTtl)) {
+        return NetworkSuccessResponse(data: cached.data);
+      }
+    }
+
+    final response = await postRequest(
+      endPoint: EndPoints.destination_detail,
+      params: {"id": resolved},
+    );
+    if (response is NetworkSuccessResponse &&
+        response.data is Map<String, dynamic>) {
+      final model =
+          DestinationDetailModel.fromJson(response.data as Map<String, dynamic>);
+      _destDetailCache[resolved] = _TtlEntry(model);
+      return NetworkSuccessResponse(data: model);
+    }
+
+    return response is NetworkSuccessResponse
+        ? const NetworkErrorResponse(
+            error: "Unexpected destination detail response")
+        : response;
+  }
+
+  Future<NetworkResponse> getDestinationDetailByCity(String cityName) async {
+    final name = cityName.trim().toLowerCase();
+    if (name.isEmpty) {
+      return const NetworkErrorResponse(error: 'empty city');
+    }
+
+    final items = await _fetchAllDestinations();
+    for (final item in items) {
+      final matches = item.cityName.uz.toLowerCase() == name ||
+          item.cityName.ru.toLowerCase() == name ||
+          item.cityName.en.toLowerCase() == name;
+      if (matches && item.slug.isNotEmpty) {
+        return getDestinationDetail(item.slug);
+      }
+    }
+    return const NetworkErrorResponse(error: 'destination not found');
   }
 
   Future<NetworkResponse> getHotTickets({bool forceRefresh = false}) async {

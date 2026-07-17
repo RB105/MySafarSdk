@@ -10,7 +10,8 @@ class SupportWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.themeProvider.isDark;
+    // Theme.of brightness — contact form bilan bir xil manba (system + `b`).
+    final isDark = context.isDarkMode;
     final brand = ProjectTheme.brandColor;
     final accent = ProjectTheme.accentLight;
     final muted = isDark
@@ -20,13 +21,16 @@ class SupportWidget extends StatelessWidget {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDark
-              ? [brand.withAlpha(60), accent.withAlpha(28)]
-              : [const Color(0xffEAF2FE), const Color(0xffF1F7FF)],
-        ),
+        // ContactFormWidget bilan bir xil: primaryContainer (dark: #2F2F2F).
+        color: context.color.primaryContainer,
+        // Gradient faqat och fonda — qora fonda solid primaryContainer.
+        gradient: isDark
+            ? null
+            : const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xffEAF2FE), Color(0xffF1F7FF)],
+              ),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: brand.withAlpha(isDark ? 90 : 45)),
       ),
