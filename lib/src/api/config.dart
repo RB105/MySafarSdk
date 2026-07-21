@@ -10,6 +10,7 @@ class MySafarConfig {
       {required this.baseUrl,
       required this.skoteBaseUrl,
       this.partnerToken = '',
+      this.appMetricaApiKey = '',
       this.appName,
       this.myId,
       this.socialAuth,
@@ -31,6 +32,10 @@ class MySafarConfig {
 
   /// Partner-token auth uchun (`Authorization: Token ...`).
   final String partnerToken;
+
+  /// AppMetrica API key. Berilsa SDK `init`da AppMetrica'ni yoqadi va
+  /// eventlarni `MySafarSdk_*` prefiksi bilan yuboradi.
+  final String appMetricaApiKey;
 
   /// UI'da ko'rinadigan brend nomi. `null` bo'lsa "MySafar" ishlatiladi —
   /// host app o'z nomini berishi mumkin (masalan home sarlavhasida).

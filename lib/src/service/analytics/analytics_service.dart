@@ -3,7 +3,8 @@ import 'dart:async' show unawaited;
 import 'package:flutter/foundation.dart';
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/core/router/navigation_service.dart';
-import 'package:mysafar_sdk/src/core/tools/project_utils.dart' show ProjectUtils;
+import 'package:mysafar_sdk/src/core/tools/project_utils.dart'
+    show ProjectUtils;
 import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 
 /// Analytics service for tracking events.
@@ -14,6 +15,8 @@ class AnalyticsService {
   static final AnalyticsService _instance = AnalyticsService._internal();
   factory AnalyticsService() => _instance;
   AnalyticsService._internal();
+
+  static const String _eventPrefix = 'mysafarsdk_';
 
   // Event names
   static const String _eventUserRegistered = 'user_registered';
@@ -82,7 +85,7 @@ class AnalyticsService {
         'timestamp': DateTime.now().toIso8601String(),
         ...?attributes,
       };
-      await MySafarSdk.analytics.logEvent(eventName, attrs);
+      await MySafarSdk.analytics.logEvent('$_eventPrefix$eventName', attrs);
     } catch (e, stackTrace) {
       debugPrint('Analytics Error: Failed to report event "$eventName"');
       debugPrint('Error: $e');
