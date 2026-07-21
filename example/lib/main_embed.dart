@@ -32,9 +32,8 @@ Future<void> main() async {
       bottomBarStyle: MySafarBottomBarStyle(
         // backgroundColorLight: Colors.amber,
         // borderRadius: 0,
-       
-        // backgroundColorDark: Colors.blue,
 
+        // backgroundColorDark: Colors.blue,
       ),
     ),
   );
