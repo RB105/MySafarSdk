@@ -1,4 +1,3 @@
-
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:appmetrica_plugin/appmetrica_plugin.dart';
 import 'package:flutter/foundation.dart'
