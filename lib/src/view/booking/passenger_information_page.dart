@@ -21,7 +21,7 @@ import 'package:mysafar_sdk/src/view/booking/widget/passenger_card_widget.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/passenger_controller.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/passenger_date_picker.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/paymentbottomsheet.dart'
-    show focusNode, showCitySearchPicker;
+    show  showCitySearchPicker;
 import 'package:mysafar_sdk/src/view/booking/widget/support_widget.dart';
 
 class PassengerInformationPage extends StatefulWidget {
