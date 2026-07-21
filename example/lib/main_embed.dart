@@ -21,6 +21,10 @@ Future<void> main() async {
         'PARTNER_TOKEN',
         defaultValue: '***REMOVED-PARTNER-TOKEN***',
       ),
+      appMetricaApiKey: String.fromEnvironment(
+        'APPMETRICA_API_KEY',
+        defaultValue: '***REMOVED-APPMETRICA-KEY***',
+      ),
 
       // MUHIM — terminal `b` bilan sinash uchun themeMode YOZMASLIK kerak!
       // themeMode: ThemeMode.dark  ← bu qator bo'lsa `b` ishlamaydi.
