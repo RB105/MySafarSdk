@@ -189,19 +189,49 @@ class DestinationAttraction {
   final String icon;
   final DestLocalizedText name;
   final DestLocalizedText description;
+  final String slug;
+  final Map<String, dynamic>? detailJson;
 
   DestinationAttraction({
     this.icon = '',
     this.name = const DestLocalizedText(),
     this.description = const DestLocalizedText(),
+    this.slug = '',
+    this.detailJson,
   });
 
   factory DestinationAttraction.fromJson(Map<String, dynamic> json) {
+    final detail = json['detail'];
     return DestinationAttraction(
       icon: (json['icon'] ?? '').toString(),
       name: DestLocalizedText.fromJson(json['name']),
       description: DestLocalizedText.fromJson(json['description']),
+      slug: (json['slug'] ?? '').toString(),
+      detailJson: detail is Map<String, dynamic> ? detail : null,
     );
+  }
+
+  String get previewImage {
+    final detail = detailJson;
+    if (detail == null) return '';
+    final hero = detail['hero'];
+    if (hero is Map) {
+      final image = (hero['image'] ?? '').toString().trim();
+      if (image.isNotEmpty && image != 'null') return image;
+    }
+    final gallery = detail['gallery'];
+    if (gallery is Map) {
+      final items = gallery['items'];
+      if (items is List) {
+        for (final item in items) {
+          if (item is! Map) continue;
+          if ((item['type'] ?? '').toString() == 'video') continue;
+          final image = (item['image'] ?? item['src'] ?? '').toString().trim();
+          if (image.isNotEmpty) return image;
+        }
+      }
+    }
+    return '';
   }
 }
 

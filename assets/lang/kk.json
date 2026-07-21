@@ -635,6 +635,7 @@
   "dest_reviews": "{count} пікір",
   "dest_cheap_flights": "Арзан әуе билеттері",
   "destinations_tab": "Бағыттар",
+  "destinations_search_hint": "Бағыт іздеу — Дубай, Бали, Рим...",
   "destinations_list_subtitle": "Ең танымал қалалар — үздік бағамен",
   "how_to_get_title": "Қалай жетуге болады",
   "price_chart_title": "Баға кестесі",
@@ -655,5 +656,16 @@
   "filter_mixed": "Аралас",
   "filter_refundable": "Қайтаруға болады",
   "filter_tariff_title": "Тариф ережелері",
-  "filter_time_title": "Ұшу және қону уақыты"
+  "filter_time_title": "Ұшу және қону уақыты",
+  "best_offers_title": "Ең жақсы ұсыныстар",
+  "flight_badge_night": "Түн",
+  "flight_badge_morning": "Таң",
+  "flight_badge_day": "Күндіз",
+  "passenger_booking_title": "Жолаушыларды брондау",
+  "passenger_booking_subtitle": "Деректерді құжаттағыдай енгізіңіз",
+  "passenger_number": "{number}-жолаушы",
+  "select_passenger_short": "Жолаушыны таңдау",
+  "contact_phone_warning": "Телефон нөмірі жолаушының өзіне тиесілі болуы керек",
+  "contact_phone_warning_sub": "Бұл әуекомпания ережесі",
+  "need_help_ticket": "Билет бойынша көмек керек пе?"
 }

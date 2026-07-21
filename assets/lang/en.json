@@ -635,6 +635,7 @@
   "dest_reviews": "{count} reviews",
   "dest_cheap_flights": "Cheap flights",
   "destinations_tab": "Destinations",
+  "destinations_search_hint": "Search destination — Dubai, Bali, Rome...",
   "destinations_list_subtitle": "The most popular cities at the best prices",
   "how_to_get_title": "How to get there",
   "price_chart_title": "Price chart",
@@ -655,5 +656,16 @@
   "filter_mixed": "Mixed",
   "filter_refundable": "Refundable",
   "filter_tariff_title": "Fare rules",
-  "filter_time_title": "Departure and arrival time"
+  "filter_time_title": "Departure and arrival time",
+  "best_offers_title": "Best offers",
+  "flight_badge_night": "Night",
+  "flight_badge_morning": "Morning",
+  "flight_badge_day": "Day",
+  "passenger_booking_title": "Passenger booking",
+  "passenger_booking_subtitle": "Enter details exactly as shown in the document",
+  "passenger_number": "Passenger {number}",
+  "select_passenger_short": "Select passenger",
+  "contact_phone_warning": "The phone number must belong to the passenger",
+  "contact_phone_warning_sub": "This is an airline rule",
+  "need_help_ticket": "Need help with your ticket?"
 }

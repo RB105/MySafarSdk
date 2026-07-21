@@ -65,57 +65,41 @@ class NextButtonWidget extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
+                  Text(
+                    "${"ticket_price".tr()}:",
+                    style: context.textTheme.bodyLarge?.copyWith(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "ticket_price".tr(),
-                          style: TextStyle(
-                            fontFamily: "packages/mysafar_sdk/Gilroy",
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: muted,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        ShaderMask(
-                          shaderCallback: (bounds) => LinearGradient(
-                            colors: [brand, ProjectTheme.accentLight],
-                          ).createShader(bounds),
-                          blendMode: BlendMode.srcIn,
-                          child: Text(
-                            currencyProvider.getElementPrice(price!),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontFamily: "packages/mysafar_sdk/Gilroy",
-                              fontWeight: FontWeight.w800,
-                              fontSize: 23,
-                              color: Colors.white,
-                              height: 1.05,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          "total_price_label".tr(namedArgs: {
-                            "count": "$passenger",
-                          }),
-                          style: TextStyle(
-                            fontFamily: "packages/mysafar_sdk/Gilroy",
-                            fontSize: 12,
-                            fontWeight: FontWeight.w400,
-                            color: muted,
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      currencyProvider.getElementPrice(price!),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: "packages/mysafar_sdk/Gilroy",
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
+                        color: brand,
+                        height: 1.1,
+                      ),
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 3),
+              Text(
+                "total_price_label".tr(namedArgs: {"count": "$passenger"}),
+                style: TextStyle(
+                  fontFamily: "packages/mysafar_sdk/Gilroy",
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w400,
+                  color: muted,
+                ),
               ),
               const SizedBox(height: 12),
               SizedBox(

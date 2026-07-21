@@ -139,11 +139,11 @@ class PassengerCubit extends Cubit<PassengerState> {
   PassengerModel _updateField(PassengerModel passenger, String field, String value) {
     switch (field) {
       case 'firstname':
-        return passenger.copyWith(firstname: value);
+        return passenger.copyWith(firstname: sanitizeName(value));
       case 'lastname':
-        return passenger.copyWith(lastname: value);
+        return passenger.copyWith(lastname: sanitizeName(value));
       case 'middlename':
-        return passenger.copyWith(middlename: value);
+        return passenger.copyWith(middlename: sanitizeName(value));
       case 'birthdate':
         return passenger.copyWith(birthdate: value);
       case 'docnum':
@@ -167,9 +167,9 @@ class PassengerCubit extends Cubit<PassengerState> {
       final passengers = List<PassengerModel>.from(currentState.passengers);
 
       passengers[index] = passengers[index].copyWith(
-        firstname: user.firstname?.toUpperCase() ?? '',
-        lastname: user.lastname?.toUpperCase() ?? '',
-        middlename: user.middlename?.toUpperCase() ?? '',
+        firstname: sanitizeName(user.firstname),
+        lastname: sanitizeName(user.lastname),
+        middlename: sanitizeName(user.middlename),
         birthdate: user.birthdate ?? '',
         docexp: user.docexp ?? '',
         docnum: user.docnum ?? '',
@@ -292,4 +292,8 @@ class PassengerCubit extends Cubit<PassengerState> {
   List<dynamic> getCachedUsers() {
     return _storageService.getCachedUsers();
   }
+
+  /// Ism maydonlaridan raqam va bo'sh joylarni olib tashlaydi.
+  static String sanitizeName(String? value) =>
+      (value ?? '').replaceAll(RegExp(r'[\d\s]'), '').toUpperCase();
 }

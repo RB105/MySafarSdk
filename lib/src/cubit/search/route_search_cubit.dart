@@ -2,8 +2,12 @@ import 'package:mysafar_sdk/src/model/local/recom_req_model.dart'
     show RecommendationReqBodySegment, RecommendationRequestBody;
 import 'package:mysafar_sdk/src/model/remote/avia/airports_model.dart'
     show AirPortsModel;
+import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_model.dart'
+    show FlightElement, GetRecommendationResModel;
 import 'package:mysafar_sdk/src/model/remote/avia/ticket_date_price_model.dart'
-    show TicketDatePriceModel;
+    show DatePrice, TicketDatePriceModel;
+import 'package:mysafar_sdk/src/service/config/remote_config_service.dart'
+    show RemoteConfigService;
 import 'package:mysafar_sdk/src/model/remote/destination/destination_detail_model.dart'
     show DestinationDetailModel;
 import 'package:mysafar_sdk/src/service/avia_service.dart' show AviaService;
@@ -95,7 +99,12 @@ class RouteSearchCubit extends Cubit<RouteSearchState> {
   /// Yuklash tugaganda yo'nalish o'zgargan bo'lsa natija tashlanadi.
   Future<void> _loadMonthPrices() async {
     final key = _routeKey;
-    emit(state.copyWith(monthLoading: true, clearMonthPrices: true));
+    emit(state.copyWith(
+      monthLoading: true,
+      clearMonthPrices: true,
+      offersLoading: true,
+      offers: const [],
+    ));
     try {
       final response = await _avia.getPriceByMonth(
         state.from.cityIataCode ?? '',
@@ -109,12 +118,130 @@ class RouteSearchCubit extends Cubit<RouteSearchState> {
             : null,
         clearMonthPrices: response is! NetworkSuccessResponse,
       ));
+      // Narxlar kelgach eng arzon kun ma'lum bo'ladi — o'sha sanaga aniq
+      // reyslar qidiriladi (webdagi "Eng yaxshi takliflar" bo'limi).
+      _loadBestOffers();
     } catch (_) {
       if (!isClosed && key == _routeKey) {
-        emit(state.copyWith(monthLoading: false));
+        emit(state.copyWith(monthLoading: false, offersLoading: false));
       }
     }
   }
+
+  /// "Eng yaxshi takliflar" — eng arzon kunga qidiruv.
+  /// Parallel so'rovlar, natijalar birlashtiriladi, eng arzon [_maxOffers]
+  /// reys saqlanadi.
+  static const int _maxOffers = 6;
+
+  Future<void> _loadBestOffers() async {
+    final date = _cheapestDate();
+    if (date == null) {
+      if (!isClosed) {
+        emit(state.copyWith(
+          offersLoading: false,
+          offers: const [],
+          clearOffersDate: true,
+        ));
+      }
+      return;
+    }
+    final key = _routeKey;
+    emit(state.copyWith(offersLoading: true, offers: const []));
+    try {
+      final body = RecommendationRequestBody(
+        adt: 1,
+        chd: 0,
+        inf: 0,
+        segments: [
+          RecommendationReqBodySegment(
+            from: state.from,
+            to: state.to,
+            date: "${date.day}.${date.month}.${date.year}",
+          ),
+        ],
+        flight_Type: 0,
+        klass: 'a',
+      );
+      final params = body.toJson();
+      final List<String> endpoints =
+          RemoteConfigService.instance.recommendationEndpoints;
+      final List<NetworkResponse> responses = await Future.wait(
+        endpoints.map(
+          (ep) => _avia.getRecommendations(params: params, endPoint: ep),
+        ),
+      );
+      if (isClosed || key != _routeKey) return;
+
+      final List<FlightElement> flights = [];
+      final Set<Object?> seenIds = {};
+      for (final response in responses) {
+        if (response is! NetworkSuccessResponse) continue;
+        final model = response.data as GetRecommendationResModel;
+        for (final f
+            in model.recommedations?.flights ?? const <FlightElement>[]) {
+          if (seenIds.add(f.id)) flights.add(f);
+        }
+      }
+      flights.sort((a, b) => _price(a).compareTo(_price(b)));
+      final top = flights.length > _maxOffers
+          ? flights.sublist(0, _maxOffers)
+          : flights;
+
+      emit(state.copyWith(
+        offersLoading: false,
+        offers: top,
+        offersDate: date,
+      ));
+    } catch (_) {
+      if (!isClosed && key == _routeKey) {
+        emit(state.copyWith(offersLoading: false, offers: const []));
+      }
+    }
+  }
+
+  /// Oylik narxlardagi eng arzon kun (bugundan boshlab).
+  DateTime? _cheapestDate() {
+    final m = state.monthPrices;
+    if (m == null) return null;
+    final List<DatePrice> list =
+        m.uzsPrices ?? m.rubPrices ?? m.usdPrices ?? const [];
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    DateTime? bestDate;
+    double? bestValue;
+    for (final p in list) {
+      final d = p.date;
+      final s = (p.sum ?? '').trim();
+      if (d == null || s.isEmpty || s == '0') continue;
+      if (d.isBefore(today)) continue;
+      final v = _parseSum(s);
+      if (v == null) continue;
+      if (bestValue == null || v < bestValue) {
+        bestValue = v;
+        bestDate = d;
+      }
+    }
+    return bestDate;
+  }
+
+  static double? _parseSum(String s) {
+    String t = s.replaceAll(' ', '').replaceAll('\u00a0', '').toUpperCase();
+    double mult = 1;
+    if (t.endsWith('M')) {
+      mult = 1000000;
+      t = t.substring(0, t.length - 1).replaceAll(',', '.');
+    } else if (t.endsWith('K')) {
+      mult = 1000;
+      t = t.substring(0, t.length - 1).replaceAll(',', '.');
+    } else {
+      t = t.replaceAll(',', '');
+    }
+    final v = double.tryParse(t);
+    return v == null || v <= 0 ? null : v * mult;
+  }
+
+  static double _price(FlightElement e) =>
+      double.tryParse(e.price?.uzs?.amount ?? '') ?? double.maxFinite;
 
   /// "Qayerga" shahri v1 bazasida bo'lsa yo'nalish ma'lumotini yuklaydi;
   /// bo'lmasa (yoki xato) blok ko'rsatilmaydi. Moslashtirish SHAHAR NOMI

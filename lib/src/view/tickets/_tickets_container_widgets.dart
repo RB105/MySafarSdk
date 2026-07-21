@@ -146,8 +146,7 @@ class _FigmaTicketCardState extends State<_FigmaTicketCard> {
             onTap: () {
               HapticFeedback.lightImpact();
               AnalyticsService().trackButtonTap('ticket_select');
-              Navigator.of(context)
-                  .pushNamed(TicketInfoPage.routeName, arguments: f);
+              TicketInfoPage.show(context, f);
             },
             onTapDown: (_) => _setPressed(true),
             onTapUp: (_) => _setPressed(false),

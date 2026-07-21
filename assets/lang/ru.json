@@ -635,6 +635,7 @@
   "dest_reviews": "{count} отзывов",
   "dest_cheap_flights": "Дешёвые авиабилеты",
   "destinations_tab": "Направления",
+  "destinations_search_hint": "Поиск направления — Дубай, Бали, Рим...",
   "destinations_list_subtitle": "Самые популярные города — по лучшим ценам",
   "how_to_get_title": "Как добраться",
   "price_chart_title": "График цен",
@@ -655,5 +656,16 @@
   "filter_mixed": "Смешанный",
   "filter_refundable": "Возврат возможен",
   "filter_tariff_title": "Правила тарифа",
-  "filter_time_title": "Время вылета и прилёта"
+  "filter_time_title": "Время вылета и прилёта",
+  "best_offers_title": "Лучшие предложения",
+  "flight_badge_night": "Ночь",
+  "flight_badge_morning": "Утро",
+  "flight_badge_day": "День",
+  "passenger_booking_title": "Бронирование пассажиров",
+  "passenger_booking_subtitle": "Вводите данные точно как в документе",
+  "passenger_number": "{number}-й пассажир",
+  "select_passenger_short": "Выбрать пассажира",
+  "contact_phone_warning": "Номер телефона должен принадлежать самому пассажиру",
+  "contact_phone_warning_sub": "Это правило авиакомпании",
+  "need_help_ticket": "Нужна помощь с билетом?"
 }

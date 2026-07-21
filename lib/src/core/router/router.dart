@@ -2,6 +2,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:mysafar_sdk/src/model/local/recom_req_model.dart'
     show RecommendationRequestBody;
 import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_model.dart';
+import 'package:mysafar_sdk/src/model/remote/destination/destination_list_model.dart'
+    show DestinationListItem;
 import 'package:mysafar_sdk/src/model/remote/fornex/pop_destinations.dart'
     show PopDestinationsModel;
 import 'package:mysafar_sdk/src/model/remote/profile/profile_model.dart';
@@ -34,7 +36,7 @@ import 'package:mysafar_sdk/src/view/profile/pages/updated_passenger_page.dart';
 import 'package:mysafar_sdk/src/view/profile/pages/edit_profile_page.dart';
 import 'package:mysafar_sdk/src/view/profile/profile_page.dart';
 import 'package:flutter/material.dart'
-    show MaterialPageRoute, Route, RouteSettings, Widget;
+    show MaterialPageRoute, Route, RouteSettings, SizedBox, Widget;
 import 'package:mysafar_sdk/src/view/tickets/ticket_info_page.dart';
 import 'package:mysafar_sdk/src/view/tickets/ticket_page.dart';
 import 'package:mysafar_sdk/src/view/visa/myid_verification_page.dart';
@@ -59,10 +61,20 @@ class RouterGenerator {
             settings);
 
       case DestinationDetailsPage.routeName:
-        return _navigateWithArgument<PopDestinationsModel>(
-          settings,
-          (args) => DestinationDetailsPage(destination: args),
-        );
+        final args = settings.arguments;
+        if (args is DestinationListItem) {
+          return _navigate(
+            DestinationDetailsPage(listItem: args),
+            settings,
+          );
+        }
+        if (args is PopDestinationsModel) {
+          return _navigate(
+            DestinationDetailsPage(destination: args),
+            settings,
+          );
+        }
+        return _pageRouteNavigate(const SizedBox.shrink(), settings);
 
       case MainPage.routeName:
         return _pageRouteNavigate(MainPage(), settings);

@@ -1335,8 +1335,7 @@ class _AirlineSummaryRow extends StatelessWidget {
   void _openFlight(BuildContext context, FlightElement flight) {
     HapticFeedback.lightImpact();
     AnalyticsService().trackButtonTap('ticket_airline_summary');
-    Navigator.of(context)
-        .pushNamed(TicketInfoPage.routeName, arguments: flight);
+    TicketInfoPage.show(context, flight);
   }
 
   @override

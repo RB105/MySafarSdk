@@ -4,7 +4,7 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:showcaseview/showcaseview.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/service/deep_link_gateway.dart';
-import 'package:mysafar_sdk/src/view/destinations/services_page.dart';
+import 'package:mysafar_sdk/src/view/destinations/destinations_list_page.dart';
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
 import 'package:mysafar_sdk/src/view/main/main_page.dart';
 import 'package:mysafar_sdk/src/view/main/showcase_keys.dart';
@@ -16,29 +16,34 @@ import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 class BottomNavBarPage extends StatefulWidget {
   final int? pageIndex;
 
-  /// bottom navigation page : HomePage , BookedTicketsPage, ServicesPage
+  /// bottom navigation page: HomePage, BookedTicketsPage,
+  /// DestinationsListPage (Yo'nalishlar), ProfilePage
   const BottomNavBarPage({super.key, this.pageIndex});
 
   @override
   State<BottomNavBarPage> createState() => _BottomNavBarPageState();
   static const routeName = '/bottom_nav_bar';
+
+  /// Ichki sahifalardan tab almashtirish so'rovi (masalan bosh sahifadagi
+  /// "Hammasi" → Yo'nalishlar tabi). `null` — so'rov yo'q.
+  static final ValueNotifier<int?> tabRequest = ValueNotifier<int?>(null);
+
+  /// Berilgan indeksdagi tabga o'tishni so'raydi (0-bosh, 1-buyurtmalar,
+  /// 2-yo'nalishlar, 3-profil).
+  static void switchTo(int index) => tabRequest.value = index;
 }
 
 class _BottomNavBarPageState extends State<BottomNavBarPage> {
   int _pageIndex = 0;
 
-  // "Xizmatlar" tab'i host config'iga bog'liq — o'chiq bo'lsa sahifa ham,
-  // pastki tugma ham qurilmaydi.
-  late final bool _servicesEnabled = MySafarSdk.config.enableServicesTab;
+  static const int _profileIndex = 3;
 
-  late final List<Widget> _pages = [
-    const MainPage(),
-    const BookedTicketsPage(),
-    if (_servicesEnabled) const ServicesPage(),
-    const ProfilePage(),
+  late final List<Widget> _pages = const [
+    MainPage(),
+    BookedTicketsPage(),
+    DestinationsListPage(),
+    ProfilePage(),
   ];
-
-  int get _profileIndex => _servicesEnabled ? 3 : 2;
 
   late final List<bool> _loaded = List<bool>.filled(_pages.length, false);
 
@@ -51,11 +56,30 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
     _pageIndex = (widget.pageIndex ?? 0).clamp(0, _pages.length - 1);
     _loaded[_pageIndex] = true;
     super.initState();
+    BottomNavBarPage.tabRequest.addListener(_onTabRequest);
     _shouldShowcase = MySafarSdk.config.enableShowcaseTour &&
         _pageIndex == 0 &&
         sdkStorage().read(_showcaseSeenKey) != true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       DeepLinkGateway.consumePendingLink();
+    });
+  }
+
+  @override
+  void dispose() {
+    BottomNavBarPage.tabRequest.removeListener(_onTabRequest);
+    super.dispose();
+  }
+
+  void _onTabRequest() {
+    final int? index = BottomNavBarPage.tabRequest.value;
+    if (index == null) return;
+    BottomNavBarPage.tabRequest.value = null;
+    if (!mounted || index < 0 || index >= _pages.length) return;
+    if (_pageIndex == index) return;
+    setState(() {
+      _pageIndex = index;
+      _loaded[index] = true;
     });
   }
 
@@ -78,7 +102,7 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
               HomeShowcaseKeys.search,
               HomeShowcaseKeys.hot,
               HomeShowcaseKeys.tabOrders,
-              if (_servicesEnabled) HomeShowcaseKeys.tabServices,
+              HomeShowcaseKeys.tabServices,
               HomeShowcaseKeys.tabProfile,
             ]);
           });
@@ -100,8 +124,6 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
     );
   }
 
-  /// Figma: chetlardan ajralib suzib turuvchi yumaloq panel — har bir tab
-  /// ikonka + doimiy yozuv; aktiv tab ikonkasi oq doira ichida.
   Widget _buildBottomBar(BuildContext context, bool isDark) {
     final style = MySafarSdk.config.bottomBarStyle;
     final shadowOpacity = isDark
@@ -146,17 +168,16 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
                   showcaseTitle: "showcase_orders_title".tr(),
                   showcaseDesc: "showcase_orders_desc".tr()),
             ),
-            if (_servicesEnabled)
-              Expanded(
-                child: _navItem(
-                    index: 2,
-                    asset: Assets.homeHomeService,
-                    label: "services".tr(),
-                    isDark: isDark,
-                    showcaseKey: HomeShowcaseKeys.tabServices,
-                    showcaseTitle: "showcase_services_title".tr(),
-                    showcaseDesc: "showcase_services_desc".tr()),
-              ),
+            Expanded(
+              child: _navItem(
+                  index: 2,
+                  iconData: Icons.location_on_rounded,
+                  label: "destinations_tab".tr(),
+                  isDark: isDark,
+                  showcaseKey: HomeShowcaseKeys.tabServices,
+                  showcaseTitle: "showcase_popular_title".tr(),
+                  showcaseDesc: "showcase_popular_desc".tr()),
+            ),
             Expanded(
               child: _navItem(
                   index: _profileIndex,
@@ -184,7 +205,6 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
     String? showcaseDesc,
   }) {
     final bool selected = _pageIndex == index;
-    // Figma: aktiv — to'q ko'k (navy), passiv — ko'kimtir kulrang.
     final Color activeColor = isDark ? Colors.white : const Color(0xFF1B2541);
     final Color unselectedColor =
         isDark ? ProjectTheme.secondaryTextDark : const Color(0xFF8E99B5);
@@ -201,7 +221,6 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
           });
         }
       },
-      // Aktiv element butunlay (ikonka + yozuv) kulrang pill ichida (Figma).
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOut,

@@ -1,129 +1,106 @@
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/svg.dart';
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+/// Bron sahifasi tepasidagi yordam kartasi: naushnik ikonkasi + sarlavha +
+/// bosiladigan telefon raqami. Dizayn maketiga mos — oq karta, ichida och
+/// ko'k kvadrat ikonka.
 class SupportWidget extends StatelessWidget {
   const SupportWidget({super.key});
 
+  static const String _phone = "+998 55 512 00 08";
+
+  Future<void> _call() async {
+    // MUHIM: `tel:` path'da bo'shliq bo'lmasligi kerak — aks holda URI
+    // buziladi va telefon ilovasi ochilmaydi.
+    final Uri phoneUri = Uri(scheme: 'tel', path: _phone.replaceAll(' ', ''));
+    try {
+      await launchUrl(phoneUri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      // Terish ilovasi mavjud emas (masalan planshet) — jim o'tkazamiz.
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Theme.of brightness — contact form bilan bir xil manba (system + `b`).
-    final isDark = context.isDarkMode;
+    final isDark = context.themeProvider.isDark;
     final brand = ProjectTheme.brandColor;
-    final accent = ProjectTheme.accentLight;
-    final muted = isDark
-        ? ProjectTheme.secondaryTextDark
-        : ProjectTheme.secondaryTextLight;
 
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        // ContactFormWidget bilan bir xil: primaryContainer (dark: #2F2F2F).
-        color: context.color.primaryContainer,
-        // Gradient faqat och fonda — qora fonda solid primaryContainer.
-        gradient: isDark
-            ? null
-            : const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xffEAF2FE), Color(0xffF1F7FF)],
+    return BookingCard(
+      padding: const EdgeInsets.all(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: _call,
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              padding: const EdgeInsets.all(5),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withAlpha(20)
+                    : ProjectTheme.swimmer200,
+                borderRadius: BorderRadius.circular(14),
               ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: brand.withAlpha(isDark ? 90 : 45)),
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [brand, accent],
+              child: Image.asset(
+                'packages/mysafar_sdk/assets/img/home/icons/support_ic.png',
+                fit: BoxFit.contain,
               ),
-              borderRadius: BorderRadius.circular(13),
-              boxShadow: [
-                BoxShadow(
-                  color: brand.withAlpha(75),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
             ),
-            child: const Icon(Icons.headset_mic_rounded,
-                color: Colors.white, size: 22),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "have_questions".tr(),
-                  style: context.textTheme.bodyLarge
-                      ?.copyWith(fontSize: 14, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 3),
-                InkWell(
-                  borderRadius: BorderRadius.circular(8),
-                  onTap: () async {
-                    // MUHIM: `tel:` path'da bo'shliq bo'lmasligi kerak — aks
-                    // holda URI buziladi va telefon ilovasi ochilmaydi.
-                    final Uri phoneUri =
-                        Uri(scheme: 'tel', path: "+998555120008");
-                    try {
-                      await launchUrl(phoneUri,
-                          mode: LaunchMode.externalApplication);
-                    } catch (_) {
-                      // Terish ilovasi mavjud emas (masalan planshet) — jim
-                      // o'tkazamiz, ilovani yiqitmaymiz.
-                    }
-                  },
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          "call_us".tr(),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: context.textTheme.titleSmall
-                              ?.copyWith(fontSize: 12.5, color: muted),
-                        ),
-                      ),
-                      const SizedBox(width: 7),
-                      SvgPicture.asset(
-                        "packages/mysafar_sdk/assets/img/booking/phone_icon.svg",
-                        width: 13,
-                        height: 13,
-                        colorFilter:
-                            ColorFilter.mode(brand, BlendMode.srcIn),
-                      ),
-                      const SizedBox(width: 3),
-                      Text(
-                        "+998 55 512 00 08",
-                        style: TextStyle(
-                          fontFamily: "packages/mysafar_sdk/Gilroy",
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          color: brand,
-                        ),
-                      ),
-                    ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "need_help_ticket".tr(),
+                    style: context.textTheme.bodyLarge?.copyWith(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 4),
+                  Text(
+                    _phone,
+                    style: TextStyle(
+                      fontFamily: "packages/mysafar_sdk/Gilroy",
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: brand,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
+    );
+  }
+}
+
+/// Bron sahifasidagi barcha bloklar uchun umumiy oq karta.
+class BookingCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  const BookingCard({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: context.color.primaryContainer,
+      borderRadius: BorderRadius.circular(20),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(padding: padding, child: child),
     );
   }
 }

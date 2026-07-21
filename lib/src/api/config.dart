@@ -49,8 +49,8 @@ class MySafarConfig {
   /// versiya siyosati host'niki, shu sabab default o'chiq.
   final bool enableVersionGate;
 
-  /// Pastki navigatsiyadagi "Xizmatlar" (visa, ban-check, destinations) tab'i.
-  /// `false` bo'lsa tab ko'rsatilmaydi — host faqat avia oqimini xohlasa.
+  /// Eski "Xizmatlar" tab'i — endi pastki navigatsiyada "Yo'nalishlar"
+  /// ishlatiladi. Maydon saqlanadi, lekin nav bar'da qo'llanmaydi.
   final bool enableServicesTab;
 
   /// Bosh sahifadagi birinchi-ochilish showcase (tutorial) turi. Embed

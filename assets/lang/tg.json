@@ -635,6 +635,7 @@
   "dest_reviews": "{count} шарҳ",
   "dest_cheap_flights": "Чиптаҳои арзон",
   "destinations_tab": "Самтҳо",
+  "destinations_search_hint": "Ҷустуҷӯи самт — Дубай, Бали, Рим...",
   "destinations_list_subtitle": "Шаҳрҳои машҳуртарин — бо нархҳои беҳтарин",
   "how_to_get_title": "Чӣ тавр расидан мумкин",
   "price_chart_title": "Ҷадвали нархҳо",
@@ -655,5 +656,16 @@
   "filter_mixed": "Омехта",
   "filter_refundable": "Баргардонидан мумкин",
   "filter_tariff_title": "Қоидаҳои тариф",
-  "filter_time_title": "Вақти парвоз ва фуруд"
+  "filter_time_title": "Вақти парвоз ва фуруд",
+  "best_offers_title": "Беҳтарин пешниҳодҳо",
+  "flight_badge_night": "Шаб",
+  "flight_badge_morning": "Субҳ",
+  "flight_badge_day": "Рӯз",
+  "passenger_booking_title": "Брони мусофирон",
+  "passenger_booking_subtitle": "Маълумотро айнан мисли ҳуҷҷат ворид кунед",
+  "passenger_number": "Мусофири {number}",
+  "select_passenger_short": "Интихоби мусофир",
+  "contact_phone_warning": "Рақами телефон бояд ба худи мусофир тааллуқ дошта бошад",
+  "contact_phone_warning_sub": "Ин қоидаи ширкати ҳавопаймоӣ аст",
+  "need_help_ticket": "Оид ба чипта кӯмак лозим аст?"
 }

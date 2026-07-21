@@ -29,6 +29,13 @@ class RouteSearchState extends Equatable {
   /// "Yo'nalish haqida" kartasi — "qayerga" shahri v1 bazasida bo'lsa.
   final DestinationDetailModel? destInfo;
 
+  /// "Eng yaxshi takliflar" — eng arzon kun uchun topilgan aniq reyslar.
+  final List<FlightElement> offers;
+  final bool offersLoading;
+
+  /// Takliflar qaysi sana uchun yuklangani (kartalarda ko'rsatiladi).
+  final DateTime? offersDate;
+
   const RouteSearchState({
     required this.from,
     required this.to,
@@ -43,6 +50,9 @@ class RouteSearchState extends Equatable {
     this.monthPrices,
     this.monthLoading = true,
     this.destInfo,
+    this.offers = const [],
+    this.offersLoading = true,
+    this.offersDate,
   });
 
   /// Jo'nash sanasi tanlanganmi (qidirish tugmasi shunda ko'rinadi).
@@ -73,6 +83,10 @@ class RouteSearchState extends Equatable {
     bool? monthLoading,
     DestinationDetailModel? destInfo,
     bool clearDestInfo = false,
+    List<FlightElement>? offers,
+    bool? offersLoading,
+    DateTime? offersDate,
+    bool clearOffersDate = false,
   }) {
     return RouteSearchState(
       from: from ?? this.from,
@@ -88,6 +102,9 @@ class RouteSearchState extends Equatable {
       monthPrices: clearMonthPrices ? null : (monthPrices ?? this.monthPrices),
       monthLoading: monthLoading ?? this.monthLoading,
       destInfo: clearDestInfo ? null : (destInfo ?? this.destInfo),
+      offers: offers ?? this.offers,
+      offersLoading: offersLoading ?? this.offersLoading,
+      offersDate: clearOffersDate ? null : (offersDate ?? this.offersDate),
     );
   }
 
@@ -106,5 +123,8 @@ class RouteSearchState extends Equatable {
         monthPrices,
         monthLoading,
         destInfo,
+        offers,
+        offersLoading,
+        offersDate,
       ];
 }

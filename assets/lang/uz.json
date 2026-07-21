@@ -635,6 +635,7 @@
   "dest_reviews": "{count} sharh",
   "dest_cheap_flights": "Arzon aviachiptalar",
   "destinations_tab": "Yo'nalishlar",
+  "destinations_search_hint": "Yo'nalish qidiring — Dubai, Bali, Rim...",
   "destinations_list_subtitle": "Eng mashhur shaharlar — eng arzon narxlar bilan",
   "how_to_get_title": "Qanday yetib olsa bo'ladi",
   "price_chart_title": "Narxlar jadvali",
@@ -655,5 +656,16 @@
   "filter_mixed": "Aralash",
   "filter_refundable": "Qaytarish mumkin",
   "filter_tariff_title": "Tarif qoidalari",
-  "filter_time_title": "Uchish va qo'nish vaqti"
+  "filter_time_title": "Uchish va qo'nish vaqti",
+  "best_offers_title": "Eng yaxshi takliflar",
+  "flight_badge_night": "Tun",
+  "flight_badge_morning": "Ertalab",
+  "flight_badge_day": "Kunduz",
+  "passenger_booking_title": "Yo'lovchilarni bronlash",
+  "passenger_booking_subtitle": "Ma'lumotlarni hujjatda keltirilganidek kiriting",
+  "passenger_number": "{number}-yo'lovchi",
+  "select_passenger_short": "Yo'lovchi tanlash",
+  "contact_phone_warning": "Telefon raqami aynan yo'lovchiga tegishli bo'lishi shart",
+  "contact_phone_warning_sub": "Bu aviakompaniya qoidasi hisoblanadi",
+  "need_help_ticket": "Chipta olishda yordam kerakmi?"
 }

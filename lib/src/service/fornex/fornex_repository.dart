@@ -56,9 +56,58 @@ class FornexRepository with RequestConfig {
     return const [];
   }
 
-  Future<NetworkResponse> getDestinationDetail(String slug,
-      {bool forceRefresh = false}) async {
-    final resolved = slug.trim();
+  static const Map<String, String> _cityToAirportAlias = {
+    'MOW': 'SVO',
+    'SEL': 'ICN',
+  };
+
+  Future<Map<String, String>> _detailSlugByAirport() async {
+    final items = await _fetchAllDestinations();
+    return {
+      for (final it in items)
+        if (it.arrivalAirport.isNotEmpty && it.slug.isNotEmpty)
+          it.arrivalAirport.toUpperCase(): it.slug,
+    };
+  }
+
+  /// v1 yo'nalishlar ro'yxati — sahifalab.
+  Future<NetworkResponse> getDestinationList({
+    required int page,
+    required int pageSize,
+  }) async {
+    final response = await postRequest(
+      endPoint: EndPoints.destination_list,
+      params: {"page": page, "page_size": pageSize},
+    );
+
+    if (response is NetworkSuccessResponse &&
+        response.data is Map<String, dynamic>) {
+      return NetworkSuccessResponse(
+        data: DestinationListPageResult.fromJson(
+          response.data as Map<String, dynamic>,
+        ),
+      );
+    }
+
+    return response is NetworkSuccessResponse
+        ? const NetworkErrorResponse(
+            error: "Unexpected destination list response")
+        : response;
+  }
+
+  Future<NetworkResponse> getDestinationDetail(
+    String slug, {
+    String? aviationCode,
+    bool forceRefresh = false,
+  }) async {
+    var resolved = slug.trim();
+    final code = (aviationCode ?? '').trim().toUpperCase();
+    if (code.isNotEmpty) {
+      final map = await _detailSlugByAirport();
+      resolved =
+          map[code] ?? map[_cityToAirportAlias[code] ?? ''] ?? resolved;
+    }
+
     if (resolved.isEmpty) {
       return const NetworkErrorResponse(error: 'empty destination');
     }
