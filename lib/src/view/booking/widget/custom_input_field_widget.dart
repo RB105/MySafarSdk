@@ -84,9 +84,8 @@ class _CustomInputFieldState extends State<CustomInputField> {
   Widget build(BuildContext context) {
     bool shouldShowLabel =
         _focusNode.hasFocus || widget.controller.text.isNotEmpty;
-    String? errorText = widget.showError && widget.controller.text.isEmpty
-        ? widget.validator?.call(widget.controller.text)
-        : null;
+    String? errorText =
+        widget.showError ? widget.validator?.call(widget.controller.text) : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

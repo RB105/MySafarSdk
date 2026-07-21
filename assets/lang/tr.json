@@ -635,6 +635,7 @@
   "dest_reviews": "{count} yorum",
   "dest_cheap_flights": "Ucuz uçak biletleri",
   "destinations_tab": "Rotalar",
+  "destinations_search_hint": "Rota arayın — Dubai, Bali, Roma...",
   "destinations_list_subtitle": "En popüler şehirler, en iyi fiyatlarla",
   "how_to_get_title": "Nasıl gidilir",
   "price_chart_title": "Fiyat grafiği",
@@ -655,5 +656,16 @@
   "filter_mixed": "Karışık",
   "filter_refundable": "İade edilebilir",
   "filter_tariff_title": "Tarife kuralları",
-  "filter_time_title": "Kalkış ve varış saati"
+  "filter_time_title": "Kalkış ve varış saati",
+  "best_offers_title": "En iyi teklifler",
+  "flight_badge_night": "Gece",
+  "flight_badge_morning": "Sabah",
+  "flight_badge_day": "Gündüz",
+  "passenger_booking_title": "Yolcu rezervasyonu",
+  "passenger_booking_subtitle": "Bilgileri belgedeki gibi girin",
+  "passenger_number": "{number}. yolcu",
+  "select_passenger_short": "Yolcu seç",
+  "contact_phone_warning": "Telefon numarası yolcunun kendisine ait olmalıdır",
+  "contact_phone_warning_sub": "Bu bir havayolu kuralıdır",
+  "need_help_ticket": "Bilet konusunda yardım gerekli mi?"
 }
