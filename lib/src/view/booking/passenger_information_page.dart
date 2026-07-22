@@ -22,6 +22,7 @@ import 'package:mysafar_sdk/src/view/booking/widget/passenger_controller.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/passenger_date_picker.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/paymentbottomsheet.dart'
     show  showCitySearchPicker;
+import 'package:mysafar_sdk/src/view/booking/widget/scan_page.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/support_widget.dart';
 
 class PassengerInformationPage extends StatefulWidget {
@@ -652,6 +653,7 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
         cubit.updatePassengerFromUser(index, user);
         _updateControllersFromUser(index, user);
       },
+      onScanTap: () => _openMrzScanner(index, cubit),
       onCitizenTap: () => _showCitizenPicker(index, cubit),
       onDocexpCalendarTap: () => _showDocexpDatePicker(index, cubit),
       onBirthdateCalendarTap: () => _showBirthdateDatePicker(index, cubit),
@@ -732,6 +734,13 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
     controller.birthdateController.text = user.birthdate ?? '';
     controller.docexpController.text = user.docexp ?? '';
     controller.docnumController.text = user.docnum ?? '';
+  }
+
+  Future<void> _openMrzScanner(int index, PassengerCubit cubit) async {
+    final user = await showMrzScannerBottomSheet(context);
+    if (!mounted || user == null) return;
+    cubit.updatePassengerFromUser(index, user);
+    _updateControllersFromUser(index, user);
   }
 
   void _handlePassengerFieldChanged(

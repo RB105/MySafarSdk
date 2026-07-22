@@ -33,7 +33,7 @@ class PaymentTypeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.themeProvider.isDark;
+    final isDark = context.isDarkMode;
     final bgColor = isDark ? const Color(0xff1E1E1E) : Colors.white;
     final borderColor = isSelected
         ? const Color(0xff0057BE)
@@ -124,7 +124,7 @@ class PaymentTypeCard extends StatelessWidget {
   }
 
   Widget _buildLogoArea(BuildContext context, bool isCentered) {
-    final isDark = context.themeProvider.isDark;
+    final isDark = context.isDarkMode;
     final logo = _logoContent(isCentered);
 
     // Dark mode'da ko'p logotiplarning matn/qismi to'q rangda bo'lgani uchun

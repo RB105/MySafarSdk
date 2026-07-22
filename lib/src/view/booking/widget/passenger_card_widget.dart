@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:mysafar_sdk/src/core/tools/project_assets.dart';
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:mysafar_sdk/src/core/tools/lang_helper.dart';
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
@@ -50,6 +52,7 @@ class PassengerCardWidget extends StatelessWidget {
   final VoidCallback onDocexpCalendarTap;
   final VoidCallback onBirthdateCalendarTap;
   final VoidCallback onNextField;
+  final VoidCallback onScanTap;
   final MaskTextInputFormatter docexpFormatter;
   final MaskTextInputFormatter birthdateFormatter;
 
@@ -79,6 +82,7 @@ class PassengerCardWidget extends StatelessWidget {
     required this.onDocexpCalendarTap,
     required this.onBirthdateCalendarTap,
     required this.onNextField,
+    required this.onScanTap,
     required this.docexpFormatter,
     required this.birthdateFormatter,
     required this.citizenKey,
@@ -122,10 +126,8 @@ class PassengerCardWidget extends StatelessWidget {
           style: context.textTheme.headlineSmall?.copyWith(fontSize: 13.5),
         ),
         const SizedBox(height: 14),
-        if (cachedUsers.isNotEmpty) ...[
-          _buildActionButtons(context),
-          const SizedBox(height: 16),
-        ],
+        _buildActionButtons(context),
+        const SizedBox(height: 16),
 
         // Maketdagi tartib: familiya → ism → otasining ismi →
         // (tug'ilgan sana + jins) → fuqarolik → hujjat raqami → muddati.
@@ -146,17 +148,33 @@ class PassengerCardWidget extends StatelessWidget {
     );
   }
 
-  /// "Yo'lovchi tanlash" — saqlangan yo'lovchilardan tanlash tugmasi.
-  /// Saqlangan yo'lovchi bo'lmasa umuman ko'rsatilmaydi.
+  /// Chapda scanner, o'ngda (bo'lsa) "Yo'lovchi tanlash".
   Widget _buildActionButtons(BuildContext context) {
-    return _ActionPill(
-      icon: Icons.people_alt_outlined,
-      label: "select_passenger_short".tr(),
-      trailing: Icons.keyboard_arrow_down_rounded,
-      onTap: () => showPassengerPickerBottomSheet(
-        context: context,
-        onSelected: onUserSelected,
-      ),
+    final hasSavedPassengers = cachedUsers.isNotEmpty;
+    return Row(
+      children: [
+        Expanded(
+          child: _ActionPill(
+            svgAsset: ProjectAssets.bookingScanIcon,
+            label: "scan_short".tr(),
+            onTap: onScanTap,
+          ),
+        ),
+        if (hasSavedPassengers) ...[
+          const SizedBox(width: 10),
+          Expanded(
+            child: _ActionPill(
+              svgAsset: ProjectAssets.bookingPeopleIcon,
+              label: "select_passenger_short".tr(),
+              trailing: Icons.keyboard_arrow_down_rounded,
+              onTap: () => showPassengerPickerBottomSheet(
+                context: context,
+                onSelected: onUserSelected,
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -437,17 +455,19 @@ class PassengerCardWidget extends StatelessWidget {
 
 /// Ramkali kichik tugma: ikonka + yozuv (+ ixtiyoriy o'ng ikonka).
 class _ActionPill extends StatelessWidget {
-  final IconData icon;
+  final String? svgAsset;
+  final IconData? icon;
   final String label;
   final IconData? trailing;
   final VoidCallback? onTap;
 
   const _ActionPill({
-    required this.icon,
+    this.svgAsset,
+    this.icon,
     required this.label,
     required this.onTap,
     this.trailing,
-  });
+  }) : assert(svgAsset != null || icon != null);
 
   @override
   Widget build(BuildContext context) {
@@ -468,7 +488,24 @@ class _ActionPill extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, size: 18, color: context.color.onSurface),
+                if (svgAsset != null)
+                  SvgPicture.asset(
+                    svgAsset!,
+                    width: 18,
+                    height: 18,
+                    fit: BoxFit.contain,
+                    colorFilter: ColorFilter.mode(
+                      context.color.onSurface,
+                      BlendMode.srcIn,
+                    ),
+                    placeholderBuilder: (_) => Icon(
+                      icon ?? Icons.image_outlined,
+                      size: 18,
+                      color: context.color.onSurface,
+                    ),
+                  )
+                else
+                  Icon(icon!, size: 18, color: context.color.onSurface),
                 const SizedBox(width: 7),
                 Flexible(
                   child: Text(

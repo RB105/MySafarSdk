@@ -43,8 +43,10 @@ class _TixTheme {
     dark: true,
   );
 
+  /// MaterialApp joriy temasi — `themeProvider.isDark` emas (nested embed'da
+  /// platform brightness bilan mos kelmasligi mumkin).
   static _TixTheme of(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark ? _dark : _light;
+      context.isDarkMode ? _dark : _light;
 
   static TextStyle style(double size, FontWeight weight, Color color,
           {double? height}) =>

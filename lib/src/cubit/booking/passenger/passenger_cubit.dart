@@ -173,6 +173,9 @@ class PassengerCubit extends Cubit<PassengerState> {
         birthdate: user.birthdate ?? '',
         docexp: user.docexp ?? '',
         docnum: user.docnum ?? '',
+        doctype: user.doctype?.isNotEmpty == true
+            ? user.doctype!
+            : passengers[index].doctype,
         gender: user.gender ?? PassengerConstants.genderMale,
         citizen: user.citizen ?? '',
         phone: currentState.phone,
