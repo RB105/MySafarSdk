@@ -59,6 +59,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'package:syncfusion_flutter_datepicker/datepicker.dart';
 import 'package:mysafar_sdk/src/cubit/profile/profile_cubit.dart';
+import 'package:mysafar_sdk/src/cubit/profile/users_data/users_data_cubit.dart';
 
 part 'src/widgets.dart';
 part 'src/main_search_form.dart';
@@ -139,6 +140,10 @@ class _MainPageState extends State<MainPage>
             _loadProfileData();
         }
 
+        // Saqlangan yo'lovchilar — kesh yo'q bo'lsa fonda yuklaydi.
+        // Bronlashdagi "Yo'lovchi tanlash" shu keshga qarab chiqadi.
+        unawaited(UsersDataCubit.prefetchIfNeeded());
+
         // Load nearby airport based on geolocation (after frame to ensure context is available)
         WidgetsBinding.instance.addPostFrameCallback((_)
         {
@@ -184,7 +189,13 @@ class _MainPageState extends State<MainPage>
     {
         final bool isDark = context.isDarkMode;
 
-        return BlocProvider(
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+            value: const SystemUiOverlayStyle(
+                statusBarColor: Colors.transparent,
+                statusBarIconBrightness: Brightness.light,
+                statusBarBrightness: Brightness.dark,
+            ),
+            child: BlocProvider(
             create: (context) => CheckVersionCubit(),
             child: BlocListener<CheckVersionCubit, CheckVersionState>(
                 listener: (BuildContext context, CheckVersionState state)
@@ -272,7 +283,9 @@ class _MainPageState extends State<MainPage>
 
                     ),
                 ),
-            ));
+            ),
+            ),
+        );
     }
 
     /// Bosh sahifa header'i — aylanuvchi orqa fon rasmi BUTUN sohani (slogan +

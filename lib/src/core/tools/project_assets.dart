@@ -232,6 +232,10 @@ class ProjectAssets {
   static const String bookingPhoneicon = "packages/mysafar_sdk/assets/img/booking/phone_icon.svg";
   static const String bookingRuflag = "packages/mysafar_sdk/assets/img/booking/ru_flag.png";
   static const String bookingSaved = "packages/mysafar_sdk/assets/img/booking/saved.png";
+  static const String bookingScanIcon =
+      "packages/mysafar_sdk/assets/img/booking/scan_icon.svg";
+  static const String bookingPeopleIcon =
+      "packages/mysafar_sdk/assets/img/booking/people_icon.svg";
   static const String bookingTicketicon = "packages/mysafar_sdk/assets/img/booking/ticket_icon.svg";
   static const String bookingUzcardnotselected =
       "packages/mysafar_sdk/assets/img/booking/uzcard_not_selected.png";

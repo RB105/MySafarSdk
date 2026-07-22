@@ -52,6 +52,20 @@ class RecommendationsTicketPage extends StatefulWidget {
       _RecommendationsTicketPageState();
 }
 
+/// Chiptalar sahifasi status bar — iOS'da SliverAppBar o'zi yetarli emas;
+/// Scaffold atrofida AnnotatedRegion bilan birga ishlatiladi.
+SystemUiOverlayStyle _ticketPageOverlayStyle(bool isDark) => isDark
+    ? const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+      )
+    : const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+      );
+
 class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
   // ── Yuklash indikatori holati ──────────────────────────────────────────
   // Yuklash boshlanganda indikator sekin to'ladi; natija kelganda tezda 100%
@@ -357,13 +371,16 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
             _prevLoading = isLoading;
             final bool showLoadingBar = isLoading || _finishing;
 
-            return Scaffold(
+            final bool isDark = context.isDarkMode;
+
+            return AnnotatedRegion<SystemUiOverlayStyle>(
+              value: _ticketPageOverlayStyle(isDark),
+              child: Scaffold(
                 body: SafeArea(
                     top: false,
                     bottom: Platform.isAndroid,
                     child: NestedScrollView(
                         headerSliverBuilder: (context, innerBoxIsScrolled) {
-                      final bool isDark = context.themeProvider.isDark;
                       final showFilters =
                           state is TicketSuccessState || ticketCubit.isFiltered;
                       // Web-uslub chiplar: har biri o'z filtrining joriy
@@ -384,15 +401,7 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
                           surfaceTintColor: Colors.transparent,
                           elevation: 0,
                           scrolledUnderElevation: 0,
-                          systemOverlayStyle: isDark
-                              ? const SystemUiOverlayStyle(
-                                  statusBarColor: Colors.transparent,
-                                  statusBarIconBrightness: Brightness.light,
-                                  statusBarBrightness: Brightness.dark)
-                              : const SystemUiOverlayStyle(
-                                  statusBarColor: Colors.transparent,
-                                  statusBarIconBrightness: Brightness.dark,
-                                  statusBarBrightness: Brightness.light),
+                          systemOverlayStyle: _ticketPageOverlayStyle(isDark),
                           toolbarHeight: 64,
                           centerTitle: true,
                           leadingWidth: 46,
@@ -526,7 +535,9 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
                           },
                         ],
                       );
-                    }))));
+                    }))),
+              ),
+            );
           },
         ));
   }
@@ -547,7 +558,7 @@ class _RecHeroIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color color = context.themeProvider.isDark
+    final Color color = context.isDarkMode
         ? Colors.white
         : const Color(0xFF16244A);
     return Material(
@@ -590,7 +601,7 @@ class _RecHeroTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isDark = context.themeProvider.isDark;
+    final bool isDark = context.isDarkMode;
     final Color textColor = isDark ? Colors.white : const Color(0xFF16244A);
     final Color subColor =
         isDark ? Colors.white70 : ProjectTheme.secondaryTextLight;
@@ -748,7 +759,7 @@ class _RecFilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isDark = context.themeProvider.isDark;
+    final bool isDark = context.isDarkMode;
     final Color bg = active
         ? ProjectTheme.brandColor.withAlpha(isDark ? 60 : 26)
         : (isDark ? Colors.white.withAlpha(20) : const Color(0xFFF1F4F9));

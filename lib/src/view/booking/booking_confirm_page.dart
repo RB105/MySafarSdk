@@ -443,7 +443,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
   }
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {
-    final isDark = context.themeProvider.isDark;
+    final isDark = context.isDarkMode;
     return AppBar(
       elevation: 0,
       scrolledUnderElevation: 0,
@@ -531,7 +531,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
   /// Foydalanuvchi bosishi shart emas: "Xaridni davom ettirish orqali oferta
   /// shartlarini qabul qilgan bo'lasiz". Davom etish tugmasini bloklamaydi.
   Widget _buildOfferAgreement(BuildContext context) {
-    final isDark = context.themeProvider.isDark;
+    final isDark = context.isDarkMode;
     final brand = ProjectTheme.brandColor;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -575,7 +575,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
     final billingId = widget.bookingCreateModel.billingId ?? '';
     if (billingId.isEmpty) return const SizedBox.shrink();
 
-    final isDark = context.themeProvider.isDark;
+    final isDark = context.isDarkMode;
     final muted = isDark ? const Color(0xffCCCFD3) : const Color(0xff8E8E92);
     final brand = ProjectTheme.brandColor;
 
@@ -708,7 +708,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
   }
 
   Widget _buildRemainingTime(BuildContext context) {
-    final isDark = context.themeProvider.isDark;
+    final isDark = context.isDarkMode;
     final muted = isDark ? const Color(0xffCCCFD3) : const Color(0xff8E8E92);
 
     // Soniyalik yangilanish faqat shu blokni qayta chizadi.

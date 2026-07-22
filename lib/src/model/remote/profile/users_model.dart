@@ -81,15 +81,37 @@ class UsersModel {
   }
 
   static UsersModel fromScan(MRZResult result) {
+    final names = _splitGivenNames(result.givenNames);
     return UsersModel(
-      firstname: result.givenNames,
+      firstname: names.firstname,
       lastname: result.surnames,
+      middlename: names.middlename,
       birthdate: result.birthDate.formatToDMY(),
-      doctype: result.documentType,
+      doctype: _mapDocType(result.documentType),
       docnum: result.documentNumber,
       docexp: result.expiryDate.formatToDMY(),
       gender: _mapSex(result.sex),
-      citizen: _mapCountry(result.countryCode),
+      // Fuqarolik uchun nationality; bo'sh bo'lsa issuing country.
+      citizen: _mapCountry(
+        result.nationalityCountryCode.isNotEmpty
+            ? result.nationalityCountryCode
+            : result.countryCode,
+      ),
+    );
+  }
+
+  /// MRZ givenNames: "ISM OTASINING ISMI" — birinchi so'z ism, qolgani otasining ismi.
+  static ({String firstname, String middlename}) _splitGivenNames(
+    String givenNames,
+  ) {
+    final parts =
+        givenNames.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
+    final list = parts.toList();
+    if (list.isEmpty) return (firstname: '', middlename: '');
+    if (list.length == 1) return (firstname: list.first, middlename: '');
+    return (
+      firstname: list.first,
+      middlename: list.sublist(1).join(' '),
     );
   }
 
@@ -104,11 +126,18 @@ class UsersModel {
     }
   }
 
+  /// Loyiha doctype: passport = P, ID = A.
+  static String _mapDocType(String raw) {
+    final type = raw.toUpperCase();
+    if (type.startsWith('P')) return 'P';
+    return 'A';
+  }
+
   static String _mapCountry(String code) {
-    // If 3-letter like "UZB", return first 2 letters
+    // ICAO 3-letter (UZB) → ISO alpha-2 (UZ).
     if (code.length >= 2) {
-      return code.substring(0, 2);
+      return code.substring(0, 2).toUpperCase();
     }
-    return code;
+    return code.toUpperCase();
   }
 }
