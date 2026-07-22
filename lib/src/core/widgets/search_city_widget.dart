@@ -90,18 +90,32 @@ class _SearchCityWidgetState extends State<SearchCityWidget> {
     Navigator.of(context).pop(airport);
   }
 
+  /// directionType: 0 = Qayerdan (from), 1 = Qayerga (to)
   String getAppBarTitle(int type) {
     if (type == 0) {
-      return "choose_visit_dir".tr();
-    } else {
-      return "choose_return_dir".tr();
+      return "from".tr();
     }
+    return "to".tr();
+  }
+
+  String _citySubtitle(AirPortsModel city) {
+    final code = city.cityIataCode ?? '';
+    final country = city.countryName ?? '';
+    if (code.isNotEmpty && country.isNotEmpty) {
+      return '$code · $country';
+    }
+    if (code.isNotEmpty) return code;
+    return country;
   }
 
   @override
   Widget build(BuildContext context) {
     final langCode = context.locale.languageCode;
-    final searchLang = langCode == "uz" ? "en" : langCode;
+    // Local JSON search: uz / ru / en to'liq qo'llab-quvvatlanadi.
+    final searchLang =
+        (langCode == 'uz' || langCode == 'ru' || langCode == 'en')
+            ? langCode
+            : 'en';
 
     return BlocProvider(
       create: (_) {
@@ -166,16 +180,22 @@ class _SearchCityWidgetState extends State<SearchCityWidget> {
                             onChanged: (value) {
                               _searchDebounce?.cancel();
                               final cubit = context.read<CityChooseCubit>();
-                              if (value.length > 2) {
-                                final lang =
-                                    context.locale.languageCode == "uz"
-                                        ? "en"
-                                        : context.locale.languageCode;
+                              final trimmed = value.trim();
+                              // 1 ta harfdan boshlab local qidiruv;
+                              // local topmasa (≥3 harf) API fallback.
+                              if (trimmed.isNotEmpty) {
+                                final code = context.locale.languageCode;
+                                final lang = (code == 'uz' ||
+                                        code == 'ru' ||
+                                        code == 'en')
+                                    ? code
+                                    : 'en';
+                                final delayMs = trimmed.length < 3 ? 80 : 200;
                                 _searchDebounce = Timer(
-                                    const Duration(milliseconds: 300), () {
-                                  cubit.getAirports(part: value, lang: lang);
+                                    Duration(milliseconds: delayMs), () {
+                                  cubit.getAirports(part: trimmed, lang: lang);
                                 });
-                              } else if (value.isEmpty) {
+                              } else {
                                 cubit.resetToInit();
                               }
                             },
@@ -212,8 +232,7 @@ class _SearchCityWidgetState extends State<SearchCityWidget> {
                                           style: context.textTheme.bodyMedium,
                                         ),
                                         subtitle: Text(
-                                          state.airports[index].cityIataCode ??
-                                              "",
+                                          _citySubtitle(state.airports[index]),
                                           style:
                                               context.textTheme.headlineMedium,
                                         ),
@@ -323,7 +342,7 @@ class _SearchCityWidgetState extends State<SearchCityWidget> {
                   style: context.textTheme.bodyMedium,
                 ),
                 subtitle: Text(
-                  airport.cityIataCode ?? "",
+                  _citySubtitle(airport),
                   style: context.textTheme.headlineMedium,
                 ),
               );

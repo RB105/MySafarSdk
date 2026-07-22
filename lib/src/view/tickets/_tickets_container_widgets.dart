@@ -5,10 +5,8 @@ part of 'ticket_page.dart';
 ///  ─────────────────────────────────────────────────────────────────
 ///  • _FigmaTicketCard — toza oq karta: tepada aviakompaniya logolari +
 ///    narx; har bir yo'nalish uchun vaqtlar, davomiylik, sana (kelish
-///    boshqa kunda bo'lsa — orange) va marshrut.
-///  • _DirectFlightsCard — "To'g'ri reyslar": transfersiz reyslarni
-///    aviakompaniya kesimida guruhlab, eng arzon narx va jo'nash
-///    vaqtlarini ko'rsatadi ("Yana N ta ko'rsatish" bilan ochiladi).
+///    boshqa kunda bo'lsa — orange) va marshrut. Barcha kartalar (one-way,
+///    return, multiway) bir xil shu ko'rinishda — maxsus birinchi karta yo'q.
 /// ═══════════════════════════════════════════════════════════════════
 
 /// Karta ranglari — light/dark temaga moslashadi.
@@ -27,8 +25,6 @@ class _TixTheme {
     required this.dark,
   });
 
-  static const Color green = Color(0xFF21A038);
-  static const Color orange = Color(0xFFF5A623);
   static const Color rose = Color(0xFFF43F5E);
 
   static const _light = _TixTheme(
@@ -53,7 +49,7 @@ class _TixTheme {
   static TextStyle style(double size, FontWeight weight, Color color,
           {double? height}) =>
       TextStyle(
-        fontFamily: "packages/mysafar_sdk/Gilroy",
+        fontFamily: "Gilroy",
         fontSize: size,
         fontWeight: weight,
         color: color,
@@ -90,9 +86,18 @@ class _FigmaTicketCard extends StatefulWidget {
   /// 0 → one-way, 1 → round-trip, 2 → multi-city
   final int tripType;
 
+  /// Ro'yxatdagi eng arzon reys — logo yonida yashil "Eng arzon" belgisi
+  /// ko'rsatiladi (web mobil dizayni).
+  final bool isCheapest;
+
+  /// Eng arzon (1- va 2-) kartalarda karta tepasida "Ekonom" belgisi.
+  final bool showEconomBadge;
+
   const _FigmaTicketCard({
     required this.flightElement,
     required this.tripType,
+    this.isCheapest = false,
+    this.showEconomBadge = false,
   });
 
   @override
@@ -141,8 +146,7 @@ class _FigmaTicketCardState extends State<_FigmaTicketCard> {
             onTap: () {
               HapticFeedback.lightImpact();
               AnalyticsService().trackButtonTap('ticket_select');
-              Navigator.of(context)
-                  .pushNamed(TicketInfoPage.routeName, arguments: f);
+              TicketInfoPage.show(context, f);
             },
             onTapDown: (_) => _setPressed(true),
             onTapUp: (_) => _setPressed(false),
@@ -153,6 +157,10 @@ class _FigmaTicketCardState extends State<_FigmaTicketCard> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (widget.showEconomBadge) ...[
+                    const _EconomBadge(),
+                    const SizedBox(height: 10),
+                  ],
                   // Har bir yo'nalish o'z logo+nomi bilan; narx faqat birinchi
                   // (borish) yo'nalishda, logo yonida ko'rsatiladi. Borish va
                   // qaytish orasi divider bilan ajratiladi.
@@ -169,6 +177,8 @@ class _FigmaTicketCardState extends State<_FigmaTicketCard> {
                         dirIndex: i,
                         segments: directions[i],
                         price: i == firstIdx ? price : null,
+                        showCheapestBadge:
+                            widget.isCheapest && i == firstIdx,
                       ),
                     ],
                   if (f.isVtrip == true) ...[
@@ -196,11 +206,15 @@ class _LegBlock extends StatelessWidget {
   /// ko'rsatiladi. Qaytish yo'nalishida `null` (narx ko'rsatilmaydi).
   final String? price;
 
+  /// Logo yonida yashil "Eng arzon" belgisi (faqat birinchi yo'nalishda).
+  final bool showCheapestBadge;
+
   const _LegBlock({
     required this.flight,
     required this.dirIndex,
     required this.segments,
     this.price,
+    this.showCheapestBadge = false,
   });
 
   /// Yo'nalishdagi almashishlar (layover) umumiy davomiyligi, daqiqada.
@@ -224,7 +238,7 @@ class _LegBlock extends StatelessWidget {
 
     final depDate = first.dep.date ?? '';
     final arrDate = last.arr.date ?? '';
-    // Kelish boshqa kunda bo'lsa — sanasi orange rangda qo'shiladi (Figma).
+    // Kelish boshqa kunda bo'lsa — sanasi qizil rangda qo'shiladi (web).
     final bool arrivesAnotherDay = arrDate.isNotEmpty && arrDate != depDate;
 
     final String transferText = transfers == 0
@@ -242,7 +256,17 @@ class _LegBlock extends StatelessWidget {
         // narx faqat birinchi yo'nalishda, o'ng tomonda.
         Row(
           children: [
-            Expanded(child: _LogoStack(segments: segments)),
+            Expanded(
+              child: Row(
+                children: [
+                  Flexible(child: _LogoStack(segments: segments)),
+                  if (showCheapestBadge) ...[
+                    const SizedBox(width: 8),
+                    const _CheapestBadge(),
+                  ],
+                ],
+              ),
+            ),
             if (price != null) ...[
               const SizedBox(width: 8),
               FittedBox(
@@ -292,7 +316,7 @@ class _LegBlock extends StatelessWidget {
                       TextSpan(
                         text: ' - ${_tixDateWithWeekday(arrDate)}',
                         style: _TixTheme.style(
-                            13, FontWeight.w600, _TixTheme.orange),
+                            13, FontWeight.w600, _TixTheme.rose),
                       ),
                   ],
                 ),
@@ -301,9 +325,11 @@ class _LegBlock extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
+            // Web dizayni: to'g'ri reys — yashil, almashishli — qizil.
             Text(
               transferText,
-              style: _TixTheme.style(13, FontWeight.w500, t.mid),
+              style: _TixTheme.style(13, FontWeight.w600,
+                  transfers == 0 ? _kTixGreen : _TixTheme.rose),
             ),
           ],
         ),
@@ -316,6 +342,28 @@ class _LegBlock extends StatelessWidget {
           style: _TixTheme.style(13, FontWeight.w500, t.mid),
         ),
       ],
+    );
+  }
+}
+
+/// Yashil "Eng arzon" belgisi — ro'yxatdagi eng arzon kartada, logo yonida
+/// ko'rsatiladi (web mobil dizayni).
+class _CheapestBadge extends StatelessWidget {
+  const _CheapestBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: _kTixGreen.withAlpha(26),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        "ticket_chip_cheapest".tr(),
+        maxLines: 1,
+        style: _TixTheme.style(11.5, FontWeight.w700, _kTixGreen),
+      ),
     );
   }
 }
@@ -427,6 +475,27 @@ class _AirlineCircle extends StatelessWidget {
   }
 }
 
+/// "Ekonom" belgisi — narx bo'yicha saralangan ro'yxatning eng arzon
+/// kartalarida (1- va 2-o'rin) karta tepasida ko'rsatiladigan yashil pill.
+class _EconomBadge extends StatelessWidget {
+  const _EconomBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
+      decoration: BoxDecoration(
+        color: _kTixGreen.withAlpha(26),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        "klass_e".tr().trim(),
+        style: _TixTheme.style(12, FontWeight.w700, _kTixGreen),
+      ),
+    );
+  }
+}
+
 /// Lowcost ogohlantirish pill'i — bosilganda tafsilot sheet ochiladi.
 class _LowcostPill extends StatelessWidget {
   final FlightElement flightElement;
@@ -473,311 +542,64 @@ class _LowcostPill extends StatelessWidget {
 }
 
 /// ═══════════════════════════════════════════════════════════════════
-///  "TO'G'RI REYSLAR" BLOKI (Figma)
-/// ═══════════════════════════════════════════════════════════════════
-
-class _DirectGroup {
-  final String code;
-  final String title;
-  FlightElement cheapest;
-
-  /// direction → shu aviakompaniyaning to'g'ri reyslari jo'nash vaqtlari.
-  final Map<int, Set<String>> timesByDir = {};
-
-  _DirectGroup({
-    required this.code,
-    required this.title,
-    required this.cheapest,
-  });
-}
-
-/// Transfersiz (to'g'ri) reyslarni aviakompaniya bo'yicha guruhlab
-/// ko'rsatadi: logo, nom, eng arzon narx, sana va jo'nash vaqtlari
-/// (eng arzonining vaqti yashil chip bilan). 2 tadan ortig'i "Yana N ta
-/// ko'rsatish" bilan ochiladi. To'g'ri reys bo'lmasa — ko'rinmaydi.
-class _DirectFlightsCard extends StatefulWidget {
-  final List<FlightElement> flights;
-  final int flightType;
-
-  const _DirectFlightsCard({
-    required this.flights,
-    required this.flightType,
-  });
-
-  @override
-  State<_DirectFlightsCard> createState() => _DirectFlightsCardState();
-}
-
-class _DirectFlightsCardState extends State<_DirectFlightsCard> {
-  bool _expanded = false;
-
-  List<_DirectGroup> _buildGroups() {
-    final map = <String, _DirectGroup>{};
-
-    for (final f in widget.flights) {
-      final dirCount = f.segmentsDirection?.length ?? 0;
-      final segments = f.segments;
-      if (dirCount == 0 || segments == null || segments.isEmpty) continue;
-
-      // Barcha yo'nalishlari transfersiz bo'lgan reyslar.
-      bool allDirect = true;
-      for (int i = 0; i < dirCount; i++) {
-        if (f.getTransferCount(i) != 0) {
-          allDirect = false;
-          break;
-        }
-      }
-      if (!allDirect) continue;
-
-      final carrier = segments.first.carrier;
-      final group = map.putIfAbsent(
-        carrier.code,
-        () => _DirectGroup(
-            code: carrier.code, title: carrier.title, cheapest: f),
-      );
-      if (_flightPriceUzs(f) < _flightPriceUzs(group.cheapest)) {
-        group.cheapest = f;
-      }
-      for (int i = 0; i < dirCount; i++) {
-        final dirSegments = f.getSegmentsByDirection(i);
-        if (dirSegments.isEmpty) continue;
-        final time = dirSegments.first.dep.time ?? '';
-        if (time.isEmpty) continue;
-        group.timesByDir.putIfAbsent(i, () => <String>{}).add(time);
-      }
-    }
-
-    return map.values.toList()
-      ..sort((a, b) =>
-          _flightPriceUzs(a.cheapest).compareTo(_flightPriceUzs(b.cheapest)));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Multiway'da bu blok ko'rsatilmaydi.
-    if (widget.flightType == 2) return const SizedBox.shrink();
-
-    final groups = _buildGroups();
-    if (groups.isEmpty) return const SizedBox.shrink();
-
-    final t = _TixTheme.of(context);
-    final visible = _expanded ? groups : groups.take(2).toList();
-    final hiddenCount = groups.length - 2;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: Container(
-        decoration: BoxDecoration(
-          color: t.card,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: t.cardShadow,
-        ),
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    "ticket_direct_flights_title".tr(),
-                    style: _TixTheme.style(16, FontWeight.w800, t.hi),
-                  ),
-                ),
-                if (hiddenCount > 0)
-                  InkWell(
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      setState(() => _expanded = !_expanded);
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 4, vertical: 4),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _expanded
-                                ? "ticket_show_less".tr()
-                                : "ticket_show_more_count".tr(
-                                    namedArgs: {"count": "$hiddenCount"}),
-                            style: _TixTheme.style(13.5, FontWeight.w600,
-                                ProjectTheme.brandColor),
-                          ),
-                          AnimatedRotation(
-                            turns: _expanded ? 0.5 : 0,
-                            duration: const Duration(milliseconds: 200),
-                            child: Icon(
-                              Icons.expand_more_rounded,
-                              size: 18,
-                              color: ProjectTheme.brandColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            for (int i = 0; i < visible.length; i++) ...[
-              if (i > 0) Divider(height: 1, thickness: 1, color: t.line),
-              _airlineRow(context, t, visible[i]),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _airlineRow(BuildContext context, _TixTheme t, _DirectGroup g) {
-    final cheapest = g.cheapest;
-    final price =
-        Provider.of<CurrencyProvider>(context).getElementPrice(cheapest.price);
-    final dirCount = cheapest.segmentsDirection?.length ?? 1;
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: () {
-        HapticFeedback.lightImpact();
-        AnalyticsService().trackButtonTap('direct_flight_select');
-        Navigator.of(context)
-            .pushNamed(TicketInfoPage.routeName, arguments: cheapest);
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                _AirlineCircle(code: g.code, size: 34),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    g.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: _TixTheme.style(15.5, FontWeight.w700, t.hi),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  price,
-                  style:
-                      _TixTheme.style(15, FontWeight.w800, _TixTheme.green),
-                ),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  size: 18,
-                  color: _TixTheme.green,
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            for (int dir = 0; dir < dirCount; dir++)
-              _timesLine(t, g, dir),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// "26 iyun  [12:10] 09:45 18:00" qatori — eng arzonining vaqti yashil
-  /// chip ichida, qolganlari oddiy matn (max 2 ta).
-  Widget _timesLine(_TixTheme t, _DirectGroup g, int dir) {
-    final dirSegments = g.cheapest.getSegmentsByDirection(dir);
-    if (dirSegments.isEmpty) return const SizedBox.shrink();
-
-    final cheapTime = dirSegments.first.dep.time ?? '';
-    final others = (g.timesByDir[dir] ?? const <String>{})
-        .where((time) => time != cheapTime)
-        .toList()
-      ..sort();
-
-    String dateText = '';
-    final depDate = dirSegments.first.dep.date ?? '';
-    if (depDate.isNotEmpty) {
-      try {
-        dateText = ElementFormatter.formatDate(depDate);
-      } catch (_) {
-        dateText = depDate;
-      }
-    }
-
-    return Padding(
-      padding: EdgeInsets.only(top: dir > 0 ? 6.0 : 0),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 58,
-            child: Text(
-              dateText,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: _TixTheme.style(12.5, FontWeight.w500, t.mid),
-            ),
-          ),
-          if (cheapTime.isNotEmpty)
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-              decoration: BoxDecoration(
-                color: _TixTheme.green.withAlpha(26),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                ElementFormatter.formatTime(cheapTime),
-                style:
-                    _TixTheme.style(12.5, FontWeight.w700, _TixTheme.green),
-              ),
-            ),
-          for (final time in others.take(2)) ...[
-            const SizedBox(width: 12),
-            Text(
-              ElementFormatter.formatTime(time),
-              style: _TixTheme.style(
-                  12.5, FontWeight.w600, t.hi.withAlpha(200)),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-/// ═══════════════════════════════════════════════════════════════════
 ///  PUBLIC CONTAINERS — ticket_page.dart switch'i ulardan foydalanadi.
 /// ═══════════════════════════════════════════════════════════════════
 class _SingleDateFlightContainer extends StatelessWidget {
   final FlightElement flightElement;
+  final bool isCheapest;
+  final bool showEconomBadge;
 
-  const _SingleDateFlightContainer({required this.flightElement});
+  const _SingleDateFlightContainer({
+    required this.flightElement,
+    this.isCheapest = false,
+    this.showEconomBadge = false,
+  });
 
   @override
-  Widget build(BuildContext context) =>
-      _FigmaTicketCard(flightElement: flightElement, tripType: 0);
+  Widget build(BuildContext context) => _FigmaTicketCard(
+        flightElement: flightElement,
+        tripType: 0,
+        isCheapest: isCheapest,
+        showEconomBadge: showEconomBadge,
+      );
 }
 
 class _ReturnDateFlightContainer extends StatelessWidget {
   final FlightElement flightElement;
+  final bool isCheapest;
+  final bool showEconomBadge;
 
-  const _ReturnDateFlightContainer({required this.flightElement});
+  const _ReturnDateFlightContainer({
+    required this.flightElement,
+    this.isCheapest = false,
+    this.showEconomBadge = false,
+  });
 
   @override
-  Widget build(BuildContext context) =>
-      _FigmaTicketCard(flightElement: flightElement, tripType: 1);
+  Widget build(BuildContext context) => _FigmaTicketCard(
+        flightElement: flightElement,
+        tripType: 1,
+        isCheapest: isCheapest,
+        showEconomBadge: showEconomBadge,
+      );
 }
 
 class _MultipleDateFlightContainer extends StatelessWidget {
   final FlightElement flightElement;
+  final bool isCheapest;
+  final bool showEconomBadge;
 
-  const _MultipleDateFlightContainer({required this.flightElement});
+  const _MultipleDateFlightContainer({
+    required this.flightElement,
+    this.isCheapest = false,
+    this.showEconomBadge = false,
+  });
 
   @override
-  Widget build(BuildContext context) =>
-      _FigmaTicketCard(flightElement: flightElement, tripType: 2);
+  Widget build(BuildContext context) => _FigmaTicketCard(
+        flightElement: flightElement,
+        tripType: 2,
+        isCheapest: isCheapest,
+        showEconomBadge: showEconomBadge,
+      );
 }

@@ -1,17 +1,17 @@
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
-import 'package:flutter_svg/flutter_svg.dart' show SvgPicture;
-import 'package:mysafar_sdk/src/core/extension/context_ext.dart' show SizeContext;
+import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart' show ProjectTheme;
-import 'package:mysafar_sdk/src/generated/assets.dart' show Assets;
 
+/// Yo'lovchilar soni va tarif (klass) tanlash sheet'i — zamonaviy karta
+/// uslubida: dumaloq +/- tugmalar, tanlangan klass brand hoshiya bilan
+/// ajratiladi. Natija `{"adt","chd","inf","klass"}` map ko'rinishida
+/// qaytariladi (eski shartnoma saqlangan).
 class PassengerCountWidget extends StatefulWidget {
   final Map<String, dynamic> params;
-  const PassengerCountWidget({
-    super.key,
-    required this.params,
-  });
+
+  const PassengerCountWidget({super.key, required this.params});
 
   @override
   State<PassengerCountWidget> createState() => _PassengerCountWidgetState();
@@ -21,219 +21,193 @@ class _PassengerCountWidgetState extends State<PassengerCountWidget> {
   int adt = 1;
   int chd = 0;
   int inf = 0;
-
   String klass = 'a';
 
   @override
   void initState() {
-    if (widget.params.isNotEmpty) {
-      final params = widget.params;
-      adt = params['adt'];
-      chd = params['chd'] ?? 0;
-      inf = params['inf'] ?? 0;
-      klass = params['klass'] ?? "a";
-    }
     super.initState();
+    if (widget.params.isNotEmpty) {
+      adt = widget.params['adt'] ?? 1;
+      chd = widget.params['chd'] ?? 0;
+      inf = widget.params['inf'] ?? 0;
+      klass = widget.params['klass'] ?? 'a';
+    }
   }
 
   bool get isMax => adt + chd + inf == 9;
 
+  void _apply() {
+    HapticFeedback.mediumImpact();
+    Navigator.of(context)
+        .pop({"adt": adt, "chd": chd, "inf": inf, "klass": klass});
+  }
+
+  void _reset() {
+    HapticFeedback.lightImpact();
+    setState(() {
+      adt = 1;
+      chd = 0;
+      inf = 0;
+      klass = 'a';
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        leading: SizedBox.shrink(),
-        title: Text(
-          "passenger_count_title".tr(),
-          style: context.textTheme.displayMedium,
-        ),
-        actions: [
-          IconButton(
-              onPressed: () {
-                Navigator.pop(
-                  context,
-                );
-              },
-              icon: Icon(Icons.close))
-        ],
-      ),
-      body: SingleChildScrollView(
+      body: SafeArea(
         child: Column(
           children: [
-            // Center(
-            //   child: Padding(
-            //     padding: context.k8verticalPadding,
-            //     child: SvgPicture.asset(ProjectAssets.dragImgSvg),
-            //   ),
-            // ),
-            Divider(
-              thickness: 1,
-              color: ProjectTheme.borderLight,
+            const SizedBox(height: 10),
+            // Dastak.
+            Container(
+              width: 44,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.withAlpha(110),
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
-            context.szBoxHeight16,
+            // Sarlavha + yopish.
             Padding(
-              padding: context.k16horizontalPadding,
-              child: Column(
+              padding: const EdgeInsets.fromLTRB(16, 12, 10, 4),
+              child: Row(
                 children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
+                  Expanded(
                     child: Text(
+                      "passenger_count_title".tr(),
+                      style: context.textTheme.displayLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 19,
+                      ),
+                    ),
+                  ),
+                  Material(
+                    color: ProjectTheme.borderLight.withAlpha(120),
+                    shape: const CircleBorder(),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: () => Navigator.pop(context),
+                      child: const SizedBox(
+                        width: 36,
+                        height: 36,
+                        child: Icon(Icons.close_rounded, size: 20),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
                       "passenger_count_header".tr(),
-                      style: context.textTheme.displayMedium
-                          ?.copyWith(fontSize: 18),
+                      style: context.textTheme.headlineSmall
+                          ?.copyWith(fontSize: 13),
                     ),
-                  ),
-                  SizedBox(
-                    height: context.k24Space,
-                  ),
-                  getPassengerCounter(
-                      type: 0,
-                      title: "above_12".tr(),
-                      remove: () {
-                        if (adt > 1) {
-                          setState(() {
-                            HapticFeedback.lightImpact();
-                            adt--;
-                          });
-                        }
-                      },
-                      add: () {
-                        if (isMax) {
-                          return;
-                        }
-
-                        setState(() {
-                          HapticFeedback.lightImpact();
-                          adt++;
-                        });
-                      }),
-                  context.szBoxHeight16,
-                  getPassengerCounter(
-                      type: 1,
-                      title: "between_2_12".tr(),
-                      remove: () {
-                        if (chd > 0) {
-                          setState(() {
-                            HapticFeedback.lightImpact();
-                            chd--;
-                          });
-                        }
-                      },
-                      add: () {
-                        if (isMax) {
-                          return;
-                        }
-
-                        setState(() {
-                          HapticFeedback.lightImpact();
-                          chd++;
-                        });
-                      }),
-                  context.szBoxHeight16,
-                  getPassengerCounter(
-                      type: 2,
-                      title: "under_2".tr(),
-                      remove: () {
-                        if (inf > 0) {
-                          setState(() {
-                            HapticFeedback.lightImpact();
-                            inf--;
-                          });
-                        }
-                      },
-                      add: () {
-                        if (isMax) {
-                          return;
-                        }
-                        setState(() {
-                          HapticFeedback.lightImpact();
-                          inf++;
-                        });
-                      }),
-                  context.szBoxHeight16,
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
+                    const SizedBox(height: 8),
+                    // Yo'lovchilar kartasi.
+                    Container(
+                      decoration: BoxDecoration(
+                        color: context.color.primaryContainer,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: context.shadowDown,
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 6),
+                      child: Column(
+                        children: [
+                          _counterRow(
+                            title: "above_12".tr(),
+                            count: adt,
+                            canRemove: adt > 1,
+                            onRemove: () => setState(() => adt--),
+                            onAdd: () => setState(() => adt++),
+                          ),
+                          _divider(),
+                          _counterRow(
+                            title: "between_2_12".tr(),
+                            count: chd,
+                            canRemove: chd > 0,
+                            onRemove: () => setState(() => chd--),
+                            onAdd: () => setState(() => chd++),
+                          ),
+                          _divider(),
+                          _counterRow(
+                            title: "under_2".tr(),
+                            count: inf,
+                            canRemove: inf > 0,
+                            onRemove: () => setState(() => inf--),
+                            onAdd: () => setState(() => inf++),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
                       "show_age_feedback_subtitle".tr(),
-                      style: context.textTheme.titleMedium,
+                      style: context.textTheme.headlineSmall
+                          ?.copyWith(fontSize: 12, height: 1.4),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      "klass_tab".tr(),
+                      style: context.textTheme.headlineSmall
+                          ?.copyWith(fontSize: 13),
+                    ),
+                    const SizedBox(height: 8),
+                    // Tarif (klass) tanlash — tanlangani brand hoshiya bilan.
+                    for (final entry in const [
+                      ('e', 'klass_e'),
+                      ('b', 'klass_b'),
+                      ('f', 'klass_f'),
+                      ('w', 'klass_w'),
+                      ('a', 'klass_a'),
+                    ]) ...[
+                      _klassRow(entry.$1, entry.$2.tr()),
+                      const SizedBox(height: 8),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            // Pastki tugmalar.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 52,
+                      child: ElevatedButton(
+                        style: context.filterCancelButtonStyle,
+                        onPressed: _reset,
+                        child: Text("reset".tr(),
+                            style: context.textTheme.bodyMedium),
+                      ),
                     ),
                   ),
-                  context.szBoxHeight8,
-                  Divider(
-                    thickness: 1,
-                    color: ProjectTheme.borderLight,
-                  ),
-                  context.szBoxHeight16,
-                  getKlass(
-                    'e',
-                    'klass_e'.tr(),
-                    (type) => setState(() => klass = type),
-                  ),
-                  context.szBoxHeight16,
-                  getKlass(
-                    'b',
-                    'klass_b'.tr(),
-                    (type) => setState(() => klass = type),
-                  ),
-                  context.szBoxHeight16,
-                  getKlass(
-                    'f',
-                    'klass_f'.tr(),
-                    (type) => setState(() => klass = type),
-                  ),
-                  context.szBoxHeight16,
-                  getKlass(
-                    'w',
-                    'klass_w'.tr(),
-                    (type) => setState(() => klass = type),
-                  ),
-                  context.szBoxHeight16,
-                  getKlass(
-                    'a',
-                    'klass_a'.tr(),
-                    (type) => setState(() => klass = type),
-                  ),
-                  SizedBox(
-                    height: context.k24Space,
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: SizedBox(
-                          height: 48,
-                          child: ElevatedButton(
-                              style: context.filterCancelButtonStyle,
-                              onPressed: () {
-                                setState(() {
-                                  adt = 1;
-                                  chd = 0;
-                                  inf = 0;
-                                  klass = 'a';
-                                });
-                              },
-                              child: Text("reset".tr())),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SizedBox(
+                      height: 52,
+                      child: ElevatedButton(
+                        style: ProjectTheme.blueButtonStyle,
+                        onPressed: _apply,
+                        child: Text(
+                          "apply".tr(),
+                          style: context.textTheme.bodyMedium?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
-                      context.szBoxWidth12,
-                      Expanded(
-                        child: SizedBox(
-                          height: 48,
-                          child: ElevatedButton(
-                              style: ProjectTheme.blueButtonStyle,
-                              onPressed: () {
-                                Navigator.of(context).pop({
-                                  "adt": adt,
-                                  "chd": chd,
-                                  "inf": inf,
-                                  "klass": klass
-                                });
-                              },
-                              child: Text("apply".tr())),
-                        ),
-                      )
-                    ],
-                  )
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -243,137 +217,148 @@ class _PassengerCountWidgetState extends State<PassengerCountWidget> {
     );
   }
 
-  InkWell getKlass(
-      String type, String title, void Function(String type) callback) {
-    return InkWell(
-      splashColor: Colors.transparent,
-      highlightColor: Colors.transparent,
-      onTap: () {
-        HapticFeedback.lightImpact();
-        callback(type);
-      },
+  Widget _divider() =>
+      Divider(height: 1, thickness: 1, color: ProjectTheme.borderLight);
+
+  /// Bitta yo'lovchi turi qatori: nom + dumaloq -/soni/+ boshqaruvi.
+  Widget _counterRow({
+    required String title,
+    required int count,
+    required bool canRemove,
+    required VoidCallback onRemove,
+    required VoidCallback onAdd,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            title,
-            style: context.textTheme.titleMedium,
+          Expanded(
+            child: Text(
+              title,
+              style: context.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+              ),
+            ),
+          ),
+          _roundButton(
+            icon: Icons.remove_rounded,
+            enabled: canRemove,
+            filled: false,
+            onTap: () {
+              if (!canRemove) return;
+              HapticFeedback.lightImpact();
+              onRemove();
+            },
           ),
           SizedBox(
-            width: 24,
-            height: 24,
-            child: SvgPicture.asset(type == klass
-                ? Assets.homeRadioButtonActive
-                : Assets.homeRadioButtonDeactive),
-          )
+            width: 40,
+            child: Center(
+              child: Text(
+                "$count",
+                style: context.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+          ),
+          _roundButton(
+            icon: Icons.add_rounded,
+            enabled: !isMax,
+            filled: true,
+            onTap: () {
+              if (isMax) return;
+              HapticFeedback.lightImpact();
+              onAdd();
+            },
+          ),
         ],
       ),
     );
   }
 
-  /// Type :
-  ///
-  /// 0 for adt
-  ///
-  /// 1 for chd
-  ///
-  /// 2 for inf
-  Widget getPassengerCounter(
-      {required int type,
-      required String title,
-      required void Function() remove,
-      required void Function() add}) {
-    return Row(
-      children: [
-        Expanded(
-            flex: 6,
-            child: Text(
-              title,
-              style: context.textTheme.titleMedium?.copyWith(fontSize: 18),
-            )),
-        Expanded(
-            flex: 4,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                AnimatedOpacity(
-                  opacity: getOpacity(type),
-                  duration: Duration(milliseconds: 500),
-                  child: InkWell(
-                    splashColor: Colors.transparent,
-                    highlightColor: Colors.transparent,
-                    onTap: () => remove(),
-                    child: SizedBox(
-                      height: 36,
-                      width: 36,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                            boxShadow: [
-                              BoxShadow(
-                                  blurRadius: 8.0,
-                                  offset: Offset(0, 2),
-                                  color: ProjectTheme.shadowDropLight)
-                            ],
-                            color: ProjectTheme.brandColor,
-                            borderRadius: BorderRadius.circular(8)),
-                        child: Icon(
-                          Icons.remove,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                Text(getCount(type)),
-                AnimatedOpacity(
-                  duration: Duration(milliseconds: 500),
-                  opacity: isMax ? 0.4 : 1.0,
-                  child: InkWell(
-                    splashColor: Colors.transparent,
-                    highlightColor: Colors.transparent,
-                    onTap: () => add(),
-                    child: SizedBox(
-                      height: 36,
-                      width: 36,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                            boxShadow: [
-                              BoxShadow(
-                                  blurRadius: 8.0,
-                                  offset: Offset(0, 2),
-                                  color: ProjectTheme.shadowDropLight)
-                            ],
-                            color: ProjectTheme.brandColor,
-                            borderRadius: BorderRadius.circular(8)),
-                        child: Icon(Icons.add, color: Colors.white),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ))
-      ],
+  /// Dumaloq +/- tugma: qo'shish — to'ldirilgan brand, ayirish — hoshiyali.
+  Widget _roundButton({
+    required IconData icon,
+    required bool enabled,
+    required bool filled,
+    required VoidCallback onTap,
+  }) {
+    final Color brand = ProjectTheme.brandColor;
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 200),
+      opacity: enabled ? 1.0 : 0.35,
+      child: Material(
+        color: filled ? brand : Colors.transparent,
+        shape: filled
+            ? const CircleBorder()
+            : CircleBorder(side: BorderSide(color: brand, width: 1.4)),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            width: 38,
+            height: 38,
+            child: Icon(
+              icon,
+              size: 20,
+              color: filled ? Colors.white : brand,
+            ),
+          ),
+        ),
+      ),
     );
   }
 
-  double getOpacity(int type) {
-    if (type == 0 && adt > 1) {
-      return 1.0;
-    } else if (type == 1 && chd > 0) {
-      return 1.0;
-    } else if (type == 2 && inf > 0) {
-      return 1.0;
-    }
-    return 0.4;
-  }
-
-  String getCount(int type) {
-    if (type == 0) {
-      return "$adt";
-    } else if (type == 1) {
-      return "$chd";
-    } else {
-      return "$inf";
-    }
+  /// Klass qatori: tanlangani brand hoshiya + och fon + belgili radio.
+  Widget _klassRow(String type, String title) {
+    final bool selected = klass == type;
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    return Material(
+      color: selected
+          ? ProjectTheme.brandColor.withAlpha(isDark ? 46 : 16)
+          : context.color.primaryContainer,
+      borderRadius: BorderRadius.circular(14),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          setState(() => klass = type);
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected ? ProjectTheme.brandColor : ProjectTheme.borderLight,
+              width: selected ? 1.4 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title.trim(),
+                  style: context.textTheme.bodyMedium?.copyWith(
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    fontSize: 14.5,
+                  ),
+                ),
+              ),
+              Icon(
+                selected
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.radio_button_off_rounded,
+                size: 22,
+                color: selected
+                    ? ProjectTheme.brandColor
+                    : Colors.grey.withAlpha(140),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

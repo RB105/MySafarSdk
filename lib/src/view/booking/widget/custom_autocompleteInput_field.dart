@@ -20,6 +20,8 @@ class CustomAutocompleteInputField extends StatefulWidget {
   final TextInputAction textInputAction;
   final bool showError;
   final ValueChanged<String>? onSuggestionSelected;
+  final FocusNode? focusNode;
+  final ValueChanged<String>? onFieldSubmitted;
 
   const CustomAutocompleteInputField({
     super.key,
@@ -36,7 +38,9 @@ class CustomAutocompleteInputField extends StatefulWidget {
     required this.textCapitalization,
     required this.textInputAction,
     required this.showError,
-    this.onSuggestionSelected
+    this.onSuggestionSelected,
+    this.focusNode,
+    this.onFieldSubmitted,
   });
 
   @override
@@ -47,6 +51,7 @@ class CustomAutocompleteInputField extends StatefulWidget {
 class _CustomAutocompleteInputFieldState
     extends State<CustomAutocompleteInputField> {
   late FocusNode _focusNode;
+  late bool _ownsFocusNode;
 
   void _onFocusChanged() {
     if (mounted) setState(() {});
@@ -55,14 +60,17 @@ class _CustomAutocompleteInputFieldState
   @override
   void initState() {
     super.initState();
-    _focusNode = FocusNode();
+    _ownsFocusNode = widget.focusNode == null;
+    _focusNode = widget.focusNode ?? FocusNode();
     _focusNode.addListener(_onFocusChanged);
   }
 
   @override
   void dispose() {
     _focusNode.removeListener(_onFocusChanged);
-    _focusNode.dispose();
+    if (_ownsFocusNode) {
+      _focusNode.dispose();
+    }
     super.dispose();
   }
 
@@ -80,22 +88,23 @@ class _CustomAutocompleteInputFieldState
         });
       },
         onSelected: (String option) {
-          String formatted = option;
-          if (widget.inputFormatters != null && widget.inputFormatters!.isNotEmpty) {
-            for (var formatter in widget.inputFormatters!) {
-              final result = formatter.formatEditUpdate(
+          TextEditingValue value = TextEditingValue(text: option);
+          if (widget.inputFormatters != null &&
+              widget.inputFormatters!.isNotEmpty) {
+            for (final formatter in widget.inputFormatters!) {
+              final rawDigits = option.replaceAll(RegExp(r'[^0-9]'), '');
+              value = formatter.formatEditUpdate(
                 const TextEditingValue(),
-                TextEditingValue(text: option),
+                TextEditingValue(text: rawDigits.isNotEmpty ? rawDigits : option),
               );
-              formatted = result.text;
               break;
-                        }
+            }
           }
 
-          widget.controller.text = formatted;
+          widget.controller.value = value;
 
           if (widget.onChanged != null) {
-            widget.onChanged!(formatted);
+            widget.onChanged!(value.text);
           }
         },
 
@@ -114,6 +123,9 @@ class _CustomAutocompleteInputFieldState
           textInputAction: widget.textInputAction,
           showError: widget.showError,
           focusNode: focusNode,
+          onFieldSubmitted: (_) {
+            widget.onFieldSubmitted?.call('');
+          },
         );
       },
       optionsViewBuilder: (context, onSelected, options) {

@@ -836,13 +836,13 @@ class _ProfilePageState extends State<ProfilePage> {
                             ),
                           ),
                         context.szBoxHeight32,
-                        Center(
-                          child: SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: SvgPicture.asset(ProjectAssets.logoProfile),
-                          ),
-                        ),
+                        // Center(
+                        //   child: SizedBox(
+                        //     width: 24,
+                        //     height: 24,
+                        //     child: SvgPicture.asset(ProjectAssets.logoProfile),
+                        //   ),
+                        // ),
                         // Versiya yozuvi olib tashlandi — embed'da package_info
                         // HOST app versiyasini qaytarib chalg'itardi.
                         context.szBoxHeight16,

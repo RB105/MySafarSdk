@@ -1,7 +1,9 @@
 // used in city choose widget
 import 'package:equatable/equatable.dart';
 import 'package:mysafar_sdk/src/core/config/response_config.dart';
+import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/airports_model.dart';
+import 'package:mysafar_sdk/src/service/avia/airport_local_search_service.dart';
 import 'package:mysafar_sdk/src/service/avia_service.dart';
 import 'package:mysafar_sdk/src/service/geolacator/location_airport_service.dart';
 import 'package:flutter/material.dart';
@@ -10,36 +12,40 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 part 'city_choose_state.dart';
 
 class CityChooseCubit extends Cubit<CityChooseStates> {
-  CityChooseCubit() : super(CityChooseInitState());
+  CityChooseCubit({
+    AirportLocalSearchService? localSearch,
+    AviaService? aviaService,
+  })  : _localSearch = localSearch ?? AirportLocalSearchService(),
+        _aviaService = aviaService ?? AviaService(),
+        super(CityChooseInitState());
 
-  final AviaService _aviaService = AviaService();
+  final AirportLocalSearchService _localSearch;
+  final AviaService _aviaService;
   final LocationAirportService _locationService = LocationAirportService();
 
-  // controllers
   TextEditingController controller = TextEditingController();
 
   /// Load nearby airport based on location (only for 'from' direction)
   Future<void> loadNearbyAirport({String? lang}) async {
-    // Check if already cached
     final cachedAirport = _locationService.cachedNearbyAirport;
     if (cachedAirport != null) {
-      emit(CityChooseInitState(nearbyAirport: cachedAirport, isLoadingNearby: false));
+      emit(CityChooseInitState(
+          nearbyAirport: cachedAirport, isLoadingNearby: false));
       return;
     }
 
-    // If already attempted, don't try again
     if (_locationService.hasAttemptedLocation) {
       emit(CityChooseInitState(nearbyAirport: null, isLoadingNearby: false));
       return;
     }
 
-    // Start loading
     emit(CityChooseInitState(nearbyAirport: null, isLoadingNearby: true));
 
     try {
       final nearbyAirport = await _locationService.getNearbyAirport(lang: lang);
       if (isClosed) return;
-      emit(CityChooseInitState(nearbyAirport: nearbyAirport, isLoadingNearby: false));
+      emit(CityChooseInitState(
+          nearbyAirport: nearbyAirport, isLoadingNearby: false));
     } catch (e) {
       debugPrint("Error loading nearby airport: $e");
       if (isClosed) return;
@@ -47,14 +53,48 @@ class CityChooseCubit extends Cubit<CityChooseStates> {
     }
   }
 
+  /// Qidiruv strategiyasi:
+  /// 1) Har doim local JSON (1+ harf)
+  /// 2) Local bo'sh va so'rov ≥ 3 harf bo'lsa — API fallback
   Future<void> getAirports({required String part, String? lang}) async {
+    final query = part.trim();
+    if (query.isEmpty) {
+      resetToInit();
+      return;
+    }
+
+    final searchLang = lang ?? 'en';
     emit(CityChooseLoadingState());
+
     try {
-      NetworkResponse response =
-          await _aviaService.getAirports(part: part, lang: lang);
+      final localResults = await _localSearch.search(
+        query: query,
+        lang: searchLang,
+      );
       if (isClosed) return;
+
+      if (localResults.isNotEmpty) {
+        emit(CityChooseSuccessState(localResults));
+        return;
+      }
+
+      if (query.length < 3) {
+        emit(CityChooseErrorState('nothingFound'.tr()));
+        return;
+      }
+
+      final apiLang = searchLang == 'uz' ? 'en' : searchLang;
+      final NetworkResponse response =
+          await _aviaService.getAirports(part: query, lang: apiLang);
+      if (isClosed) return;
+
       if (response is NetworkSuccessResponse) {
-        emit(CityChooseSuccessState(response.data));
+        final data = response.data;
+        if (data is List<AirPortsModel> && data.isNotEmpty) {
+          emit(CityChooseSuccessState(data));
+        } else {
+          emit(CityChooseErrorState('nothingFound'.tr()));
+        }
       } else if (response is NetworkErrorResponse) {
         emit(CityChooseErrorState(response.getError()));
       }
@@ -65,10 +105,10 @@ class CityChooseCubit extends Cubit<CityChooseStates> {
     }
   }
 
-  /// Reset to initial state with nearby airport preserved
   void resetToInit() {
     final cachedAirport = _locationService.cachedNearbyAirport;
-    emit(CityChooseInitState(nearbyAirport: cachedAirport, isLoadingNearby: false));
+    emit(CityChooseInitState(
+        nearbyAirport: cachedAirport, isLoadingNearby: false));
   }
 
   @override

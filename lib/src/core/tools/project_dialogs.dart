@@ -158,32 +158,33 @@ class ProjectDialogs {
 
   static Future showLowcostSheet(
       BuildContext context, FlightElement flightElement) async {
+    final parentContext = context;
     showModalBottomSheet(
       backgroundColor: context.color.primaryContainer,
       isScrollControlled: true,
       context: context,
-      builder: (context) => SizedBox(
-        height: context.height * 0.7,
+      builder: (sheetContext) => SizedBox(
+        height: sheetContext.height * 0.7,
         child: DecoratedBox(
           decoration: BoxDecoration(
               borderRadius: BorderRadius.vertical(top: Radius.circular(12))),
           child: Padding(
-            padding: context.k16horizontalPadding,
+            padding: sheetContext.k16horizontalPadding,
             child: SingleChildScrollView(
               child: Column(
                 children: [
-                  context.szBoxHeight16,
+                  sheetContext.szBoxHeight16,
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         "lowcost".tr(),
-                        style: context.textTheme.bodyMedium,
+                        style: sheetContext.textTheme.bodyMedium,
                       ),
                       InkWell(
                           splashColor: Colors.transparent,
                           highlightColor: Colors.transparent,
-                          onTap: () => Navigator.of(context).pop(),
+                          onTap: () => Navigator.of(sheetContext).pop(),
                           child: Icon(Icons.close))
                     ],
                   ),
@@ -191,20 +192,20 @@ class ProjectDialogs {
                     thickness: 1,
                     color: ProjectTheme.borderLight,
                   ),
-                  context.szBoxHeight16,
+                  sheetContext.szBoxHeight16,
                   Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
                       "about_lowcost".tr(),
-                      style: context.textTheme.bodyMedium
+                      style: sheetContext.textTheme.bodyMedium
                           ?.copyWith(fontWeight: FontWeight.w600),
                     ),
                   ),
                   Text(
                     "low_cost_airline_info".tr(),
-                    style: context.textTheme.bodySmall,
+                    style: sheetContext.textTheme.bodySmall,
                   ),
-                  context.szBoxHeight16,
+                  sheetContext.szBoxHeight16,
                   Row(
                     children: [
                       Expanded(
@@ -213,21 +214,20 @@ class ProjectDialogs {
                         child: ElevatedButton(
                             style: ProjectTheme.blueBorderButtonStyle,
                             onPressed: () {
-                              Navigator.of(context).pop();
+                              Navigator.of(sheetContext).pop();
                             },
                             child: Text("done".tr())),
                       )),
-                      context.szBoxWidth12,
+                      sheetContext.szBoxWidth12,
                       Expanded(
                           child: SizedBox(
                         height: 36,
                         child: ElevatedButton(
                             style: ProjectTheme.blueButtonStyle,
                             onPressed: () {
-                              // navigation
-                              Navigator.of(context).pushNamed(
-                                  TicketInfoPage.routeName,
-                                  arguments: flightElement);
+                              Navigator.of(sheetContext).pop();
+                              TicketInfoPage.show(
+                                  parentContext, flightElement);
                             },
                             child: Text("continue_ticket".tr())),
                       )),
@@ -293,6 +293,8 @@ class ProjectDialogs {
 
   static Future<FlightElement?> showTariffPicker(
       BuildContext context, List<FlightTariffModel> tariffs, String tid) async {
+    if (tariffs.isEmpty) return null;
+
     if (Platform.isIOS) {
       return await showSdkCupertinoSheet<FlightElement?>(
           context: context,
