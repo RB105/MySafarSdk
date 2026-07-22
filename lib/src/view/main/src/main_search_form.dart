@@ -67,13 +67,17 @@ class _MainSearchFormState extends State<MainSearchForm> {
       toDir != null &&
       fromDir!.cityIataCode == toDir!.cityIataCode;
 
+  bool _didInitFromDir = false;
+
   @override
   void initState() {
     super.initState();
     isSmart = widget.isSmart;
 
+    // context / EasyLocalization faqat didChangeDependencies da ishlatiladi.
     if (widget.nearbyAirport != null) {
       fromDir = widget.nearbyAirport;
+      _didInitFromDir = true;
     }
 
     // Alohida sahifada ochilganda (oddiy rejim) — yo'riqli oqim avtomatik
@@ -90,16 +94,30 @@ class _MainSearchFormState extends State<MainSearchForm> {
     }
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Default "Qayerdan" = Toshkent (tilga mos). initState da InheritedWidget
+    // o'qib bo'lmaydi — shu yerda bir marta o'rnatamiz.
+    if (!_didInitFromDir && fromDir == null && widget.nearbyAirport == null) {
+      final lang = context.locale.languageCode;
+      fromDir = DefaultAirports.tashkent(lang: lang);
+      _didInitFromDir = true;
+    }
+  }
+
   /// Lokatsiya bo'yicha aniqlangan yaqin aeroport keyinroq (async) kelganda —
-  /// foydalanuvchi hali "qayerdan"ni qo'lda o'zgartirmagan bo'lsa, uni
-  /// avtomatik to'ldiramiz.
+  /// foydalanuvchi hali default Toshkentni o'zgartirmagan bo'lsa, yangilanadi.
   @override
   void didUpdateWidget(covariant MainSearchForm oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.nearbyAirport != null &&
         widget.nearbyAirport != oldWidget.nearbyAirport &&
-        fromDir == null) {
-      setState(() => fromDir = widget.nearbyAirport);
+        (fromDir == null || DefaultAirports.isTashkent(fromDir))) {
+      setState(() {
+        fromDir = widget.nearbyAirport;
+        _didInitFromDir = true;
+      });
     }
   }
 
@@ -188,6 +206,16 @@ class _MainSearchFormState extends State<MainSearchForm> {
         final r = await ProjectDialogs.showCitySearchPicker(context, 1);
         if (!mounted || r == null) return false;
         setState(() => toDir = r);
+        // Qayerdan → qayerga tanlandi — alohida yo'nalish qidiruv oynasiga
+        // o'tamiz (sana/yo'lovchi/filtr va narxlar jadvali o'sha yerda).
+        if (fromDir != null) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => RouteSearchPage(from: fromDir!, to: r),
+            ),
+          );
+          return false; // eski qadam zanjiri (sana/yo'lovchi) ochilmaydi
+        }
         return true;
       case _stepDate:
         final r = await ProjectDialogs.showCalendartPicker(

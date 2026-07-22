@@ -11,3 +11,6 @@ class TicketTariffSuccessState extends TicketTariffState {
 
   TicketTariffSuccessState(this.tariffs);
 }
+
+/// API error yoki bo'sh tariflar ro'yxati.
+class TicketTariffUnavailableState extends TicketTariffState {}

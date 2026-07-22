@@ -8,6 +8,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart'
     show HapticFeedback, SystemUiOverlayStyle;
+import 'package:mysafar_sdk/src/core/enum/currency.dart';
 import 'package:mysafar_sdk/src/service/profile/profile_cache.dart';
 import 'package:mysafar_sdk/src/core/tools/app_cache_manager.dart';
 import 'package:mysafar_sdk/src/core/tools/currency_provider.dart';
@@ -19,6 +20,11 @@ import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/cubit/main/ai/ai_search_cubit.dart';
 import 'package:mysafar_sdk/src/cubit/main/hot/hot_tickets_cubit.dart';
 import 'package:mysafar_sdk/src/cubit/main/popularDestinations/pop_destinations_cubit.dart';
+import 'package:mysafar_sdk/src/cubit/destinations/destination_list_cubit.dart';
+import 'package:mysafar_sdk/src/model/remote/destination/destination_detail_model.dart'
+    show DestLocalizedText;
+import 'package:mysafar_sdk/src/model/remote/destination/destination_list_model.dart'
+    show DestinationListItem;
 import 'package:mysafar_sdk/src/cubit/main/version/check_version_cubit.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/airports_model.dart';
@@ -36,8 +42,14 @@ import 'package:mysafar_sdk/src/service/geolacator/location_airport_service.dart
 import 'package:mysafar_sdk/src/service/pexels/pexels_service.dart';
 import 'package:mysafar_sdk/src/view/booking/passenger_information_page.dart';
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
+import 'package:mysafar_sdk/src/view/destinations/destination_details_page.dart';
 import 'package:mysafar_sdk/src/view/destinations/destinations_info_map_page.dart';
+import 'package:mysafar_sdk/src/view/navbar/bottom_nav_bar.dart'
+    show BottomNavBarPage;
+import 'package:mysafar_sdk/src/core/constants/default_airports.dart'
+    show DefaultAirports;
 import 'package:mysafar_sdk/src/view/booking/ticketed_booking_search_page.dart';
+import 'package:mysafar_sdk/src/view/search/route_search_page.dart';
 import 'package:mysafar_sdk/src/view/tickets/ticket_page.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
@@ -50,6 +62,7 @@ import 'package:mysafar_sdk/src/cubit/profile/profile_cubit.dart';
 
 part 'src/widgets.dart';
 part 'src/main_search_form.dart';
+part 'src/main_popular_destinations.dart';
 
 
 class MainPage extends StatefulWidget
@@ -169,6 +182,7 @@ class _MainPageState extends State<MainPage>
     @override
     Widget build(BuildContext context)
     {
+        final bool isDark = context.isDarkMode;
 
         return BlocProvider(
             create: (context) => CheckVersionCubit(),
@@ -213,13 +227,15 @@ class _MainPageState extends State<MainPage>
                                 child: _circleIconButton(
                                     null,
                                     MySafarSdk.exitEmbed,
-                                    iconData: Icons.arrow_back_rounded),
+                                    iconData: Icons.arrow_back_rounded,
+                                    isDark: isDark),
                               )
                             : null,
                         actions: [
                             _circleIconButton(
                                 ProjectAssets.callCenterIcon,
                                 () => ProjectDialogs.showSupportMenu(context),
+                                isDark: isDark,
                                 showcaseKey: HomeShowcaseKeys.support,
                                 showcaseTitle: "showcase_support_title".tr(),
                                 showcaseDesc: "showcase_support_desc".tr()),
@@ -239,15 +255,12 @@ class _MainPageState extends State<MainPage>
                                                     const SizedBox(height: 16),
                                                     Showcase(
                                                         key: HomeShowcaseKeys.hot,
-                                                        title: "showcase_hot_title".tr(),
-                                                        description: "showcase_hot_desc".tr(),
+                                                        title: "showcase_popular_title".tr(),
+                                                        description: "showcase_popular_desc".tr(),
                                                         targetBorderRadius: BorderRadius.circular(16),
                                                         tooltipBackgroundColor: ProjectTheme.brandColor,
                                                         textColor: Colors.white,
-                                                        child: const MainHotTickets()),
-                                                    // "Mashhur yo'nalishlar" olib tashlandi —
-                                                    // widget ham, /destinations so'rovi ham yo'q.
-                                                    // Figma: so'ngi qidiruvlar va 24/7 yordam.
+                                                        child: const MainPopularDestinations()),
                                                     const RecentSearchesWidget(),
                                                     const HomeSupportBanner(),
                                                     const SizedBox(height: 24),
@@ -364,10 +377,16 @@ class _MainPageState extends State<MainPage>
 
     Widget _circleIconButton(String? asset, VoidCallback onTap,
         {IconData? iconData,
+        required bool isDark,
         GlobalKey? showcaseKey,
         String? showcaseTitle,
         String? showcaseDesc})
     {
+        // Light: brend ko'k; dark: yarim-shaffof oq (fon rasmi ustida ko'rinadi).
+        final Color bg = isDark
+            ? Colors.white.withOpacity(0.22)
+            : ProjectTheme.brandColor;
+
         final Widget button = InkWell(
             borderRadius: BorderRadius.circular(22),
             onTap: onTap,
@@ -377,7 +396,7 @@ class _MainPageState extends State<MainPage>
                 padding: const EdgeInsets.all(9),
                 decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: ProjectTheme.brandColor,
+                    color: bg,
                 ),
                 child: SizedBox(
                     width: 20,

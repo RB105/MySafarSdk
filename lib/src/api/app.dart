@@ -191,8 +191,9 @@ Widget _sdkMaterialApp(BuildContext context, {required String initialRoute}) {
         [RouterGenerator.router.onGenerate(RouteSettings(name: route))],
     theme: ProjectTheme.light,
     darkTheme: ProjectTheme.dark,
-    themeMode: context.select<ThemeNotifier, ThemeMode>(
-        (notifier) => notifier.themeMode),
+    // watch — ThemeMode.system bo'lganda terminal `b` (platform brightness)
+    // o'zgarganda isDark ham yangilanadi va MaterialApp qayta chiziladi.
+    themeMode: context.watch<ThemeNotifier>().themeMode,
     debugShowCheckedModeBanner: false,
     initialRoute: initialRoute,
   );
@@ -212,7 +213,10 @@ class _MySafarShell extends StatelessWidget {
       valueListenable: SdkLocalization.localeNotifier,
       builder: (context, _, __) => MultiProvider(
         providers: [
-          ChangeNotifierProvider<ThemeNotifier>(create: (_) => ThemeNotifier()),
+          ChangeNotifierProvider<ThemeNotifier>(
+            create: (_) =>
+                ThemeNotifier(initialMode: MySafarSdk.config.themeMode),
+          ),
           ChangeNotifierProvider<CurrencyProvider>(
               create: (_) => CurrencyProvider()),
         ],

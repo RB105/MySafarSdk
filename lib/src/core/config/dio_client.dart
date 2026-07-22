@@ -35,6 +35,26 @@ class DioClient {
   /// Skote backend (`SKOTE_BASE_URL`). No auth header.
   static final Dio skote = Dio(_baseOptions())
     ..interceptors.add(_SkoteInterceptor());
+
+  /// Fayl yuklash (PDF va h.k.) — uzun timeout, auth yo'q.
+  static final Dio download = Dio(_baseOptions()
+    ..connectTimeout = const Duration(seconds: 60)
+    ..receiveTimeout = const Duration(seconds: 120));
+
+  /// Umumiy download yordamchisi — bitta client orqali.
+  static Future<Response<dynamic>> downloadFile(
+    String url,
+    String savePath, {
+    CancelToken? cancelToken,
+    void Function(int, int)? onReceiveProgress,
+  }) {
+    return download.download(
+      url,
+      savePath,
+      cancelToken: cancelToken,
+      onReceiveProgress: onReceiveProgress,
+    );
+  }
 }
 
 /// Refreshes the access token at most once at a time. Concurrent 401s share a

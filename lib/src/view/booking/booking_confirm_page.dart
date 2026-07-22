@@ -30,6 +30,8 @@ import 'package:mysafar_sdk/src/view/booking/widget/payment_type_card.dart';
 
 
 class BookingConfirmPage extends StatefulWidget {
+  static const routeName = '/bookingConfirm';
+
   final BookingCreateModel bookingCreateModel;
   final int passengerNumber;
   final FlightPrice? price;

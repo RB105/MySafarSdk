@@ -202,6 +202,7 @@ class _MainHotTicketsState extends State<MainHotTickets> {
                       height: _HomeHotTicketCard.height,
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
+                        clipBehavior: Clip.none,
                         physics: const BouncingScrollPhysics(),
                         padding: const EdgeInsets.symmetric(horizontal: 4),
                         itemCount: state.flights.length,

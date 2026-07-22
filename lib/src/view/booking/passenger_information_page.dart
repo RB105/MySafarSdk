@@ -7,6 +7,8 @@ import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
+import 'package:mysafar_sdk/src/core/tools/formatters.dart'
+    show ElementFormatter;
 import 'package:mysafar_sdk/src/core/widgets/county_pick/src/country_code_model.dart';
 import 'package:mysafar_sdk/src/cubit/booking/passenger/passenger_cubit.dart';
 import 'package:mysafar_sdk/src/cubit/booking/passenger/passenger_state.dart';
@@ -19,7 +21,7 @@ import 'package:mysafar_sdk/src/view/booking/widget/passenger_card_widget.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/passenger_controller.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/passenger_date_picker.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/paymentbottomsheet.dart'
-    show showCitySearchPicker;
+    show  showCitySearchPicker;
 import 'package:mysafar_sdk/src/view/booking/widget/support_widget.dart';
 
 class PassengerInformationPage extends StatefulWidget {
@@ -35,6 +37,8 @@ class PassengerInformationPage extends StatefulWidget {
     required this.chd,
     required this.inf,
   });
+
+  static const routeName = '/passengerInformation';
 
   @override
   State<PassengerInformationPage> createState() =>
@@ -124,6 +128,9 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
 
   final _emailKey = GlobalKey();
   final _phoneKey = GlobalKey();
+  final _continueButtonKey = GlobalKey();
+  final _emailFocusNode = FocusNode(skipTraversal: true);
+  final _phoneFocusNode = FocusNode(skipTraversal: true);
   late List<GlobalKey> _citizenKeys;
   late List<GlobalKey> _docnumKeys;
   late List<GlobalKey> _docexpKeys;
@@ -136,6 +143,9 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
   int get _totalPassengers => widget.adt + widget.chd + widget.inf;
 
   bool _isContactControllersFilled = false;
+  bool _formFieldFocused = false;
+
+  late final VoidCallback _focusListener;
 
   // Autocomplete tavsiyalari faqat saqlash xizmati orqali (saqlangan
   // ma'lumotlardan) keladi va sahifa ochiq turganda o'zgarmaydi. Har bir
@@ -191,6 +201,34 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
     super.initState();
     _initializeControllers();
     _initializeKeys();
+    _focusListener = _updateFormFocusState;
+    FocusManager.instance.addListener(_focusListener);
+    for (final node in _allFormFocusNodes) {
+      node.addListener(_updateFormFocusState);
+    }
+  }
+
+  Iterable<FocusNode> get _allFormFocusNodes sync* {
+    yield _emailFocusNode;
+    yield _phoneFocusNode;
+    for (final controller in _passengerControllers) {
+      yield controller.lastnameFocus;
+      yield controller.firstnameFocus;
+      yield controller.middlenameFocus;
+      yield controller.birthdateFocus;
+      yield controller.citizenFocus;
+      yield controller.docnumFocus;
+      yield controller.docexpFocus;
+    }
+  }
+
+  void _updateFormFocusState() {
+    final focused = FocusManager.instance.primaryFocus;
+    final hasFormFocus =
+        focused != null && _allFormFocusNodes.contains(focused);
+    if (hasFormFocus != _formFieldFocused && mounted) {
+      setState(() => _formFieldFocused = hasFormFocus);
+    }
   }
 
   void _initializeControllers() {
@@ -213,9 +251,15 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
 
   @override
   void dispose() {
+    FocusManager.instance.removeListener(_focusListener);
+    for (final node in _allFormFocusNodes) {
+      node.removeListener(_updateFormFocusState);
+    }
     _scrollController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
+    _emailFocusNode.dispose();
+    _phoneFocusNode.dispose();
     for (final controller in _passengerControllers) {
       controller.dispose();
     }
@@ -240,29 +284,58 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
           });
         }
 
+        // Klavatura balandligi OS dan keladi — tugma aynan shu qiymatda
+        // joylashadi, orada bo'sh joy qolmaydi (har qanday qurilmada).
+        final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+        final showKeyboardBar = keyboardInset > 0;
+        const keyboardBarHeight = 44.0;
+
         return Scaffold(
           appBar: _buildAppBar(context),
-          body: GestureDetector(
-            onTap: () => FocusScope.of(context).unfocus(),
-            child: SingleChildScrollView(
-              controller: _scrollController,
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SupportWidget(),
-                  const SizedBox(height: 16),
-                  _buildContactForm(context, state),
-                  _buildSectionHeader(context, 'passenger_data',
-                      trailing:
-                          _totalPassengers > 1 ? '$_totalPassengers' : null),
-                  _buildPassengersList(context, state),
-                  const SizedBox(height: 8),
-                ],
+          // Scaffold o'zi insetni "yeb" qo'ymasligi kerak — aks holda
+          // Positioned(bottom: inset) ikki marta hisoblanib bo'shliq chiqadi
+          // yoki tugma klaviatura orqasida qoladi.
+          resizeToAvoidBottomInset: false,
+          body: Stack(
+            children: [
+              GestureDetector(
+                onTap: () => FocusScope.of(context).unfocus(),
+                child: SingleChildScrollView(
+                  controller: _scrollController,
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    10,
+                    16,
+                    16 +
+                        (showKeyboardBar
+                            ? keyboardBarHeight + keyboardInset
+                            : 140),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildRouteSummary(context),
+                      const SizedBox(height: 12),
+                      const SupportWidget(),
+                      const SizedBox(height: 12),
+                      _buildContactForm(context, state),
+                      const SizedBox(height: 12),
+                      _buildPassengersList(context, state),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
+                ),
               ),
-            ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: showKeyboardBar ? keyboardInset : 0,
+                child: showKeyboardBar
+                    ? _buildKeyboardNextBar(context, state)
+                    : _buildBottomButton(context),
+              ),
+            ],
           ),
-          bottomNavigationBar: _buildBottomButton(context),
         );
       },
     );
@@ -273,7 +346,10 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
       if (_emailController.text.isEmpty && state.email.isNotEmpty) {
         _emailController.text = state.email;
       }
-      if (_phoneController.text.isEmpty && state.phone.isNotEmpty) {
+      // Fokusda tahrirlayotganda state'dan qayta yozib qo'ymaymiz.
+      if (!_phoneFocusNode.hasFocus &&
+          _phoneController.text.isEmpty &&
+          state.phone.isNotEmpty) {
         _updateContactControllers('', state.phone);
       }
     } else if (state is PassengerValidationError) {
@@ -316,163 +392,141 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
       _emailController.text = email;
     }
     if (phone.isNotEmpty) {
-      String phoneDigits = phone.replaceAll(RegExp(r'[^0-9]'), '');
-      // Joriy tanlangan mamlakat kodini olib tashlaymiz (mas. '1', '7', '998').
-      // Faqat '998' ni kesib tashlash boshqa davlat kodini ('1' kabi) input
-      // ichida qoldirar edi.
-      final dialCode = _countryCode.dialCode ?? '998';
-      if (phoneDigits.startsWith(dialCode)) {
-        phoneDigits = phoneDigits.substring(dialCode.length);
-      } else if (phoneDigits.startsWith('998')) {
-        phoneDigits = phoneDigits.substring(3);
-      }
+      final phoneDigits = _stripDialCodeFromPhone(phone);
       if (phoneDigits.isNotEmpty) {
-        _phoneController.text = _phoneFormatter.maskText(phoneDigits);
+        _applyPhoneDigitsToController(phoneDigits);
       }
     }
   }
 
-  PreferredSizeWidget _buildAppBar(BuildContext context) {
-    final isDark = context.themeProvider.isDark;
-    final segs = widget.element.segments ?? const [];
-    final dir0 = widget.element.getSegmentsByDirection(0);
-    final origin = segs.isNotEmpty
-        ? (segs.first.dep.city?.title ??
-            segs.first.dep.airport?.code ??
-            '')
-        : '';
-    final dest = dir0.isNotEmpty
-        ? (dir0.last.arr.city?.title ?? dir0.last.arr.airport?.code ?? '')
-        : (segs.isNotEmpty ? (segs.last.arr.city?.title ?? '') : '');
-    final muted = isDark
-        ? ProjectTheme.secondaryTextDark
-        : ProjectTheme.secondaryTextLight;
+  String _stripDialCodeFromPhone(String phone) {
+    var phoneDigits = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    final dialCode = _countryCode.dialCode ?? '998';
+    if (phoneDigits.startsWith(dialCode)) {
+      phoneDigits = phoneDigits.substring(dialCode.length);
+    } else if (phoneDigits.startsWith('998')) {
+      phoneDigits = phoneDigits.substring(3);
+    }
+    return phoneDigits;
+  }
 
+  /// MaskTextInputFormatter ichki holatini controller bilan sinxron saqlaydi.
+  void _applyPhoneDigitsToController(String digits) {
+    if (digits.isEmpty) {
+      _phoneController.value = const TextEditingValue();
+      _phoneFormatter.formatEditUpdate(
+        const TextEditingValue(),
+        const TextEditingValue(),
+      );
+      return;
+    }
+
+    _phoneController.value = _phoneFormatter.formatEditUpdate(
+      const TextEditingValue(),
+      TextEditingValue(text: digits),
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar(BuildContext context) {
     return AppBar(
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: true,
-      backgroundColor: context.color.primaryContainer,
-      leadingWidth: 56,
-      leading: Center(
-        child: Material(
-          color: isDark
-              ? Colors.white.withAlpha(20)
-              : Colors.black.withAlpha(10),
-          shape: const CircleBorder(),
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: () => Navigator.of(context).maybePop(),
-            child: const SizedBox(
-              width: 38,
-              height: 38,
-              child: Icon(Icons.arrow_back_ios_new_rounded, size: 17),
-            ),
-          ),
-        ),
+      backgroundColor: Colors.transparent,
+      leading: IconButton(
+        onPressed: () => Navigator.of(context).maybePop(),
+        icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 19),
       ),
-      title: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'booking'.tr(),
-            style: context.textTheme.bodyLarge
-                ?.copyWith(fontSize: 16, fontWeight: FontWeight.w800),
-          ),
-          if (origin.isNotEmpty && dest.isNotEmpty) ...[
-            const SizedBox(height: 1),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: Text(
-                    origin,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: context.textTheme.titleSmall
-                        ?.copyWith(fontSize: 11.5, color: muted),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 5),
-                  child: Icon(Icons.flight_takeoff_rounded,
-                      size: 12, color: ProjectTheme.brandColor),
-                ),
-                Flexible(
-                  child: Text(
-                    dest,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: context.textTheme.titleSmall
-                        ?.copyWith(fontSize: 11.5, color: muted),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(1),
-        child: Container(
-          height: 1,
-          color: isDark
-              ? const Color(0xff3A3A3A)
-              : const Color(0xffEAEBEE),
-        ),
+      title: Text(
+        'booking'.tr(),
+        style: context.textTheme.bodyLarge
+            ?.copyWith(fontSize: 17, fontWeight: FontWeight.w800),
       ),
     );
   }
 
-  /// Bo'lim sarlavhasi — nozik gradient aksent chiziq + nom + (ixtiyoriy)
-  /// son badge.
-  Widget _buildSectionHeader(BuildContext context, String key,
-      {String? trailing}) {
-    final isDark = context.themeProvider.isDark;
-    final brand = ProjectTheme.brandColor;
-    return Padding(
-      padding: const EdgeInsets.only(top: 20, bottom: 12),
-      child: Row(
+  Widget _buildRouteSummary(BuildContext context) {
+    final segs = widget.element.segments ?? const [];
+    if (segs.isEmpty) return const SizedBox.shrink();
+
+    final dir0 = widget.element.getSegmentsByDirection(0);
+    final origin =
+        segs.first.dep.city?.title ?? segs.first.dep.airport?.code ?? '';
+    final dest = dir0.isNotEmpty
+        ? (dir0.last.arr.city?.title ?? dir0.last.arr.airport?.code ?? '')
+        : (segs.last.arr.city?.title ?? '');
+
+    final dir1 = widget.element.getSegmentsByDirection(1);
+    final String? depDate = _shortDate(segs.first.dep.date);
+    final String? retDate =
+        dir1.isNotEmpty ? _shortDate(dir1.first.dep.date) : null;
+
+    final parts = <String>[
+      if (depDate != null) retDate != null ? "$depDate - $retDate" : depDate,
+      "passengers_count".tr(namedArgs: {"count": "$_totalPassengers"}),
+    ];
+
+    return BookingCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 4,
-            height: 18,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [brand, ProjectTheme.accentLight],
-              ),
-              borderRadius: BorderRadius.circular(4),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            key.tr(),
-            style: context.textTheme.bodyLarge
-                ?.copyWith(fontSize: 16, fontWeight: FontWeight.w800),
-          ),
-          if (trailing != null) ...[
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: brand.withAlpha(isDark ? 55 : 22),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                trailing,
-                style: TextStyle(
-                  color: brand,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
+          Row(
+            children: [
+              Flexible(
+                child: Text(
+                  origin,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.textTheme.bodyLarge
+                      ?.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
                 ),
               ),
-            ),
-          ],
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Icon(Icons.swap_horiz_rounded,
+                    size: 18, color: ProjectTheme.brandColor),
+              ),
+              Flexible(
+                child: Text(
+                  dest,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.textTheme.bodyLarge
+                      ?.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 3),
+          Text(
+            parts.join(' · '),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: context.textTheme.headlineSmall?.copyWith(fontSize: 13),
+          ),
         ],
       ),
     );
+  }
+
+  String? _shortDate(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    DateTime? d = DateTime.tryParse(raw);
+    if (d == null) {
+      final parts = raw.split(RegExp(r'[.\-/]'));
+      if (parts.length == 3) {
+        final a = int.tryParse(parts[0]);
+        final b = int.tryParse(parts[1]);
+        final c = int.tryParse(parts[2]);
+        if (a != null && b != null && c != null) {
+          d = a > 31 ? DateTime(a, b, c) : DateTime(c, b, a);
+        }
+      }
+    }
+    if (d == null) return null;
+    return "${d.day} ${ElementFormatter.formatMonth(d.month).toLowerCase()}";
   }
 
   Widget _buildContactForm(BuildContext context, PassengerLoaded state) {
@@ -491,64 +545,145 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
       onCountrySelected: (code) => _updateMask(code, cubit),
       emailKey: _emailKey,
       phoneKey: _phoneKey,
+      emailFocusNode: _emailFocusNode,
+      phoneFocusNode: _phoneFocusNode,
+      onNextField: _goToNextEmptyField,
+    );
+  }
+
+  Widget _buildKeyboardNextBar(BuildContext context, PassengerLoaded state) {
+    final isDark = context.isDarkMode;
+    final cubit = context.read<PassengerCubit>();
+    final targets = _fieldTargets(cubit, state);
+    final allFilled = !targets.any(_fieldNeedsAttention);
+
+    return Material(
+      elevation: 6,
+      color: isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight,
+      child: Container(
+        height: 44,
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(
+              color:
+                  isDark ? ProjectTheme.borderDark : ProjectTheme.borderLight,
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            const Spacer(),
+            TextButton(
+              onPressed: allFilled
+                  ? _dismissKeyboardWhenComplete
+                  : _goToNextEmptyField,
+              child: Text(
+                allFilled ? 'continue_purchase'.tr() : 'next'.tr(),
+                style: TextStyle(
+                  fontFamily: 'packages/mysafar_sdk/Gilroy',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: ProjectTheme.brandColor,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+        ),
+      ),
     );
   }
 
   Widget _buildPassengersList(BuildContext context, PassengerLoaded state) {
     final cubit = context.read<PassengerCubit>();
 
-    return ListView.builder(
-      itemCount: _totalPassengers,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      addAutomaticKeepAlives: false,
-      addRepaintBoundaries: true,
-      itemBuilder: (_, index) => RepaintBoundary(
-        child: PassengerCardWidget(
-          index: index,
-          adultCount: widget.adt,
-          childCount: widget.chd,
-          passenger: state.passengers[index],
-          controller: _passengerControllers[index],
-          showErrors: state.showErrors,
-          cachedUsers: _cachedUsers(),
-          getSuggestions: _cachedSuggestions,
-          onFieldChanged: (field, value) => _handlePassengerFieldChanged(
-            cubit,
-            index,
-            field,
-            value,
+    return BookingCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "passenger_booking_title".tr(),
+            style: context.textTheme.bodyLarge
+                ?.copyWith(fontSize: 17, fontWeight: FontWeight.w700),
           ),
-          onUserSelected: (user) {
-            cubit.updatePassengerFromUser(index, user);
-            _updateControllersFromUser(index, user);
-          },
-          onCitizenTap: () => _showCitizenPicker(index, cubit),
-          onDocexpCalendarTap: () => _showDocexpDatePicker(index, cubit),
-          onBirthdateCalendarTap: () => _showBirthdateDatePicker(index, cubit),
-          docexpFormatter: _docexpFormatter,
-          birthdateFormatter: _birthdateFormatter,
-          citizenKey: _citizenKeys[index],
-          docnumKey: _docnumKeys[index],
-          docexpKey: _docexpKeys[index],
-          firstnameKey: _firstnameKeys[index],
-          lastnameKey: _lastnameKeys[index],
-          middlenameKey: _middlenameKeys[index],
-          birthdateKey: _birthdateKeys[index],
-          genderKey: _genderKeys[index],
-        ),
+          const SizedBox(height: 3),
+          Text(
+            "passenger_booking_subtitle".tr(),
+            style: context.textTheme.headlineSmall?.copyWith(fontSize: 13.5),
+          ),
+          const SizedBox(height: 18),
+          for (int index = 0; index < _totalPassengers; index++) ...[
+            if (index != 0) ...[
+              const SizedBox(height: 20),
+              Divider(height: 1, thickness: 1, color: context.color.outline),
+              const SizedBox(height: 20),
+            ],
+            RepaintBoundary(
+              child: _buildPassengerCard(context, cubit, state, index),
+            ),
+          ],
+        ],
       ),
     );
   }
 
+  Widget _buildPassengerCard(
+    BuildContext context,
+    PassengerCubit cubit,
+    PassengerLoaded state,
+    int index,
+  ) {
+    return PassengerCardWidget(
+      index: index,
+      adultCount: widget.adt,
+      childCount: widget.chd,
+      passenger: state.passengers[index],
+      controller: _passengerControllers[index],
+      showErrors: state.showErrors,
+      cachedUsers: _cachedUsers(),
+      getSuggestions: _cachedSuggestions,
+      onFieldChanged: (field, value) => _handlePassengerFieldChanged(
+        cubit,
+        index,
+        field,
+        value,
+      ),
+      onUserSelected: (user) {
+        cubit.updatePassengerFromUser(index, user);
+        _updateControllersFromUser(index, user);
+      },
+      onCitizenTap: () => _showCitizenPicker(index, cubit),
+      onDocexpCalendarTap: () => _showDocexpDatePicker(index, cubit),
+      onBirthdateCalendarTap: () => _showBirthdateDatePicker(index, cubit),
+      onNextField: _goToNextEmptyField,
+      docexpFormatter: _docexpFormatter,
+      birthdateFormatter: _birthdateFormatter,
+      citizenKey: _citizenKeys[index],
+      docnumKey: _docnumKeys[index],
+      docexpKey: _docexpKeys[index],
+      firstnameKey: _firstnameKeys[index],
+      lastnameKey: _lastnameKeys[index],
+      middlenameKey: _middlenameKeys[index],
+      birthdateKey: _birthdateKeys[index],
+      genderKey: _genderKeys[index],
+    );
+  }
+
   Widget _buildBottomButton(BuildContext context) {
-    return NextButtonWidget(
-      nextTittle: 'continue_purchase',
-      analyticsId: 'booking_passenger_continue',
-      onPressed: () => context.read<PassengerCubit>().validateAndSave(),
-      passenger: _totalPassengers,
-      showButton: true,
-      price: widget.element.price,
+    return KeyedSubtree(
+      key: _continueButtonKey,
+      child: NextButtonWidget(
+        nextTittle: 'continue_purchase',
+        analyticsId: 'booking_passenger_continue',
+        onPressed: () {
+          ////////////////
+          // FocusScope.of(context).unfocus();
+          context.read<PassengerCubit>().validateAndSave();
+        },
+        passenger: _totalPassengers,
+        showButton: true,
+        price: widget.element.price,
+      ),
     );
   }
 
@@ -557,9 +692,8 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
     // Raqam kiritilmagan bo'lsa telefonni bo'sh saqlaymiz. Aks holda phone
     // faqat mamlakat kodidan iborat bo'lib ('998' / '1'), listener uni bo'sh
     // input ichiga qaytadan yozib qo'yardi.
-    final phone = unmaskedText.isEmpty
-        ? ''
-        : '${_countryCode.dialCode}$unmaskedText';
+    final phone =
+        unmaskedText.isEmpty ? '' : '${_countryCode.dialCode}$unmaskedText';
     cubit.updatePhone(phone);
   }
 
@@ -574,7 +708,7 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
     );
 
     if (unmaskedText.isNotEmpty) {
-      _phoneController.text = _phoneFormatter.maskText(unmaskedText);
+      _applyPhoneDigitsToController(unmaskedText);
     }
 
     setState(() {
@@ -589,9 +723,12 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
 
   void _updateControllersFromUser(int index, dynamic user) {
     final controller = _passengerControllers[index];
-    controller.firstnameController.text = user.firstname?.toUpperCase() ?? '';
-    controller.lastnameController.text = user.lastname?.toUpperCase() ?? '';
-    controller.middlenameController.text = user.middlename?.toUpperCase() ?? '';
+    controller.firstnameController.text =
+        PassengerCubit.sanitizeName(user.firstname);
+    controller.lastnameController.text =
+        PassengerCubit.sanitizeName(user.lastname);
+    controller.middlenameController.text =
+        PassengerCubit.sanitizeName(user.middlename);
     controller.birthdateController.text = user.birthdate ?? '';
     controller.docexpController.text = user.docexp ?? '';
     controller.docnumController.text = user.docnum ?? '';
@@ -615,6 +752,8 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
     if (result != null) {
       cubit.updateCitizen(index, result['code'] ?? '');
     }
+    if (!mounted) return;
+    _passengerControllers[index].citizenFocus.requestFocus();
   }
 
   void _showDocexpDatePicker(int index, PassengerCubit cubit) {
@@ -622,6 +761,7 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
       context: context,
       controller: _passengerControllers[index].docexpController,
       isFutureOnly: true,
+      title: 'passport_validity'.tr(),
       onDateSelected: (date) {
         cubit.updatePassengerField(
           index,
@@ -637,6 +777,7 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
       context: context,
       controller: _passengerControllers[index].birthdateController,
       isFutureOnly: false,
+      title: 'birth_date'.tr(),
       onDateSelected: (date) {
         cubit.updatePassengerField(
           index,
@@ -666,24 +807,209 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
   }
 
   Future<void> _scrollToField(GlobalKey key) async {
-    await Future.delayed(const Duration(milliseconds: 100));
     final fieldContext = key.currentContext;
     if (fieldContext == null) return;
 
-    final renderBox = fieldContext.findRenderObject() as RenderBox?;
-    if (renderBox == null || !renderBox.hasSize) return;
-
-    final position = renderBox.localToGlobal(Offset.zero);
-    final offset = (position.dy - 100).clamp(
-      0.0,
-      _scrollController.position.maxScrollExtent,
+    await Scrollable.ensureVisible(
+      fieldContext,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      alignment: 0.18,
     );
+  }
 
-    await _scrollController.animateTo(
-      offset,
-      duration: const Duration(milliseconds: 800),
-      curve: Curves.easeInOut,
-    );
+  Future<void> _scrollToContinueButton() async {
+    FocusScope.of(context).unfocus();
+    await _scrollToField(_continueButtonKey);
+  }
+
+  String? _validateRequired(String value, String emptyMessage) {
+    if (value.trim().isEmpty) return emptyMessage;
+    return null;
+  }
+
+  String? _validateDate(String value, {required String emptyMessage}) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return emptyMessage;
+    if (!RegExp(r'^\d{2}\.\d{2}\.\d{4}$').hasMatch(trimmed)) {
+      return 'invalid_date_format'.tr();
+    }
+    try {
+      DateFormat('dd.MM.yyyy').parseStrict(trimmed);
+    } catch (_) {
+      return 'invalid_date_format'.tr();
+    }
+    return null;
+  }
+
+  bool _fieldNeedsAttention(_BookingFieldTarget target) {
+    if (target.isOptional) return false;
+    final text = target.getText();
+    if (text.trim().isEmpty) return true;
+    final error = target.validator?.call(text);
+    return error != null && error.isNotEmpty;
+  }
+
+  List<_BookingFieldTarget> _fieldTargets(
+    PassengerCubit cubit,
+    PassengerLoaded state,
+  ) {
+    final targets = <_BookingFieldTarget>[
+      _BookingFieldTarget(
+        fieldName: 'email',
+        key: _emailKey,
+        focusNode: _emailFocusNode,
+        getText: () => _emailController.text,
+        validator: (v) => _validateRequired(v, 'enter_email_address'.tr()),
+      ),
+      _BookingFieldTarget(
+        fieldName: 'phone',
+        key: _phoneKey,
+        focusNode: _phoneFocusNode,
+        getText: () => _phoneController.text,
+        validator: (_) => _phoneFormatter.getUnmaskedText().isEmpty
+            ? 'enter_full_phone_number'.tr()
+            : null,
+      ),
+    ];
+
+    for (int index = 0; index < _totalPassengers; index++) {
+      final controller = _passengerControllers[index];
+      final passenger = state.passengers[index];
+      targets.addAll([
+        _BookingFieldTarget(
+          passengerIndex: index,
+          fieldName: 'lastname',
+          key: _lastnameKeys[index],
+          focusNode: controller.lastnameFocus,
+          getText: () => controller.lastnameController.text,
+          validator: (v) => _validateRequired(v, 'surname_not_entered'.tr()),
+        ),
+        _BookingFieldTarget(
+          passengerIndex: index,
+          fieldName: 'firstname',
+          key: _firstnameKeys[index],
+          focusNode: controller.firstnameFocus,
+          getText: () => controller.firstnameController.text,
+          validator: (v) => _validateRequired(v, 'name_not_entered'.tr()),
+        ),
+        _BookingFieldTarget(
+          passengerIndex: index,
+          fieldName: 'middlename',
+          key: _middlenameKeys[index],
+          focusNode: controller.middlenameFocus,
+          isOptional: true,
+          getText: () => controller.middlenameController.text,
+        ),
+        _BookingFieldTarget(
+          passengerIndex: index,
+          fieldName: 'birthdate',
+          key: _birthdateKeys[index],
+          focusNode: controller.birthdateFocus,
+          getText: () => controller.birthdateController.text,
+          validator: (v) =>
+              _validateDate(v, emptyMessage: 'birthdate_required'.tr()),
+        ),
+        _BookingFieldTarget(
+          passengerIndex: index,
+          fieldName: 'citizen',
+          key: _citizenKeys[index],
+          isPicker: true,
+          focusNode: controller.citizenFocus,
+          getText: () => passenger.citizen,
+          validator: (v) =>
+              _validateRequired(v, 'citizenship_not_selected'.tr()),
+          onPickerTap: () => _showCitizenPicker(index, cubit),
+        ),
+        _BookingFieldTarget(
+          passengerIndex: index,
+          fieldName: 'docnum',
+          key: _docnumKeys[index],
+          focusNode: controller.docnumFocus,
+          getText: () => controller.docnumController.text,
+          validator: (v) =>
+              _validateRequired(v, 'passport_data_not_entered'.tr()),
+        ),
+        _BookingFieldTarget(
+          passengerIndex: index,
+          fieldName: 'docexp',
+          key: _docexpKeys[index],
+          focusNode: controller.docexpFocus,
+          getText: () => controller.docexpController.text,
+          validator: (v) =>
+              _validateDate(v, emptyMessage: 'passport_expiry_required'.tr()),
+        ),
+      ]);
+    }
+
+    return targets;
+  }
+
+  _BookingFieldTarget? _currentTarget(List<_BookingFieldTarget> targets) {
+    final focused = FocusManager.instance.primaryFocus;
+    if (focused == null) return null;
+
+    for (final target in targets) {
+      if (target.focusNode != null && target.focusNode == focused) {
+        return target;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _goToNextEmptyField() async {
+    final cubit = context.read<PassengerCubit>();
+    if (cubit.state is! PassengerLoaded) return;
+
+    _updatePhoneNumber(cubit);
+    cubit.showErrors();
+
+    final state = cubit.state as PassengerLoaded;
+    final targets = _fieldTargets(cubit, state);
+    final current = _currentTarget(targets);
+
+    if (current != null && _fieldNeedsAttention(current)) {
+      await _activateField(current);
+      if (mounted) setState(() {});
+      return;
+    }
+
+    final nextIndex = current == null ? 0 : targets.indexOf(current) + 1;
+
+    if (nextIndex >= targets.length) {
+      final firstIssue = targets.cast<_BookingFieldTarget?>().firstWhere(
+            (target) => target != null && _fieldNeedsAttention(target),
+            orElse: () => null,
+          );
+      if (firstIssue != null) {
+        await _activateField(firstIssue);
+      } else {
+        await _scrollToContinueButton();
+      }
+      if (mounted) setState(() {});
+      return;
+    }
+
+    await _activateField(targets[nextIndex]);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _dismissKeyboardWhenComplete() async {
+    FocusScope.of(context).unfocus();
+    await _scrollToContinueButton();
+  }
+
+  Future<void> _activateField(_BookingFieldTarget target) async {
+    if (target.isPicker) {
+      // FocusScope.of(context).unfocus();
+      await _scrollToField(target.key);
+      target.focusNode?.requestFocus();
+      target.onPickerTap?.call();
+      return;
+    }
+
+    await _scrollToField(target.key);
+    target.focusNode?.requestFocus();
   }
 
   void _showSnackBar(String message) {
@@ -694,4 +1020,28 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
       ),
     );
   }
+}
+
+class _BookingFieldTarget {
+  final int? passengerIndex;
+  final String fieldName;
+  final GlobalKey key;
+  final FocusNode? focusNode;
+  final bool isPicker;
+  final bool isOptional;
+  final VoidCallback? onPickerTap;
+  final String Function() getText;
+  final String? Function(String value)? validator;
+
+  const _BookingFieldTarget({
+    required this.fieldName,
+    required this.key,
+    required this.getText,
+    this.passengerIndex,
+    this.focusNode,
+    this.isPicker = false,
+    this.isOptional = false,
+    this.onPickerTap,
+    this.validator,
+  });
 }

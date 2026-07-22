@@ -1,6 +1,7 @@
-
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
-import 'package:flutter/foundation.dart' show VoidCallback, debugPrint;
+import 'package:appmetrica_plugin/appmetrica_plugin.dart';
+import 'package:flutter/foundation.dart'
+    show VoidCallback, debugPrint, kDebugMode;
 import 'package:flutter/widgets.dart' show WidgetsFlutterBinding;
 import 'package:get_storage/get_storage.dart' show GetStorage;
 import 'package:mysafar_sdk/src/core/config/response_config.dart'
@@ -19,6 +20,10 @@ import 'package:mysafar_sdk/src/api/token_store.dart';
 import 'package:mysafar_sdk/src/core/config/app_config.dart' show AppConfig;
 import 'package:mysafar_sdk/src/service/cache/hive_service.dart'
     show HiveService;
+import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart'
+    show AnalyticsService;
+import 'package:mysafar_sdk/src/service/analytics/appmetrica_analytics.dart'
+    show AppMetricaAnalytics;
 import 'package:mysafar_sdk/src/service/deep_link_gateway.dart'
     show DeepLinkGateway;
 
@@ -70,7 +75,17 @@ class MySafarSdk {
 
     _config = config;
     if (tokenStore != null) _tokens = tokenStore;
-    if (analytics != null) _analytics = analytics;
+    if (analytics != null) {
+      _analytics = analytics;
+    } else {
+      final apiKey = config.appMetricaApiKey.trim();
+      if (apiKey.isNotEmpty && !apiKey.startsWith(r'$(')) {
+        await AppMetrica.activate(
+          AppMetricaConfig(apiKey, logs: kDebugMode),
+        );
+        _analytics = const AppMetricaAnalytics();
+      }
+    }
     _callbacks = callbacks;
 
     AppConfig.apply(config);
@@ -88,6 +103,8 @@ class MySafarSdk {
       persist: config.saveLocale,
     );
 
+    await AnalyticsService().initGlobalEnvironment();
+    await AnalyticsService().restoreUserProfile();
   }
 
   /// Host app deep-link'ni SDK'ga uzatadi (masalan

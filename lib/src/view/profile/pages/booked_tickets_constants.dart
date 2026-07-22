@@ -3,10 +3,10 @@ class BookedTicketsConstants {
 
   // Tab
   static const int tabCount = 3;
-  static const double tabBarHeight = 56.0;
+  static const double tabBarHeight = 52.0;
 
   // Shimmer
-  static const int shimmerItemCount = 5;
+  static const int shimmerItemCount = 4;
 
   // Status
   static const String statusTicketed = 'ticketed';
