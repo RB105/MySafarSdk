@@ -35,7 +35,7 @@ class _SearchCityWidgetState extends State<SearchCityWidget> {
   final GetStorage _getStorage = sdkStorage();
   List<AirPortsModel> _recentSearches = [];
 
-  /// Debounce timer for airport search to avoid a network request per keystroke.
+  /// Debounce timer for airport search.
   Timer? _searchDebounce;
 
   // Cache keys
@@ -125,182 +125,182 @@ class _SearchCityWidgetState extends State<SearchCityWidget> {
         }
         return cubit;
       },
-      child: BlocBuilder<CityChooseCubit, CityChooseStates>(
-        builder: (BuildContext context, CityChooseStates state) {
-          return Scaffold(
-              appBar: AppBar(
-                leading: SizedBox.fromSize(),
-                centerTitle: true,
-                title: Text(title, style: context.textTheme.bodyMedium),
-                actions: [
-                  IconButton(
-                      onPressed: () {
-                        Navigator.pop(
-                          context,
-                        );
-                      },
-                      icon: Icon(Icons.close))
-                ],
-              ),
-              body: Padding(
-                padding: context.k16horizontalPadding,
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      context.szBoxHeight16,
-                      SizedBox(
-                          height: 56,
-                          width: double.infinity,
-                          child: TextFormField(
-                            autofocus: true,
-                            controller:
-                                context.watch<CityChooseCubit>().controller,
-                            keyboardType: TextInputType.name,
-                            style: context.textTheme.bodyMedium,
-                            decoration: InputDecoration(
-                              contentPadding: EdgeInsets.symmetric(
-                                  vertical: 16.0, horizontal: 16),
-                              prefixIcon: Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: SvgPicture.asset(
-                                  Assets.iconsSearchIcon,
-                                ),
-                              ),
-                              suffixIcon: getLoadingWidget(state, context),
-                              enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                  borderSide: BorderSide(
-                                      color: context.color.outline, width: 1)),
-                              hintStyle: context.textTheme.headlineMedium,
-                              border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                  borderSide: BorderSide(
-                                      color: context.color.outline, width: 1)),
+      // TextField BlocBuilder tashqarisida — state o‘zgarganda klaviatura
+      // qayta build bo‘lmaydi (qotishning asosiy UI sababi).
+      child: Scaffold(
+        appBar: AppBar(
+          leading: SizedBox.fromSize(),
+          centerTitle: true,
+          title: Text(title, style: context.textTheme.bodyMedium),
+          actions: [
+            IconButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              icon: const Icon(Icons.close),
+            )
+          ],
+        ),
+        body: Padding(
+          padding: context.k16horizontalPadding,
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                context.szBoxHeight16,
+                SizedBox(
+                  height: 56,
+                  width: double.infinity,
+                  child: Builder(
+                    builder: (context) {
+                      final cubit = context.read<CityChooseCubit>();
+                      return TextFormField(
+                        autofocus: true,
+                        controller: cubit.controller,
+                        keyboardType: TextInputType.name,
+                        style: context.textTheme.bodyMedium,
+                        decoration: InputDecoration(
+                          contentPadding: const EdgeInsets.symmetric(
+                              vertical: 16.0, horizontal: 16),
+                          prefixIcon: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: SvgPicture.asset(
+                              Assets.iconsSearchIcon,
                             ),
-                            onChanged: (value) {
-                              _searchDebounce?.cancel();
-                              final cubit = context.read<CityChooseCubit>();
-                              final trimmed = value.trim();
-                              // 1 ta harfdan boshlab local qidiruv;
-                              // local topmasa (≥3 harf) API fallback.
-                              if (trimmed.isNotEmpty) {
-                                final code = context.locale.languageCode;
-                                final lang = (code == 'uz' ||
-                                        code == 'ru' ||
-                                        code == 'en')
-                                    ? code
-                                    : 'en';
-                                final delayMs = trimmed.length < 3 ? 80 : 200;
-                                _searchDebounce = Timer(
-                                    Duration(milliseconds: delayMs), () {
-                                  cubit.getAirports(part: trimmed, lang: lang);
-                                });
-                              } else {
-                                cubit.resetToInit();
-                              }
-                            },
-                          )),
-                      Builder(
-                        builder: (context) {
-                          switch (state) {
-                            case CityChooseSuccessState():
-                              return ListView.builder(
-                                physics: NeverScrollableScrollPhysics(),
-                                padding: EdgeInsets.all(0.0),
-                                shrinkWrap: true,
-                                itemCount: state.airports.length,
-                                itemBuilder: (context, index) {
-                                  final city = state.airports[index];
-                                  return Column(
-                                    children: [
-                                      ListTile(
-                                        contentPadding: EdgeInsets.zero,
-                                        onTap: () {
-                                          _onAirportSelected(
-                                              state.airports[index]);
-                                        },
-                                        leading: SizedBox(
-                                          height: 24,
-                                          width: 24,
-                                          child: SvgPicture.asset(
-                                            Assets.homeMapLocationPin,
-
-                                          ),
-                                        ),
-                                        title: Text(
-                                          state.airports[index].cityName ?? "",
-                                          style: context.textTheme.bodyMedium,
-                                        ),
-                                        subtitle: Text(
-                                          _citySubtitle(state.airports[index]),
-                                          style:
-                                              context.textTheme.headlineMedium,
-                                        ),
-                                      ),
-                                      Column(
-                                        children: List.generate(
-                                            city.airports?.length ?? 0,
-                                            (i) => ListTile(
-                                                  onTap: () {
-                                                    final selectedAirport =
-                                                        city.copyWith(
-                                                            cityIataCode: city
-                                                                .airports
-                                                                ?.elementAt(i)
-                                                                .airportIataCode);
-                                                    _onAirportSelected(
-                                                        selectedAirport);
-                                                  },
-                                                  contentPadding:
-                                                      EdgeInsets.only(
-                                                    left: 24.0,
-                                                  ),
-                                                  leading: SizedBox(
-                                                    height: 24,
-                                                    width: 24,
-                                                    child: SvgPicture.asset(
-                                                        Assets.iconsPlaneIcon),
-                                                  ),
-                                                  title: Text(
-                                                    city.airports?[i]
-                                                            .airportName ??
-                                                        "",
-                                                  ),
-                                                  subtitle: Text(
-                                                    city.airports?[i]
-                                                            .airportIataCode ??
-                                                        "",
-                                                    style: context.textTheme
-                                                        .headlineMedium,
-                                                  ),
-                                                )),
-                                      )
-                                    ],
-                                  );
-                                },
-                              );
-                            case CityChooseErrorState():
-                              return Center(
-                                child: Padding(
-                                  padding: const EdgeInsets.only(top: 16.0),
-                                  child: Text(state.error),
-                                ),
-                              );
-                            case CityChooseInitState():
-                              return _buildInitialContent(context, state);
-                            default:
-                              return _buildInitialContent(context, null);
+                          ),
+                          suffixIcon: BlocBuilder<CityChooseCubit,
+                              CityChooseStates>(
+                            buildWhen: (prev, next) =>
+                                prev.runtimeType != next.runtimeType,
+                            builder: (context, state) =>
+                                getLoadingWidget(state, context),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(20),
+                              borderSide: BorderSide(
+                                  color: context.color.outline, width: 1)),
+                          hintStyle: context.textTheme.headlineMedium,
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(20),
+                              borderSide: BorderSide(
+                                  color: context.color.outline, width: 1)),
+                        ),
+                        onChanged: (value) {
+                          _searchDebounce?.cancel();
+                          final trimmed = value.trim();
+                          if (trimmed.isNotEmpty) {
+                            final code = context.locale.languageCode;
+                            final lang = (code == 'uz' ||
+                                    code == 'ru' ||
+                                    code == 'en')
+                                ? code
+                                : 'en';
+                            _searchDebounce = Timer(
+                              const Duration(milliseconds: 350),
+                              () {
+                                cubit.getAirports(
+                                    part: trimmed, lang: lang);
+                              },
+                            );
+                          } else {
+                            cubit.resetToInit();
                           }
                         },
-                      ),
-                      SizedBox(
-                        height: context.height * 0.1,
-                      )
-                    ],
+                      );
+                    },
                   ),
                 ),
-              ));
-        },
+                BlocBuilder<CityChooseCubit, CityChooseStates>(
+                  builder: (context, state) {
+                    switch (state) {
+                      case CityChooseSuccessState():
+                        return ListView.builder(
+                          physics: const NeverScrollableScrollPhysics(),
+                          padding: EdgeInsets.zero,
+                          shrinkWrap: true,
+                          itemCount: state.airports.length,
+                          itemBuilder: (context, index) {
+                            final city = state.airports[index];
+                            return Column(
+                              children: [
+                                ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  onTap: () {
+                                    _onAirportSelected(state.airports[index]);
+                                  },
+                                  leading: SizedBox(
+                                    height: 24,
+                                    width: 24,
+                                    child: SvgPicture.asset(
+                                      Assets.homeMapLocationPin,
+                                    ),
+                                  ),
+                                  title: Text(
+                                    state.airports[index].cityName ?? "",
+                                    style: context.textTheme.bodyMedium,
+                                  ),
+                                  subtitle: Text(
+                                    _citySubtitle(state.airports[index]),
+                                    style: context.textTheme.headlineMedium,
+                                  ),
+                                ),
+                                Column(
+                                  children: List.generate(
+                                    city.airports?.length ?? 0,
+                                    (i) => ListTile(
+                                      onTap: () {
+                                        final selectedAirport = city.copyWith(
+                                          cityIataCode: city.airports
+                                              ?.elementAt(i)
+                                              .airportIataCode,
+                                        );
+                                        _onAirportSelected(selectedAirport);
+                                      },
+                                      contentPadding: const EdgeInsets.only(
+                                        left: 24.0,
+                                      ),
+                                      leading: SizedBox(
+                                        height: 24,
+                                        width: 24,
+                                        child: SvgPicture.asset(
+                                            Assets.iconsPlaneIcon),
+                                      ),
+                                      title: Text(
+                                        city.airports?[i].airportName ?? "",
+                                      ),
+                                      subtitle: Text(
+                                        city.airports?[i].airportIataCode ??
+                                            "",
+                                        style: context
+                                            .textTheme.headlineMedium,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              ],
+                            );
+                          },
+                        );
+                      case CityChooseErrorState():
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 16.0),
+                            child: Text(state.error),
+                          ),
+                        );
+                      case CityChooseInitState():
+                        return _buildInitialContent(context, state);
+                      default:
+                        return _buildInitialContent(context, null);
+                    }
+                  },
+                ),
+                SizedBox(
+                  height: context.height * 0.1,
+                )
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
