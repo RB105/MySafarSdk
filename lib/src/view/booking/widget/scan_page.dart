@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kDebugMode;
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -47,7 +49,8 @@ class _MrzScannerSheet extends StatefulWidget {
   State<_MrzScannerSheet> createState() => _MrzScannerSheetState();
 }
 
-class _MrzScannerSheetState extends State<_MrzScannerSheet> {
+class _MrzScannerSheetState extends State<_MrzScannerSheet>
+    with WidgetsBindingObserver {
   CameraController? _cameraController;
   final TextRecognizer _textRecognizer =
       TextRecognizer(script: TextRecognitionScript.latin);
@@ -57,6 +60,7 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet> {
   bool _initializing = false;
   bool _isBusy = false;
   bool _isParsed = false;
+  bool _isCapturing = false;
   String? _error;
   String? _scanError;
   int _cameraSession = 0;
@@ -76,7 +80,14 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet> {
   };
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _scanTimeoutTimer?.cancel();
     final controller = _cameraController;
     _cameraController = null;
@@ -84,6 +95,24 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet> {
     unawaited(_tearDownController(controller));
     unawaited(_textRecognizer.close());
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_docType == null || _isParsed) return;
+
+    if (state == AppLifecycleState.inactive) {
+      unawaited(_disposeCamera());
+    } else if (state == AppLifecycleState.resumed) {
+      if (_hasPermission &&
+          _cameraController == null &&
+          !_initializing &&
+          !_isCapturing) {
+        final session = _cameraSession;
+        setState(() => _initializing = true);
+        unawaited(_initCamera(session));
+      }
+    }
   }
 
   Future<void> _tearDownController(CameraController? controller) async {
@@ -166,7 +195,14 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet> {
     setState(() {
       _scanError = null;
       _accumulatedLines.clear();
+      _isCapturing = false;
     });
+    final controller = _cameraController;
+    if (controller != null &&
+        controller.value.isInitialized &&
+        !controller.value.isStreamingImages) {
+      unawaited(controller.startImageStream(_onCameraImage));
+    }
     _startScanTimeout();
   }
 
@@ -221,6 +257,7 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet> {
     final controller = _cameraController;
     if (_isParsed ||
         _isBusy ||
+        _isCapturing ||
         !mounted ||
         _docType == null ||
         controller == null ||
@@ -237,38 +274,138 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet> {
 
     _isBusy = true;
     try {
-      final recognized = await _textRecognizer.processImage(inputImage);
-      for (final line in MrzTextExtractor.extractCandidateLines(recognized.text)) {
-        _accumulatedLines.remove(line);
-        _accumulatedLines.add(line);
+      await _processRecognized(await _textRecognizer.processImage(inputImage));
+    } catch (_) {
+      // Keyingi kadrda qayta uriniladi.
+    } finally {
+      _isBusy = false;
+    }
+  }
+
+  Future<void> _processRecognized(RecognizedText recognized) async {
+    final rawLines = <String>[];
+    for (final block in recognized.blocks) {
+      for (final line in block.lines) {
+        rawLines.add(line.text);
       }
-      while (_accumulatedLines.length > 24) {
-        _accumulatedLines.remove(_accumulatedLines.first);
+    }
+    if (rawLines.isEmpty) {
+      rawLines.addAll(recognized.text.split(RegExp(r'[\r\n]+')));
+    }
+
+    MrzTextExtractor.accumulateRawLines(rawLines, _accumulatedLines);
+
+    final expected = _docType == _ScanDocType.passport
+        ? MrzExpectedDoc.passport
+        : MrzExpectedDoc.idCard;
+    final candidates = _accumulatedLines.toList();
+    final shouldDebug = kDebugMode &&
+        DateTime.now().difference(_lastDebugAt).inMilliseconds >= 1200;
+    if (shouldDebug) {
+      _lastDebugAt = DateTime.now();
+      // ignore: avoid_print
+      print(
+        '[MRZ] expected=$expected '
+        'rawLen=${recognized.text.length} '
+        'candidates=${candidates.length}',
+      );
+    }
+
+    var mrz = MrzTextExtractor.tryExtractFromLines(
+      candidates,
+      expected: expected,
+    );
+    mrz ??= MrzTextExtractor.tryExtract(
+      recognized.text,
+      expected: expected,
+    );
+
+    if (mrz == null) {
+      final mismatch = MrzTextExtractor.detectMismatch(
+        candidates,
+        expected: expected,
+      );
+      if (mismatch != null && mounted) {
+        _scanTimeoutTimer?.cancel();
+        setState(() {
+          _scanError = mismatch == MrzExpectedDoc.passport
+              ? 'scan_wrong_doc_passport'.tr()
+              : 'scan_wrong_doc_id'.tr();
+        });
+        if (kDebugMode)
+          print('[MRZ] mismatch: expected=$expected found=$mismatch');
+        return;
       }
+      if (shouldDebug) {
+        MrzTextExtractor.debugWhyFailed(
+          candidates,
+          expected: expected,
+        );
+      }
+      return;
+    }
+    if (kDebugMode) {
+      print(
+        '[MRZ] OK → ${mrz.surnames} ${mrz.givenNames} '
+        'doc=${mrz.documentNumber} type=${mrz.documentType}',
+      );
+    }
+    if (!mounted || _isParsed) return;
+
+    _scanTimeoutTimer?.cancel();
+    _isParsed = true;
+    final active = _cameraController;
+    if (active != null && active.value.isStreamingImages) {
+      await active.stopImageStream();
+    }
+    if (!mounted) return;
+
+    final user = UsersModel.fromScan(mrz);
+    Navigator.of(context).pop(user);
+  }
+
+  /// Qo'lda suratga olish — live stream ishlamasa aniqroq o'qish uchun.
+  Future<void> _captureAndProcess() async {
+    final controller = _cameraController;
+    if (controller == null ||
+        !controller.value.isInitialized ||
+        _isParsed ||
+        _isCapturing ||
+        _docType == null) {
+      return;
+    }
+
+    setState(() {
+      _isCapturing = true;
+      _scanError = null;
+    });
+
+    try {
+      try {
+        if (controller.value.isStreamingImages) {
+          await controller.stopImageStream();
+        }
+      } catch (_) {}
+
+      final file = await controller.takePicture();
+      final recognized = await _textRecognizer
+          .processImage(InputImage.fromFilePath(file.path));
 
       final expected = _docType == _ScanDocType.passport
           ? MrzExpectedDoc.passport
           : MrzExpectedDoc.idCard;
-      final candidates = _accumulatedLines.toList();
-      final shouldDebug =
-          DateTime.now().difference(_lastDebugAt).inMilliseconds >= 1200;
-      if (shouldDebug) {
-        _lastDebugAt = DateTime.now();
-        // ignore: avoid_print
-        print(
-          '[MRZ] expected=$expected '
-          'rawLen=${recognized.text.length} '
-          'candidates=${candidates.length} '
-          'lens=${candidates.map((e) => e.length).toList()}',
-        );
-        for (var i = 0; i < candidates.length; i++) {
-          // ignore: avoid_print
-          print('[MRZ] L$i(${candidates[i].length}): ${candidates[i]}');
+
+      final rawLines = <String>[];
+      for (final block in recognized.blocks) {
+        for (final line in block.lines) {
+          rawLines.add(line.text);
         }
       }
 
+      MrzTextExtractor.accumulateRawLines(rawLines, _accumulatedLines);
+
       var mrz = MrzTextExtractor.tryExtractFromLines(
-        candidates,
+        _accumulatedLines.toList(),
         expected: expected,
       );
       mrz ??= MrzTextExtractor.tryExtract(
@@ -276,51 +413,30 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet> {
         expected: expected,
       );
 
-      if (mrz == null) {
-        final mismatch = MrzTextExtractor.detectMismatch(
-          candidates,
-          expected: expected,
-        );
-        if (mismatch != null && mounted) {
-          _scanTimeoutTimer?.cancel();
-          setState(() {
-            _scanError = mismatch == MrzExpectedDoc.passport
-                ? 'scan_wrong_doc_passport'.tr()
-                : 'scan_wrong_doc_id'.tr();
-          });
-          // ignore: avoid_print
-          print('[MRZ] mismatch: expected=$expected found=$mismatch');
-          return;
-        }
-        if (shouldDebug) {
-          MrzTextExtractor.debugWhyFailed(
-            candidates,
-            expected: expected,
-          );
-        }
+      if (mrz != null && mounted && !_isParsed) {
+        _scanTimeoutTimer?.cancel();
+        _isParsed = true;
+        final user = UsersModel.fromScan(mrz);
+        Navigator.of(context).pop(user);
         return;
       }
-      // ignore: avoid_print
-      print(
-        '[MRZ] OK → ${mrz.surnames} ${mrz.givenNames} '
-        'doc=${mrz.documentNumber} type=${mrz.documentType}',
-      );
-      if (!mounted || _isParsed) return;
 
-      _scanTimeoutTimer?.cancel();
-      _isParsed = true;
-      final active = _cameraController;
-      if (active != null && active.value.isStreamingImages) {
-        await active.stopImageStream();
+      if (mounted) {
+        setState(() => _scanError = 'scan_mrz_not_found'.tr());
+        if (!_isParsed) {
+          await controller.startImageStream(_onCameraImage);
+          _startScanTimeout();
+        }
       }
-      if (!mounted) return;
-
-      final user = UsersModel.fromScan(mrz);
-      Navigator.of(context).pop(user);
     } catch (_) {
-      // Keyingi kadrda qayta uriniladi.
+      if (mounted && !_isParsed) {
+        try {
+          await controller.startImageStream(_onCameraImage);
+          _startScanTimeout();
+        } catch (_) {}
+      }
     } finally {
-      _isBusy = false;
+      if (mounted) setState(() => _isCapturing = false);
     }
   }
 
@@ -338,8 +454,7 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet> {
       final deviceOrientation = controller.value.deviceOrientation;
       var rotationCompensation = _orientations[deviceOrientation] ?? 0;
       if (camera.lensDirection == CameraLensDirection.front) {
-        rotationCompensation =
-            (sensorOrientation + rotationCompensation) % 360;
+        rotationCompensation = (sensorOrientation + rotationCompensation) % 360;
       } else {
         rotationCompensation =
             (sensorOrientation - rotationCompensation + 360) % 360;
@@ -353,11 +468,12 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet> {
     if (Platform.isAndroid && format != InputImageFormat.nv21) return null;
     if (Platform.isIOS && format != InputImageFormat.bgra8888) return null;
 
-    if (image.planes.isEmpty) return null;
+    final bytes = _concatenatePlanes(image.planes);
+    if (bytes == null) return null;
     final plane = image.planes.first;
 
     return InputImage.fromBytes(
-      bytes: plane.bytes,
+      bytes: bytes,
       metadata: InputImageMetadata(
         size: Size(image.width.toDouble(), image.height.toDouble()),
         rotation: rotation,
@@ -367,6 +483,20 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet> {
     );
   }
 
+  Uint8List? _concatenatePlanes(List<Plane> planes) {
+    if (planes.isEmpty) return null;
+    if (planes.length == 1) return planes.first.bytes;
+
+    final total = planes.fold<int>(0, (s, p) => s + p.bytes.length);
+    final bytes = Uint8List(total);
+    var offset = 0;
+    for (final plane in planes) {
+      bytes.setRange(offset, offset + plane.bytes.length, plane.bytes);
+      offset += plane.bytes.length;
+    }
+    return bytes;
+  }
+
   String get _instructionKey => _docType == _ScanDocType.passport
       ? 'scan_passport_instruction'
       : 'scan_id_instruction';
@@ -374,24 +504,24 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet> {
   String get _hintKey =>
       _docType == _ScanDocType.passport ? 'scan_passport_hint' : 'scan_id_hint';
 
-  _MrzOverlayConfig get _overlayConfig =>
-      _docType == _ScanDocType.passport
-          ? const _MrzOverlayConfig(
-              widthFactor: 0.98,
-              heightFactor: 0.28,
-              centerYFactor: 0.62,
-            )
-          : const _MrzOverlayConfig(
-              widthFactor: 0.94,
-              heightFactor: 0.32,
-              centerYFactor: 0.58,
-            );
+  _MrzOverlayConfig get _overlayConfig => _docType == _ScanDocType.passport
+      ? const _MrzOverlayConfig(
+          widthFactor: 0.98,
+          heightFactor: 0.28,
+          centerYFactor: 0.62,
+        )
+      : const _MrzOverlayConfig(
+          widthFactor: 0.94,
+          heightFactor: 0.32,
+          centerYFactor: 0.58,
+        );
 
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.sizeOf(context).height;
     final topInset = MediaQuery.paddingOf(context).top;
-    final sheetHeight = screenHeight - topInset - 8;
+    final scannerSheetHeight = screenHeight - topInset - 8;
+    final pickingDoc = _docType == null;
     final isDark = context.isDarkMode;
     final titleColor =
         isDark ? ProjectTheme.textColorDark : ProjectTheme.textColorLight;
@@ -399,9 +529,12 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet> {
         ? ProjectTheme.secondaryTextDark
         : ProjectTheme.secondaryTextLight;
 
-    return SizedBox(
-      height: sheetHeight,
+    final sheet = AnimatedSize(
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeInOut,
+      alignment: Alignment.topCenter,
       child: Column(
+        mainAxisSize: pickingDoc ? MainAxisSize.min : MainAxisSize.max,
         children: [
           const SizedBox(height: 8),
           Container(
@@ -433,12 +566,17 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet> {
                 ),
                 Expanded(
                   child: Text(
-                    'document_scanner'.tr(),
+                    pickingDoc
+                        ? 'scan_choose_document'.tr()
+                        : 'document_scanner'.tr(),
                     textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: context.textTheme.bodyLarge?.copyWith(
-                      fontSize: 16,
+                      fontSize: pickingDoc ? 15 : 16,
                       fontWeight: FontWeight.w700,
                       color: titleColor,
+                      height: 1.25,
                     ),
                   ),
                 ),
@@ -446,19 +584,9 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet> {
               ],
             ),
           ),
-          if (_docType == null) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              child: Text(
-                'scan_choose_document'.tr(),
-                textAlign: TextAlign.center,
-                style: context.textTheme.headlineSmall?.copyWith(
-                  fontSize: 14,
-                  color: secondaryColor,
-                ),
-              ),
-            ),
-            Expanded(child: _buildDocTypePicker(context, isDark)),
+          if (pickingDoc) ...[
+            _buildDocTypePicker(context, isDark),
+            SizedBox(height: MediaQuery.paddingOf(context).bottom + 8),
           ] else ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -473,41 +601,122 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet> {
             ),
             Expanded(
               child: ColoredBox(
-                color: isDark ? const Color(0xFF000000) : const Color(0xFF1A1A1A),
+                color:
+                    isDark ? const Color(0xFF000000) : const Color(0xFF1A1A1A),
                 child: _buildBody(context),
               ),
             ),
             SafeArea(
               top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-                child: _scanError != null
-                    ? _buildScanErrorBanner(context)
-                    : Row(
-                        children: [
-                          Icon(
-                            Icons.crop_free_rounded,
-                            size: 18,
-                            color: ProjectTheme.brandColor,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _hintKey.tr(),
-                              style: context.textTheme.bodyMedium?.copyWith(
-                                fontSize: 13,
-                                color: secondaryColor,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF141414)
+                      : const Color(0xFF1A1A1A),
+                  border: Border(
+                    top: BorderSide(
+                      color:
+                          Colors.white.withValues(alpha: isDark ? 0.08 : 0.06),
+                    ),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  child: _scanError != null
+                      ? _buildScanErrorBanner(context)
+                      : Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  Icons.crop_free_rounded,
+                                  size: 18,
+                                  color: Colors.white.withValues(alpha: 0.72),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _hintKey.tr(),
+                                    style:
+                                        context.textTheme.bodyMedium?.copyWith(
+                                      fontSize: 13,
+                                      height: 1.35,
+                                      color:
+                                          Colors.white.withValues(alpha: 0.72),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton.icon(
+                                onPressed: (_isCapturing ||
+                                        _isParsed ||
+                                        _cameraController == null)
+                                    ? null
+                                    : _captureAndProcess,
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: ProjectTheme.brandColor,
+                                  foregroundColor: Colors.white,
+                                  disabledBackgroundColor: ProjectTheme
+                                      .brandColor
+                                      .withValues(alpha: 0.35),
+                                  disabledForegroundColor:
+                                      Colors.white.withValues(alpha: 0.5),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  elevation: 0,
+                                ),
+                                icon: _isCapturing
+                                    ? SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white.withValues(
+                                            alpha: 0.9,
+                                          ),
+                                        ),
+                                      )
+                                    : Icon(
+                                        Icons.photo_camera_rounded,
+                                        size: 20,
+                                        color: Colors.white.withValues(
+                                          alpha: 0.95,
+                                        ),
+                                      ),
+                                label: Text(
+                                  'scan_capture'.tr(),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 15,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ],
-                      ),
+                          ],
+                        ),
+                ),
               ),
             ),
           ],
         ],
       ),
     );
+
+    if (pickingDoc) {
+      return sheet;
+    }
+    return SizedBox(height: scannerSheetHeight, child: sheet);
   }
 
   Widget _buildScanErrorBanner(BuildContext context) {
@@ -515,44 +724,60 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isDark
-            ? const Color(0xFF3A2020)
-            : const Color(0xFFFFF0F0),
+        color: isDark ? const Color(0xFF3A2020) : const Color(0xFFFFF0F0),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: ProjectTheme.error.withValues(alpha: 0.4),
         ),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Icon(Icons.error_outline_rounded,
-              size: 20, color: ProjectTheme.error),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.error_outline_rounded,
+                  size: 20, color: ProjectTheme.error),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
                   _scanError!,
                   style: context.textTheme.bodyMedium?.copyWith(
                     fontSize: 13,
                     color: isDark ? Colors.white : Colors.black87,
                   ),
                 ),
-                const SizedBox(height: 10),
-                TextButton(
-                  onPressed: _retryScan,
-                  style: TextButton.styleFrom(
-                    foregroundColor: ProjectTheme.brandColor,
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: Text('scan_retry'.tr()),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              TextButton(
+                onPressed: _retryScan,
+                style: TextButton.styleFrom(
+                  foregroundColor: ProjectTheme.brandColor,
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-              ],
-            ),
+                child: Text('scan_retry'.tr()),
+              ),
+              const SizedBox(width: 16),
+              TextButton.icon(
+                onPressed: (_isCapturing || _cameraController == null)
+                    ? null
+                    : _captureAndProcess,
+                style: TextButton.styleFrom(
+                  foregroundColor: ProjectTheme.brandColor,
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                icon: const Icon(Icons.document_scanner_outlined, size: 18),
+                label: Text('scan_capture'.tr()),
+              ),
+            ],
           ),
         ],
       ),
@@ -561,27 +786,24 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet> {
 
   Widget _buildDocTypePicker(BuildContext context, bool isDark) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: _DocTypeCard(
-              icon: Icons.menu_book_outlined,
-              label: 'scan_passport_option'.tr(),
-              subtitle: 'scan_passport_instruction'.tr(),
-              isDark: isDark,
-              onTap: () => _selectDocType(_ScanDocType.passport),
-            ),
+          _DocTypeScanTile(
+            label: 'scan_passport_option'.tr(),
+            hint: 'scan_passport_picker_hint'.tr(),
+            isDark: isDark,
+            docShape: _DocShape.passport,
+            onTap: () => _selectDocType(_ScanDocType.passport),
           ),
-          const SizedBox(height: 14),
-          Expanded(
-            child: _DocTypeCard(
-              icon: Icons.badge_outlined,
-              label: 'scan_id_card_option'.tr(),
-              subtitle: 'scan_id_instruction'.tr(),
-              isDark: isDark,
-              onTap: () => _selectDocType(_ScanDocType.idCard),
-            ),
+          const SizedBox(height: 10),
+          _DocTypeScanTile(
+            label: 'scan_id_card_option'.tr(),
+            hint: 'scan_id_picker_hint'.tr(),
+            isDark: isDark,
+            docShape: _DocShape.idCard,
+            onTap: () => _selectDocType(_ScanDocType.idCard),
           ),
         ],
       ),
@@ -689,10 +911,14 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet> {
             ),
           ),
         ),
-        if (_isParsed)
-          const ColoredBox(
-            color: Color(0x66000000),
-            child: Center(child: CircularProgressIndicator()),
+        if (_isParsed || _isCapturing)
+          ColoredBox(
+            color: const Color(0x66000000),
+            child: Center(
+              child: CircularProgressIndicator(
+                color: ProjectTheme.brandColor,
+              ),
+            ),
           ),
       ],
     );
@@ -737,18 +963,20 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet> {
   }
 }
 
-class _DocTypeCard extends StatelessWidget {
-  final IconData icon;
+enum _DocShape { passport, idCard }
+
+class _DocTypeScanTile extends StatelessWidget {
   final String label;
-  final String subtitle;
+  final String hint;
   final bool isDark;
+  final _DocShape docShape;
   final VoidCallback onTap;
 
-  const _DocTypeCard({
-    required this.icon,
+  const _DocTypeScanTile({
     required this.label,
-    required this.subtitle,
+    required this.hint,
     required this.isDark,
+    required this.docShape,
     required this.onTap,
   });
 
@@ -761,48 +989,102 @@ class _DocTypeCard extends StatelessWidget {
         : ProjectTheme.secondaryTextLight;
     final borderColor =
         isDark ? ProjectTheme.borderDark : ProjectTheme.borderLight;
-    final cardColor = isDark
-        ? ProjectTheme.cardColorDark
-        : ProjectTheme.brandColor.withValues(alpha: 0.06);
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         child: Ink(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(width: 1.5, color: borderColor),
-            color: cardColor,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: borderColor),
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
               children: [
-                Icon(icon, size: 40, color: ProjectTheme.brandColor),
-                const SizedBox(height: 16),
-                Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: context.textTheme.bodyLarge?.copyWith(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: titleColor,
+                _DocShapeIcon(shape: docShape, isDark: isDark),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        style: context.textTheme.bodyLarge?.copyWith(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: titleColor,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        hint,
+                        style: context.textTheme.bodySmall?.copyWith(
+                          fontSize: 12.5,
+                          color: subtitleColor,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  subtitle,
-                  textAlign: TextAlign.center,
-                  style: context.textTheme.headlineSmall?.copyWith(
-                    fontSize: 13,
-                    color: subtitleColor,
-                    height: 1.35,
-                  ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 22,
+                  color: subtitleColor,
                 ),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DocShapeIcon extends StatelessWidget {
+  final _DocShape shape;
+  final bool isDark;
+
+  const _DocShapeIcon({required this.shape, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    final isPassport = shape == _DocShape.passport;
+    final w = isPassport ? 28.0 : 36.0;
+    final h = isPassport ? 36.0 : 24.0;
+    final borderColor =
+        isDark ? ProjectTheme.borderDark : ProjectTheme.borderLight;
+
+    return Container(
+      width: 44,
+      height: 44,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: ProjectTheme.brandColor.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Container(
+        width: w,
+        height: h,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(isPassport ? 4 : 3),
+          border: Border.all(color: borderColor, width: 1.2),
+          color: isDark
+              ? ProjectTheme.cardColorDark
+              : Colors.white.withValues(alpha: 0.9),
+        ),
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: Container(
+            width: w * 0.85,
+            height: h * 0.22,
+            margin: const EdgeInsets.only(bottom: 3),
+            decoration: BoxDecoration(
+              color: ProjectTheme.brandColor.withValues(alpha: 0.35),
+              borderRadius: BorderRadius.circular(1),
             ),
           ),
         ),
