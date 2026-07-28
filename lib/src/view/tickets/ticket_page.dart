@@ -525,8 +525,15 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
                                           )
                                         ],
                                       ),
-                                    TicketErrorState() => Center(
-                                        child: Text(state.errorMsg),
+                                    TicketErrorState() => _TicketErrorView(
+                                        message: state.errorMsg,
+                                        onRetry: () {
+                                          final cubit =
+                                              BlocProvider.of<TicketCubit>(
+                                                  context);
+                                          cubit.add(GetRecommendationsEvent(
+                                              cubit.filterReqBody));
+                                        },
                                       ),
                                     _ => const SizedBox(),
                                   },
