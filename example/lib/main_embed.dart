@@ -29,11 +29,20 @@ Future<void> main() async {
       // MUHIM — terminal `b` bilan sinash uchun themeMode YOZMASLIK kerak!
       // themeMode: ThemeMode.dark  ← bu qator bo'lsa `b` ishlamaydi.
       // Production (Unired): themeMode: ThemeMode.dark yoki .light
+      // brandColor berilmasa default #0057BE qoladi.
+      brandColor: Colors.pink,
       bottomBarStyle: MySafarBottomBarStyle(
         // backgroundColorLight: Colors.amber,
         // borderRadius: 0,
 
         // backgroundColorDark: Colors.blue,
+      ),
+      homeHeaderStyle: MySafarHomeHeaderStyle(
+        // logo .png va .svg formatni qabul qiladi 
+        // logo uchun .svg berilsa logo xira bolib qolmaydi 
+        logoAssetPath: 'packages/mysafar_sdk/assets/img/splash/logo.svg',
+        title: 'UNIRED',
+        description: 'ishonchli sayohat qiling!',
       ),
     ),
   );
