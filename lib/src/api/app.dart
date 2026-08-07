@@ -80,6 +80,8 @@ class _MySafarEmbedState extends State<MySafarEmbed> {
   @override
   void initState() {
     super.initState();
+    // Embed ochilganda faqat portrait — host landscape bo'lsa ham.
+    MySafarSdk.lockPortrait();
     // Home ekranidagi "orqaga" tugmasi shu orqali host route'ini yopadi.
     MySafarSdk.attachEmbedExit(() {
       if (mounted) Navigator.of(context).pop();
@@ -103,6 +105,8 @@ class _MySafarEmbedState extends State<MySafarEmbed> {
       FlutterError.onError = _prevOnError;
     }
     MySafarSdk.detachEmbedExit();
+    // Host app o'z orientation siyosatiga qaytsin.
+    MySafarSdk.restoreOrientations();
     super.dispose();
   }
 

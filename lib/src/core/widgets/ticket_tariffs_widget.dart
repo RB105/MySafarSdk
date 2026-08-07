@@ -46,8 +46,13 @@ class _TariffPickerWidgetState extends State<TariffPickerWidget> {
   @override
   Widget build(BuildContext context) {
     final currencyProvider = Provider.of<CurrencyProvider>(context);
+    // Theme.of / isDarkMode — themeProvider.isDark bilan sinxron chiqmasin
+    // (light'da fon buzilib qolardi).
+    final isDark = context.isDarkMode;
     return Scaffold(
-      backgroundColor: context.backgroundColor,
+      backgroundColor: isDark
+          ? ProjectTheme.backgroundDark
+          : ProjectTheme.backgroundLight,
       body: Column(
         children: [
           _header(context),
@@ -75,7 +80,7 @@ class _TariffPickerWidgetState extends State<TariffPickerWidget> {
 
   // ── Header (grabber + title + close) ─────────────────────────────────
   Widget _header(BuildContext context) {
-    final isDark = context.themeProvider.isDark;
+    final isDark = context.isDarkMode;
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 10, 12, 8),
       child: Column(
@@ -132,7 +137,8 @@ class _TariffPickerWidgetState extends State<TariffPickerWidget> {
     if (tariffs.isEmpty) return const SizedBox.shrink();
 
     final brand = ProjectTheme.brandColor;
-    final secondary = context.themeProvider.isDark
+    final isDark = context.isDarkMode;
+    final secondary = isDark
         ? ProjectTheme.secondaryTextDark
         : ProjectTheme.secondaryTextLight;
     final name = _tariffName(tariffs[selected], selected);
@@ -141,7 +147,9 @@ class _TariffPickerWidgetState extends State<TariffPickerWidget> {
 
     return Container(
       decoration: BoxDecoration(
-        color: context.color.primaryContainer,
+        color: isDark
+            ? ProjectTheme.cardColorDark
+            : ProjectTheme.cardColorLight,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
         boxShadow: context.shadowUp,
       ),
@@ -264,8 +272,12 @@ class _TariffCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brand = ProjectTheme.brandColor;
-    final isDark = context.themeProvider.isDark;
+    final isDark = context.isDarkMode;
     final flight = tariff.flight;
+    final cardColor =
+        isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight;
+    final borderColor =
+        isDark ? ProjectTheme.borderDark : ProjectTheme.borderLight;
 
     return Material(
       color: Colors.transparent,
@@ -279,11 +291,11 @@ class _TariffCard extends StatelessWidget {
           duration: const Duration(milliseconds: 280),
           curve: Curves.easeOut,
           decoration: BoxDecoration(
-            color: context.color.primaryContainer,
+            color: cardColor,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               width: isSelected ? 2 : 1,
-              color: isSelected ? brand : context.color.outline.withAlpha(120),
+              color: isSelected ? brand : borderColor.withAlpha(180),
             ),
             boxShadow: isSelected
                 ? [
@@ -452,7 +464,7 @@ class _FeatureRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.themeProvider.isDark;
+    final isDark = context.isDarkMode;
     final brand =
         isDark ? ProjectTheme.accentLight : ProjectTheme.brandColor;
     return Padding(

@@ -107,7 +107,7 @@ extension SizeContext on BuildContext {
   Color get disabledBgColor => themeProvider.isDark
       ? ProjectTheme.disabledBackgroundDark
       : ProjectTheme.disabledBackgroundLight;
-  
+
   Color get backgroundColor => themeProvider.isDark
       ? ProjectTheme.backgroundDark
       : ProjectTheme.backgroundLight;

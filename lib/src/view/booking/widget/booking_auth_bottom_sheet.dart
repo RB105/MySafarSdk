@@ -9,12 +9,13 @@ import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:mysafar_sdk/src/core/enum/status.dart';
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
+import 'package:mysafar_sdk/src/core/tools/sdk_sheets.dart';
 import 'package:mysafar_sdk/src/view/auth/logic/bloc/auth_cubit.dart';
 import 'package:mysafar_sdk/src/view/auth/widget/auth_custom_input.dart';
 import 'package:pinput/pinput.dart';
 
 Future<bool?> showBookingAuthBottomSheet(BuildContext context) async {
-  return await showModalBottomSheet<bool>(
+  return await showSdkModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,

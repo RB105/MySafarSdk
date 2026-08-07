@@ -1,7 +1,6 @@
 // ignore_for_file: void_checks
 import 'dart:io';
 
-import 'package:flutter/cupertino.dart';
 import 'package:mysafar_sdk/src/core/tools/project_assets.dart';
 import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart';
 import 'package:mysafar_sdk/src/core/tools/project_utils.dart';
@@ -12,6 +11,7 @@ import 'package:mysafar_sdk/src/view/booking/support/country_name_list.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/custom_input_field_widget.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/gender_button.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/passenger_controller.dart';
+import 'package:mysafar_sdk/src/view/booking/widget/passenger_date_picker.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/paymentbottomsheet.dart';
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
 
@@ -635,82 +635,20 @@ class _UpdatedPassengerPageState extends State<UpdatedPassengerPage> {
     DateTime? initialDate,
     required bool isFutureOnly,
     required Function(DateTime) onDateSelected,
+    String? title,
   }) {
-    DateTime tempPickedDate = selectedDate ?? initialDate ?? DateTime.now();
-    final today = DateTime.now();
-    final todayOnlyDate = DateTime(today.year, today.month, today.day);
-    showCupertinoModalPopup(
+    final ctrl = controller ?? TextEditingController();
+    if (selectedDate != null && ctrl.text.isEmpty) {
+      ctrl.text = DateFormat('dd.MM.yyyy').format(selectedDate);
+    }
+    PassengerDatePicker.show(
       context: context,
-      builder: (context) {
-        return SafeArea(
-          child: Container(
-            height: 350,
-            decoration: BoxDecoration(
-              color: context.color.primaryContainer,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(16),
-                topRight: Radius.circular(16),
-              ),
-            ),
-            child: Column(
-              children: [
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.cancel_outlined),
-                  ),
-                ),
-                Expanded(
-                  child: CupertinoTheme(
-                    data: CupertinoTheme.of(context).copyWith(
-                      textTheme: CupertinoTextThemeData(
-                        dateTimePickerTextStyle: context.textTheme.bodyMedium
-                            ?.copyWith(fontSize: 20),
-                      ),
-                    ),
-                    child: CupertinoDatePicker(
-                      initialDateTime: isFutureOnly
-                          ? todayOnlyDate
-                          : (initialDate ?? DateTime(1990, 1, 1)),
-                      mode: CupertinoDatePickerMode.date,
-                      minimumDate: isFutureOnly ? todayOnlyDate : null,
-                      maximumDate: isFutureOnly ? null : todayOnlyDate,
-                      onDateTimeChanged: (DateTime newDate) {
-                        tempPickedDate = newDate;
-                      },
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      style: ProjectTheme.blueButtonStyle,
-                      onPressed: () {
-                        controller?.text =
-                            DateFormat('dd.MM.yyyy').format(tempPickedDate);
-                        onDateSelected(tempPickedDate);
-                        Navigator.pop(context);
-                      },
-                      child: Text(
-                        "apply".tr(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+      controller: ctrl,
+      isFutureOnly: isFutureOnly,
+      initialDate: initialDate,
+      title: title ??
+          (isFutureOnly ? 'passport_validity'.tr() : 'birth_date'.tr()),
+      onDateSelected: onDateSelected,
     );
   }
 }

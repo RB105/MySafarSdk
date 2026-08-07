@@ -10,6 +10,7 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
+import 'package:mysafar_sdk/src/core/tools/sdk_sheets.dart';
 import 'package:mysafar_sdk/src/model/remote/profile/users_model.dart';
 import 'package:mysafar_sdk/src/view/booking/support/mrz_text_extractor.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -19,26 +20,15 @@ enum _ScanDocType { passport, idCard }
 /// Pasport/ID MRZ skanerini pastki sheet sifatida ochadi.
 /// Muvaffaqiyatda [UsersModel] qaytaradi; yopilsa `null`.
 Future<UsersModel?> showMrzScannerBottomSheet(BuildContext context) {
-  // Embed'da root navigator host'niki — SDK theme yo'qoladi.
-  // Chaqiruvchi context'dan temani oldindan olib sheet ichiga uzatamiz.
-  final isDark = context.isDarkMode;
-  final sheetTheme = isDark ? ProjectTheme.dark : ProjectTheme.light;
-  final sheetColor =
-      isDark ? ProjectTheme.backgroundDark : ProjectTheme.cardColorLight;
-
-  return showModalBottomSheet<UsersModel>(
+  // Tema jonli: showSdkModalBottomSheet ThemeNotifier tinglaydi.
+  return showSdkModalBottomSheet<UsersModel>(
     context: context,
     isScrollControlled: true,
     useSafeArea: false,
-    useRootNavigator: false,
-    backgroundColor: sheetColor,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
-    builder: (_) => Theme(
-      data: sheetTheme,
-      child: const _MrzScannerSheet(),
-    ),
+    builder: (_) => const _MrzScannerSheet(),
   );
 }
 
@@ -332,8 +322,9 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet>
               ? 'scan_wrong_doc_passport'.tr()
               : 'scan_wrong_doc_id'.tr();
         });
-        if (kDebugMode)
+        if (kDebugMode) {
           print('[MRZ] mismatch: expected=$expected found=$mismatch');
+        }
         return;
       }
       if (shouldDebug) {

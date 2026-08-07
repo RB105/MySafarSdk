@@ -16,9 +16,12 @@ class _FlightDirectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor =
+        isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight;
     return Container(
       decoration: BoxDecoration(
-        color: context.color.primaryContainer,
+        color: cardColor,
         borderRadius: BorderRadius.circular(24),
         boxShadow: context.shadowDown,
       ),
