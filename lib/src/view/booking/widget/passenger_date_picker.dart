@@ -1,10 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
-import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
 import 'package:mysafar_sdk/src/core/tools/formatters.dart'
     show ElementFormatter;
+import 'package:mysafar_sdk/src/core/tools/sdk_sheets.dart';
 
 /// Yo'lovchi uchun sana tanlash bottom sheet (MySafar booking uslubida).
 class PassengerDatePicker {
@@ -26,132 +26,27 @@ class PassengerDatePicker {
     );
     DateTime tempPickedDate = initial;
 
-    // showCupertinoModalPopup MaterialApp temasini olmaydi — ranglarni
-    // chaqiruvchi context'dan oldindan olamiz.
-    final isDark = context.isDarkMode;
-    final sheetColor =
-        isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight;
-    final materialTheme = isDark ? ProjectTheme.dark : ProjectTheme.light;
-
-    showCupertinoModalPopup(
+    // Material sheet — Cupertino popup platform dark themesiga yopishib
+    // qolmasin; tema sahifa bilan bir xil.
+    showSdkModalBottomSheet(
       context: context,
-      builder: (sheetContext) {
-        final titleColor = isDark
-            ? ProjectTheme.textColorDark
-            : ProjectTheme.textColorLight;
-
-        return Theme(
-          data: materialTheme,
-          child: CupertinoTheme(
-            data: _cupertinoTheme(isDark: isDark, sheetColor: sheetColor),
-            child: SafeArea(
-              top: false,
-              child: Material(
-                color: sheetColor,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(24),
-                  topRight: Radius.circular(24),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const SizedBox(height: 10),
-                    Container(
-                      width: 36,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: (isDark
-                                ? ProjectTheme.borderDark
-                                : ProjectTheme.borderLight)
-                            .withValues(alpha: 0.8),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 10, 8, 0),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              title ?? 'birth_date'.tr(),
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                fontFamily: 'packages/mysafar_sdk/Gilroy',
-                                color: titleColor,
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: () => Navigator.pop(sheetContext),
-                            icon: Icon(
-                              Icons.close_rounded,
-                              color: isDark
-                                  ? ProjectTheme.secondaryTextDark
-                                  : ProjectTheme.secondaryTextLight,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    ColoredBox(
-                      color: sheetColor,
-                      child: SizedBox(
-                        height: 216,
-                        width: double.infinity,
-                        child: _SdkDateWheelPicker(
-                          isDark: isDark,
-                          sheetColor: sheetColor,
-                          initial: initial,
-                          minimumDate: isFutureOnly ? todayOnlyDate : null,
-                          maximumDate: isFutureOnly ? null : todayOnlyDate,
-                          onChanged: (date) => tempPickedDate = date,
-                        ),
-                      ),
-                    ),
-                    ColoredBox(
-                      color: sheetColor,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                        child: SizedBox(
-                          width: double.infinity,
-                          height: 56,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              elevation: 0,
-                              backgroundColor: ProjectTheme.brandColor,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                            ),
-                            onPressed: () {
-                              controller.text = DateFormat('dd.MM.yyyy')
-                                  .format(tempPickedDate);
-                              onDateSelected(tempPickedDate);
-                              Navigator.pop(sheetContext);
-                            },
-                            child: Text(
-                              'select'.tr(),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                fontFamily: 'packages/mysafar_sdk/Gilroy',
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
+      backgroundColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => _PassengerDateSheet(
+        title: title,
+        initial: initial,
+        isFutureOnly: isFutureOnly,
+        todayOnlyDate: todayOnlyDate,
+        onChanged: (date) => tempPickedDate = date,
+        onApply: () {
+          controller.text = DateFormat('dd.MM.yyyy').format(tempPickedDate);
+          onDateSelected(tempPickedDate);
+          Navigator.pop(sheetContext);
+        },
+        onClose: () => Navigator.pop(sheetContext),
+      ),
     );
   }
 
@@ -204,6 +99,138 @@ class PassengerDatePicker {
     }
 
     return initial;
+  }
+}
+
+/// Sheet kontenti — Stateful, tema o'zgaganda State saqlanadi.
+class _PassengerDateSheet extends StatelessWidget {
+  final String? title;
+  final DateTime initial;
+  final bool isFutureOnly;
+  final DateTime todayOnlyDate;
+  final ValueChanged<DateTime> onChanged;
+  final VoidCallback onApply;
+  final VoidCallback onClose;
+
+  const _PassengerDateSheet({
+    required this.title,
+    required this.initial,
+    required this.isFutureOnly,
+    required this.todayOnlyDate,
+    required this.onChanged,
+    required this.onApply,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final sheetColor =
+        isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight;
+    final titleColor =
+        isDark ? ProjectTheme.textColorDark : ProjectTheme.textColorLight;
+
+    return Material(
+      color: sheetColor,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      clipBehavior: Clip.antiAlias,
+      child: SafeArea(
+        top: false,
+        child: CupertinoTheme(
+          data: PassengerDatePicker._cupertinoTheme(
+              isDark: isDark, sheetColor: sheetColor),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 10),
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: (isDark
+                          ? ProjectTheme.borderDark
+                          : ProjectTheme.borderLight)
+                      .withValues(alpha: 0.8),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 8, 0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title ?? 'birth_date'.tr(),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          fontFamily: 'packages/mysafar_sdk/Gilroy',
+                          color: titleColor,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: onClose,
+                      icon: Icon(
+                        Icons.close_rounded,
+                        color: isDark
+                            ? ProjectTheme.secondaryTextDark
+                            : ProjectTheme.secondaryTextLight,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ColoredBox(
+                color: sheetColor,
+                child: SizedBox(
+                  height: 216,
+                  width: double.infinity,
+                  child: _SdkDateWheelPicker(
+                    isDark: isDark,
+                    sheetColor: sheetColor,
+                    initial: initial,
+                    minimumDate: isFutureOnly ? todayOnlyDate : null,
+                    maximumDate: isFutureOnly ? null : todayOnlyDate,
+                    onChanged: onChanged,
+                  ),
+                ),
+              ),
+              ColoredBox(
+                color: sheetColor,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        elevation: 0,
+                        backgroundColor: ProjectTheme.brandColor,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      onPressed: onApply,
+                      child: Text(
+                        'select'.tr(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: 'packages/mysafar_sdk/Gilroy',
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

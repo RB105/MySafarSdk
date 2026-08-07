@@ -25,7 +25,7 @@ class SupportWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.themeProvider.isDark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final brand = ProjectTheme.brandColor;
 
     return BookingCard(
@@ -61,6 +61,9 @@ class SupportWidget extends StatelessWidget {
                     style: context.textTheme.bodyLarge?.copyWith(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
+                      color: isDark
+                          ? ProjectTheme.textColorDark
+                          : ProjectTheme.textColorLight,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -96,8 +99,11 @@ class BookingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Material(
-      color: context.color.primaryContainer,
+      color: isDark
+          ? ProjectTheme.cardColorDark
+          : ProjectTheme.cardColorLight,
       borderRadius: BorderRadius.circular(20),
       clipBehavior: Clip.antiAlias,
       child: Padding(padding: padding, child: child),

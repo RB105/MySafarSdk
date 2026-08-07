@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:flutter/cupertino.dart';
+import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 
 class ProjectTheme {
   /// Android va iOS'da (va boshqa platformalarda) bir xil — chetdan surib
@@ -184,7 +185,7 @@ class ProjectTheme {
   static final secondaryTextDarkStyle = TextStyle(
       color: secondaryTextDark, fontSize: 16, fontWeight: FontWeight.w400);
 
-  static final focusGradient = [accentLight, brandColor];
+  static List<Color> get focusGradient => [accentLight, brandColor];
 
   static final kStatusBarLight = SystemUiOverlayStyle(
       statusBarBrightness: Brightness.light,
@@ -225,10 +226,18 @@ class ProjectTheme {
       primaryContainer: cardColorDark,
       secondaryContainer: lightDropDark,
       outline: borderDark);
-  // Brand
-  static final brandColor = const Color(0xFF0057BE);
-  static final brandDisableLight = const Color(0xFF0057BE).withOpacity(0.4);
-  static final brandDisableDark = const Color(0xFF0057BE).withOpacity(0.4);
+  // Brand — host `MySafarConfig.brandColor` bersa o'sha, aks holda default.
+  static const Color _defaultBrandColor = Color(0xFF0057BE);
+
+  static Color get brandColor {
+    if (MySafarSdk.isInitialized) {
+      return MySafarSdk.config.brandColor ?? _defaultBrandColor;
+    }
+    return _defaultBrandColor;
+  }
+
+  static Color get brandDisableLight => brandColor.withOpacity(0.4);
+  static Color get brandDisableDark => brandColor.withOpacity(0.4);
 
   // Accent
   static final accentLight = const Color(0xFF00A8FF);
@@ -325,7 +334,7 @@ class ProjectTheme {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       foregroundColor: white,
       textStyle: TextStyle(fontWeight: FontWeight.w500, fontSize: 16));
-  static final blueButtonStyle = ElevatedButton.styleFrom(
+  static ButtonStyle get blueButtonStyle => ElevatedButton.styleFrom(
       disabledBackgroundColor: brandColor.withAlpha(60),
       backgroundColor: brandColor,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -352,11 +361,16 @@ class ProjectTheme {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       foregroundColor: black,
       textStyle: TextStyle(fontWeight: FontWeight.w500, fontSize: 16));
-  static final blueBorderButtonStyle = ElevatedButton.styleFrom(
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-          side: BorderSide(color: brandColor, width: 1)),
-      foregroundColor: brandColor,
-      textStyle: TextStyle(fontWeight: FontWeight.w500, fontSize: 16));
+  static ButtonStyle blueBorderButtonStyleFor(bool isDark) =>
+      ElevatedButton.styleFrom(
+          backgroundColor:
+              isDark ? cardColorDark : cardColorLight,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+              side: BorderSide(color: brandColor, width: 1)),
+          foregroundColor: brandColor,
+          textStyle: TextStyle(fontWeight: FontWeight.w500, fontSize: 16));
+
+  static ButtonStyle get blueBorderButtonStyle =>
+      blueBorderButtonStyleFor(false);
 }

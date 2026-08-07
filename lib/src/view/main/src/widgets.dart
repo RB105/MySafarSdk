@@ -552,14 +552,16 @@ class HomeSupportBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.themeProvider.isDark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Konteyner ekran chetlariga yopishadi (yon padding/yumaloq burchak yo'q).
     return Container(
       margin: const EdgeInsets.only(top: 20),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: context.color.primaryContainer,
+        color: isDark
+            ? ProjectTheme.cardColorDark
+            : ProjectTheme.cardColorLight,
         borderRadius: BorderRadius.circular(32),
         boxShadow: context.shadowDown,
       ),
@@ -611,7 +613,10 @@ class HomeSupportBanner extends StatelessWidget {
                 ),
                   const SizedBox(width: 6),
                   Icon(Icons.chevron_right_rounded,
-                      size: 24, color: ProjectTheme.secondaryTextLight),
+                      size: 24,
+                      color: isDark
+                          ? ProjectTheme.secondaryTextDark
+                          : ProjectTheme.secondaryTextLight),
                 ],
               ),
             ),

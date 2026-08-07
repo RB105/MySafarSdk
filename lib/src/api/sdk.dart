@@ -2,6 +2,8 @@ import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:appmetrica_plugin/appmetrica_plugin.dart';
 import 'package:flutter/foundation.dart'
     show VoidCallback, debugPrint, kDebugMode;
+import 'package:flutter/services.dart'
+    show DeviceOrientation, SystemChrome;
 import 'package:flutter/widgets.dart' show WidgetsFlutterBinding;
 import 'package:get_storage/get_storage.dart' show GetStorage;
 import 'package:mysafar_sdk/src/core/config/response_config.dart'
@@ -65,6 +67,18 @@ class MySafarSdk {
   ///
   /// Firebase'ga bog'liq funksiyalar (Firestore remote config, Google auth)
   /// host app `Firebase.initializeApp`ni o'zi bajargan bo'lsagina ishlaydi.
+  /// SDK ekranlari faqat vertical (portrait) da ishlaydi.
+  static Future<void> lockPortrait() => SystemChrome.setPreferredOrientations(
+        const [
+          DeviceOrientation.portraitUp,
+          DeviceOrientation.portraitDown,
+        ],
+      );
+
+  /// Embed yopilganda host app orientation'larini qayta ochadi.
+  static Future<void> restoreOrientations() =>
+      SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+
   static Future<void> init({
     required MySafarConfig config,
     MySafarTokenStore? tokenStore,
@@ -72,6 +86,7 @@ class MySafarSdk {
     MySafarCallbacks callbacks = const MySafarCallbacks(),
   }) async {
     WidgetsFlutterBinding.ensureInitialized();
+    await lockPortrait();
 
     _config = config;
     if (tokenStore != null) _tokens = tokenStore;

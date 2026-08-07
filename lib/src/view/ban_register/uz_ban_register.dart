@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
+import 'package:mysafar_sdk/src/core/tools/sdk_sheets.dart';
 import 'package:mysafar_sdk/src/cubit/ban_chek/uz_ban_check_cubit.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart' show Assets;
 import 'package:mysafar_sdk/src/view/ban_register/widget/container_column_widget.dart';
@@ -212,7 +213,7 @@ class UpperCaseTextFormatter extends TextInputFormatter {
 }
 
 void showCustomBottomSheet(BuildContext context) {
-  showModalBottomSheet(
+  showSdkModalBottomSheet(
     context: context,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,

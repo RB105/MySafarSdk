@@ -22,7 +22,9 @@ class MySafarConfig {
       this.startLocale,
       this.saveLocale = true,
       this.themeMode,
-      this.bottomBarStyle});
+      this.brandColor,
+      this.bottomBarStyle,
+      this.homeHeaderStyle});
 
   /// Asosiy backend (masalan `https://api.mysafar.ru`).
   final String baseUrl;
@@ -81,9 +83,17 @@ class MySafarConfig {
   /// Sozlamalardan o'zi tanlagan bo'lsa, o'sha tanlov saqlanadi.
   final ThemeMode? themeMode;
 
+  /// Asosiy brend rangi (tugmalar, switch, focus va h.k.).
+  /// `null` bo'lsa SDK default (`#0057BE`) ishlatiladi.
+  final Color? brandColor;
+
   /// Pastki navbar paneli (Container) ko'rinishi. `null` bo'lsa
   /// [BottomNavBarPage] ichidagi default dizayn ishlatiladi.
   final MySafarBottomBarStyle? bottomBarStyle;
+
+  /// Bosh sahifadagi slogan qismi ko'rinishi. `null` bo'lsa hozirgi
+  /// lokalizatsiya matni (`home_slogan`) ishlatiladi.
+  final MySafarHomeHeaderStyle? homeHeaderStyle;
 }
 
 /// Pastki navbar panelining tashqi ko'rinishi (faqat Container qatlami).
@@ -125,6 +135,35 @@ class MySafarBottomBarStyle {
 
   /// 7 — soyа offset (default: Offset(0, 8)).
   final Offset? shadowOffset;
+}
+
+/// Bosh sahifa slogan qismi uchun host tomonidan beriladigan ixtiyoriy style.
+/// Barcha maydonlar ixtiyoriy:
+/// - [logoAssetPath] berilsa matndan oldin ko'rsatiladi (PNG/JPG yoki SVG);
+/// - [logoBackgroundColor] berilmasa theme card ranglari ishlatiladi;
+/// - [title]/[description] bo'sh bo'lmasa ko'rsatiladi;
+/// - ikkalasi ham bo'lsa orasiga `-` qo'yiladi.
+class MySafarHomeHeaderStyle {
+  const MySafarHomeHeaderStyle({
+    this.logoAssetPath,
+    this.logoBackgroundColor,
+    this.title,
+    this.description,
+  });
+
+  /// Host/SDK asset path'i. PNG/JPG yoki SVG bo'lishi mumkin
+  /// (masalan `assets/unired_logo.png` yoki `packages/mysafar_sdk/assets/img/splash/logo.svg`).
+  final String? logoAssetPath;
+
+  /// Logo konteyner foni. `null` bo'lsa light/dark card ranglari
+  /// (`cardColorLight` / `cardColorDark`) ishlatiladi.
+  final Color? logoBackgroundColor;
+
+  /// Header title qismi (masalan `UNIRED`).
+  final String? title;
+
+  /// Header description qismi (masalan `ishonchli sayohat qiling!`).
+  final String? description;
 }
 
 /// MyID SDK kirish ma'lumotlari (nomi `myid` paketidagi `MyIdConfig` bilan

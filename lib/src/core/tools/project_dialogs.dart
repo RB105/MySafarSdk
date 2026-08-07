@@ -7,6 +7,9 @@ import 'package:flutter/cupertino.dart'
         CupertinoButton,
         CupertinoDatePicker,
         CupertinoDatePickerMode,
+        CupertinoTextThemeData,
+        CupertinoTheme,
+        CupertinoThemeData,
         showCupertinoDialog;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show FontWeight, HapticFeedback;
@@ -72,7 +75,7 @@ class ProjectDialogs {
                 ),
               ));
     } else {
-      return await showModalBottomSheet<PickerDateRange?>(
+      return await showSdkModalBottomSheet<PickerDateRange?>(
         context: context,
         isScrollControlled: true,
         useSafeArea: true,
@@ -99,7 +102,7 @@ class ProjectDialogs {
                 ),
               ));
     }
-    return await showModalBottomSheet<Map<String, dynamic>?>(
+    return await showSdkModalBottomSheet<Map<String, dynamic>?>(
       context: context,
       useSafeArea: true,
       isScrollControlled: true,
@@ -126,7 +129,7 @@ class ProjectDialogs {
               ));
     }
 
-    return await showModalBottomSheet<AirPortsModel?>(
+    return await showSdkModalBottomSheet<AirPortsModel?>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -148,7 +151,7 @@ class ProjectDialogs {
       );
     }
 
-    return await showModalBottomSheet<RecommendationRequestBody?>(
+    return await showSdkModalBottomSheet<RecommendationRequestBody?>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -159,8 +162,7 @@ class ProjectDialogs {
   static Future showLowcostSheet(
       BuildContext context, FlightElement flightElement) async {
     final parentContext = context;
-    showModalBottomSheet(
-      backgroundColor: context.color.primaryContainer,
+    showSdkModalBottomSheet(
       isScrollControlled: true,
       context: context,
       builder: (sheetContext) => SizedBox(
@@ -250,12 +252,12 @@ class ProjectDialogs {
           builder: (dialogContext) {
             _dialogContext = dialogContext;
             return MediaQuery.removePadding(
-                context: context,
+                context: dialogContext,
                 removeTop: true,
                 child: VerifyOtpWidget(phone: phone, otpToken: otpToken));
           });
     }
-    return await showModalBottomSheet(
+    return await showSdkModalBottomSheet(
         context: context,
         isScrollControlled: true,
         useSafeArea: true,
@@ -275,13 +277,13 @@ class ProjectDialogs {
           builder: (dialogContext) {
             _dialogContext = dialogContext;
             return MediaQuery.removePadding(
-                context: context,
+                context: dialogContext,
                 removeTop: true,
                 removeBottom: true,
                 child: AuthPage(onAuthSuccess: onAuthSuccess));
           });
     }
-    return await showModalBottomSheet(
+    return await showSdkModalBottomSheet(
         context: context,
         isScrollControlled: true,
         useSafeArea: true,
@@ -295,26 +297,17 @@ class ProjectDialogs {
       BuildContext context, List<FlightTariffModel> tariffs, String tid) async {
     if (tariffs.isEmpty) return null;
 
-    if (Platform.isIOS) {
-      return await showSdkCupertinoSheet<FlightElement?>(
-          context: context,
-          builder: (context) => MediaQuery.removePadding(
-              context: context,
-              removeTop: true,
-              child: TariffPickerWidget(
-                tariffs: tariffs,
-                id: tid,
-              )));
-    }
-
-    return await showModalBottomSheet<FlightElement?>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        builder: (context) => TariffPickerWidget(
-              tariffs: tariffs,
-              id: tid,
-            ));
+    // Material sheet — jonli Theme.of(parent); CupertinoSheet Theme wrap
+    // qilmasa light'da fon chalkashardi.
+    return await showSdkModalBottomSheet<FlightElement?>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) => TariffPickerWidget(
+        tariffs: tariffs,
+        id: tid,
+      ),
+    );
   }
 
   /// dialog that shows Support Menu
@@ -325,108 +318,139 @@ class ProjectDialogs {
   ///
   /// 2 - via tg
   static Future<void> showSupportMenu(BuildContext context) async {
-    final action = await showModalBottomSheet<int?>(
+    final action = await showSdkModalBottomSheet<int?>(
         context: context,
-        builder: (context) => SafeArea(
-              bottom: Platform.isAndroid,
-              child: SizedBox(
-                child: DecoratedBox(
-                    decoration: BoxDecoration(
-                        color: context.color.primaryContainer,
-                        borderRadius:
-                            BorderRadius.vertical(top: Radius.circular(12))),
-                    child: Padding(
-                      padding: context.k16horizontalPadding
-                          .copyWith(bottom: 12.0, top: 12.0),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            children: [
-                              Text("support_badge_title".tr(),
-                                  style: context.textTheme.bodyMedium),
-                              Expanded(child: SizedBox.shrink()),
-                              InkWell(
-                                  onTap: () => Navigator.of(context).pop(),
-                                  child: Icon(Icons.close))
-                            ],
+        backgroundColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+        ),
+        builder: (context) {
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          final sheetColor = isDark
+              ? ProjectTheme.cardColorDark
+              : ProjectTheme.cardColorLight;
+          final titleColor = isDark
+              ? ProjectTheme.textColorDark
+              : ProjectTheme.textColorLight;
+
+          return SafeArea(
+            bottom: Platform.isAndroid,
+            child: Material(
+              color: sheetColor,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(12)),
+              clipBehavior: Clip.antiAlias,
+              child: Padding(
+                padding: context.k16horizontalPadding
+                    .copyWith(bottom: 12.0, top: 12.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          "support_badge_title".tr(),
+                          style: context.textTheme.bodyMedium?.copyWith(
+                            color: titleColor,
+                            fontWeight: FontWeight.w700,
                           ),
-                          Divider(thickness: 1, color: context.color.outline),
-                          Text("support_subtitle".tr(),
-                              maxLines: 3,
-                              textAlign: TextAlign.start,
-                              style: context.textTheme.bodyMedium),
-                          context.szBoxHeight12,
-                          SizedBox(
-                              height: 48,
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                  style: ProjectTheme.blueButtonStyle,
-                                  onPressed: () {
-                                    HapticFeedback.lightImpact();
-                                    Navigator.of(context).pop(0);
-                                  },
-                                  child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        SizedBox(
-                                          width: 24,
-                                          height: 24,
-                                          child: SvgPicture.asset(
-                                              Assets.iconsPhoneCallIcon),
-                                        ),
-                                        context.szBoxWidth12,
-                                        Text("support_via_phone".tr()),
-                                      ]))),
-                          context.szBoxHeight12,
-                          // SizedBox(
-                          //     height: 48,
-                          //     width: double.infinity,
-                          //     child: ElevatedButton(
-                          //         style: ProjectTheme.blueButtonStyle,
-                          //         onPressed: () => Navigator.of(context).pop(1),
-                          //         child: Row(
-                          //             mainAxisAlignment: MainAxisAlignment.center,
-                          //             children: [
-                          //               SizedBox(
-                          //                 width: 24,
-                          //                 height: 24,
-                          //                 child: SvgPicture.asset(
-                          //                     ProjectAssets.messageIcon),
-                          //               ),
-                          //               context.szBoxWidth12,
-                          //               Text("Chat orqali bog'lanish"),
-                          //             ]))),
-                          // context.szBoxHeight12,
-                          SizedBox(
-                              height: 48,
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                  style: ProjectTheme.blueButtonStyle,
-                                  onPressed: () {
-                                    HapticFeedback.lightImpact();
-                                    Navigator.of(context).pop(2);
-                                  },
-                                  child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        SizedBox(
-                                          width: 24,
-                                          height: 24,
-                                          child: SvgPicture.asset(
-                                              Assets.iconsTelegramIcon),
-                                        ),
-                                        context.szBoxWidth12,
-                                        Text("support_via_tg".tr())
-                                      ]))),
-                          SizedBox(height: 20)
-                        ],
+                        ),
+                        const Expanded(child: SizedBox.shrink()),
+                        InkWell(
+                          onTap: () => Navigator.of(context).pop(),
+                          child: Icon(Icons.close, color: titleColor),
+                        ),
+                      ],
+                    ),
+                    Divider(
+                      thickness: 1,
+                      color: isDark
+                          ? ProjectTheme.borderDark
+                          : ProjectTheme.borderLight,
+                    ),
+                    Text(
+                      "support_subtitle".tr(),
+                      maxLines: 3,
+                      textAlign: TextAlign.start,
+                      style: context.textTheme.bodyMedium?.copyWith(
+                        color: isDark
+                            ? ProjectTheme.secondaryTextDark
+                            : ProjectTheme.secondaryTextLight,
                       ),
-                    )),
+                    ),
+                    context.szBoxHeight12,
+                    SizedBox(
+                      height: 48,
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ProjectTheme.blueButtonStyle,
+                        onPressed: () {
+                          HapticFeedback.lightImpact();
+                          Navigator.of(context).pop(0);
+                        },
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: SvgPicture.asset(
+                                Assets.iconsPhoneCallIcon,
+                                colorFilter: const ColorFilter.mode(
+                                  Colors.white,
+                                  BlendMode.srcIn,
+                                ),
+                              ),
+                            ),
+                            context.szBoxWidth12,
+                            Text(
+                              "support_via_phone".tr(),
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    context.szBoxHeight12,
+                    SizedBox(
+                      height: 48,
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ProjectTheme.blueButtonStyle,
+                        onPressed: () {
+                          HapticFeedback.lightImpact();
+                          Navigator.of(context).pop(2);
+                        },
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: SvgPicture.asset(
+                                Assets.iconsTelegramIcon,
+                                colorFilter: const ColorFilter.mode(
+                                  Colors.white,
+                                  BlendMode.srcIn,
+                                ),
+                              ),
+                            ),
+                            context.szBoxWidth12,
+                            Text(
+                              "support_via_tg".tr(),
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                ),
               ),
-            ));
+            ),
+          );
+        });
     if (action != null) {
       switch (action) {
         case 0:
@@ -582,57 +606,78 @@ class ProjectDialogs {
     DateTime tempDate = initialDate ?? DateTime(2003);
 
     if (Platform.isIOS) {
-      return await showCupertinoDialog<DateTime>(useRootNavigator: false, 
+      final theme = Theme.of(context);
+      final isDark = theme.brightness == Brightness.dark;
+      return await showCupertinoDialog<DateTime>(
+        useRootNavigator: false,
         context: context,
         barrierDismissible: true,
-        builder: (context) {
-          _dialogContext = context;
-          return CupertinoAlertDialog(
-            title: Text(
-              'choice_date'.tr(),
-              style: context.theme.textTheme.bodyLarge,
-            ),
-            content: SizedBox(
-              height: 200,
-              child: CupertinoDatePicker(
-                mode: CupertinoDatePickerMode.date,
-                initialDateTime: tempDate,
-                minimumDate: DateTime(1950),
-                maximumDate: DateTime.now(),
-                onDateTimeChanged: (DateTime newDate) => tempDate = newDate,
-              ),
-            ),
-            actions: [
-              CupertinoButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(
-                  'cancel'.tr(),
-                  style: context.theme.textTheme.bodyMedium,
+        builder: (dialogContext) {
+          _dialogContext = dialogContext;
+          return Theme(
+            data: theme,
+            child: CupertinoTheme(
+              data: CupertinoThemeData(
+                brightness: theme.brightness,
+                primaryColor: ProjectTheme.brandColor,
+                textTheme: CupertinoTextThemeData(
+                  dateTimePickerTextStyle: TextStyle(
+                    fontSize: 20,
+                    color: isDark
+                        ? ProjectTheme.textColorDark
+                        : ProjectTheme.textColorLight,
+                  ),
                 ),
               ),
-              CupertinoButton(
-                onPressed: () => Navigator.pop(context, tempDate),
-                child: Text(
-                  'choice'.tr(),
-                  style: context.theme.textTheme.bodyMedium,
+              child: CupertinoAlertDialog(
+                title: Text(
+                  'choice_date'.tr(),
+                  style: theme.textTheme.bodyLarge,
                 ),
+                content: SizedBox(
+                  height: 200,
+                  child: CupertinoDatePicker(
+                    mode: CupertinoDatePickerMode.date,
+                    initialDateTime: tempDate,
+                    minimumDate: DateTime(1950),
+                    maximumDate: DateTime.now(),
+                    onDateTimeChanged: (DateTime newDate) => tempDate = newDate,
+                  ),
+                ),
+                actions: [
+                  CupertinoButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: Text(
+                      'cancel'.tr(),
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ),
+                  CupertinoButton(
+                    onPressed: () => Navigator.pop(dialogContext, tempDate),
+                    child: Text(
+                      'choice'.tr(),
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           );
         },
       ).whenComplete(_afterComplete);
     } else {
+      final theme = Theme.of(context);
       return await showDatePicker(
         context: context,
         initialDate: tempDate,
         firstDate: DateTime(1950),
         lastDate: DateTime.now(),
-        builder: (context, child) {
+        builder: (ctx, child) {
           return Theme(
-            data: Theme.of(context).copyWith(
+            data: theme.copyWith(
               textButtonTheme: TextButtonThemeData(
                 style: TextButton.styleFrom(
-                  foregroundColor: context.theme.primaryColor,
+                  foregroundColor: ProjectTheme.brandColor,
                 ),
               ),
             ),
@@ -644,22 +689,20 @@ class ProjectDialogs {
   }
 
   static void showLanguageMenu(BuildContext context) {
-    showModalBottomSheet(
+    showSdkModalBottomSheet(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
         ),
-        backgroundColor: context.color.primaryContainer,
         context: context,
         builder: (context) => LangOptionsWidget());
   }
 
   static void showThemeMenu(BuildContext context) {
-    showModalBottomSheet(
+    showSdkModalBottomSheet(
         useSafeArea: Platform.isAndroid,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
         ),
-        backgroundColor: context.color.primaryContainer,
         context: context,
         builder: (dialogContext) {
           _dialogContext = dialogContext;
@@ -668,12 +711,11 @@ class ProjectDialogs {
   }
 
   static void showCurrencyMenu(BuildContext context) {
-    showModalBottomSheet(
+    showSdkModalBottomSheet(
         useSafeArea: Platform.isAndroid,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
         ),
-        backgroundColor: context.color.primaryContainer,
         context: context,
         builder: (dialogContext) {
           _dialogContext = dialogContext;
@@ -683,7 +725,16 @@ class ProjectDialogs {
 
   static void changeAmountPrice(
       BuildContext context, double oldCurrency, double newCurrency) {
-    showModalBottomSheet(
+    final isDark = context.isDarkMode;
+    final cardColor =
+        isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight;
+    final textColor =
+        isDark ? ProjectTheme.textColorDark : ProjectTheme.textColorLight;
+    final secondaryTextColor = isDark
+        ? ProjectTheme.secondaryTextDark
+        : ProjectTheme.secondaryTextLight;
+
+    showSdkModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isDismissible: true,
@@ -698,7 +749,7 @@ class ProjectDialogs {
               child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
-                    color: Colors.white,
+                    color: cardColor,
                   ),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
@@ -729,6 +780,7 @@ class ProjectDialogs {
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
                             fontSize: 16,
+                            color: textColor,
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -744,6 +796,7 @@ class ProjectDialogs {
                           style: TextStyle(
                             fontSize: 16,
                             height: 1.4,
+                            color: secondaryTextColor,
                           ),
                         ),
                         const SizedBox(height: 24),
@@ -769,7 +822,7 @@ class ProjectDialogs {
                                 child: Text(
                                   "cancel".tr(),
                                   style: TextStyle(
-                                    color: Colors.black,
+                                    color: textColor,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -818,7 +871,7 @@ class ProjectDialogs {
     required double newPrice,
     required String currencyLabel,
   }) async {
-    final result = await showModalBottomSheet<bool>(
+    final result = await showSdkModalBottomSheet<bool>(
       context: context,
       backgroundColor: Colors.transparent,
       isDismissible: false,
@@ -938,7 +991,7 @@ class ProjectDialogs {
   /// Faqat "qayta qidirish" tugmasi bor; tashqarini bossa yopilmaydi. Tugma
   /// bosilganda yopiladi va `true` qaytaradi.
   static Future<bool> showPricesOutdatedDialog(BuildContext context) async {
-    final result = await showModalBottomSheet<bool>(
+    final result = await showSdkModalBottomSheet<bool>(
       context: context,
       backgroundColor: Colors.transparent,
       isDismissible: false,
@@ -1027,7 +1080,7 @@ class ProjectDialogs {
     BuildContext context, {
     required VoidCallback onConfirm,
   }) {
-    showModalBottomSheet(
+    showSdkModalBottomSheet(
       context: context,
       isDismissible: false,
       enableDrag: false,
@@ -1154,8 +1207,7 @@ class ProjectDialogs {
     BuildContext context, {
     required VoidCallback onPressed,
   }) {
-    showModalBottomSheet(
-      backgroundColor: context.color.primaryContainer,
+    showSdkModalBottomSheet(
       context: context,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
@@ -1308,7 +1360,7 @@ class ProjectDialogs {
   }
 
   static void showUpdateRequiredDialog(BuildContext context) {
-    showModalBottomSheet(
+    showSdkModalBottomSheet(
       backgroundColor: Colors.transparent,
       context: context,
       isDismissible: false,
@@ -1386,7 +1438,7 @@ class ProjectDialogs {
       required String title,
       required String subtitle,
       required void Function()? onPressed}) {
-    showModalBottomSheet(
+    showSdkModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
@@ -1464,7 +1516,7 @@ class ProjectDialogs {
   }
 
   static void showUpdateOptionalDialog(BuildContext context) {
-    showModalBottomSheet(
+    showSdkModalBottomSheet(
       backgroundColor: Colors.transparent,
       context: context,
       isDismissible: true,
