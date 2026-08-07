@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/tools/sdk_sheets.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/country_search_widget.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/humo_uzkard_widget.dart';
@@ -13,10 +12,9 @@ import '../../../model/remote/avia/recommendation/get_recom_res_model.dart'
 
 void showPaymentCardBottomSheet(
     BuildContext context, String trId, String cardType, FlightPrice? price) {
-  showModalBottomSheet(
+  showSdkModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: context.color.primaryContainer,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -52,10 +50,9 @@ void showPaymentOtpBottomSheet(
     required final Map<String, dynamic> data,
     required final Map<String, dynamic> params,
     required FlightPrice? price}) {
-  showModalBottomSheet(
+  showSdkModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    backgroundColor: context.color.primaryContainer,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
@@ -85,7 +82,7 @@ Future<Map<String, dynamic>?> showCitySearchPicker(BuildContext context) async {
             ));
   }
 
-  return await showModalBottomSheet<Map<String, dynamic>>(
+  return await showSdkModalBottomSheet<Map<String, dynamic>>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,

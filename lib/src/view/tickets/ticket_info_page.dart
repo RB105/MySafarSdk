@@ -15,6 +15,7 @@ import 'package:mysafar_sdk/src/core/tools/project_assets.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart';
 import 'package:mysafar_sdk/src/core/tools/project_utils.dart';
+import 'package:mysafar_sdk/src/core/tools/sdk_sheets.dart';
 import 'package:mysafar_sdk/src/cubit/tickets/tariff/ticket_tariff_cubit.dart';
 import 'package:mysafar_sdk/src/model/local/recom_req_model.dart'
     show RecommendationRequestBody;
@@ -43,7 +44,7 @@ class TicketInfoPage extends StatefulWidget {
 
   /// Chipta tafsilotini bottom sheet sifatida ochadi (navigatsiya o‘rniga).
   static Future<T?> show<T>(BuildContext context, FlightElement flight) {
-    return showModalBottomSheet<T>(
+    return showSdkModalBottomSheet<T>(
       context: context,
       isScrollControlled: true,
       useSafeArea: false,
@@ -74,7 +75,9 @@ class _TicketInfoPageState extends State<TicketInfoPage> {
     final params = ProjectUtils.params;
     final bottomInset = MediaQuery.of(context).padding.bottom;
     final maxH = MediaQuery.of(context).size.height * 0.92;
-    final sheetColor = Theme.of(context).scaffoldBackgroundColor;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final sheetColor =
+        isDark ? ProjectTheme.backgroundDark : ProjectTheme.backgroundLight;
 
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: _sheetTopRadius),

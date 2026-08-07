@@ -67,7 +67,7 @@ class _PriceChartCard extends StatelessWidget {
     }
 
     return Material(
-      color: isDark ? ProjectTheme.cardColorDark : Colors.white,
+      color: isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight,
       borderRadius: BorderRadius.circular(18),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -534,7 +534,9 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
         maxHeight: MediaQuery.of(context).size.height * 0.92,
       ),
       decoration: BoxDecoration(
-        color: context.color.primaryContainer,
+        color: Theme.of(context).brightness == Brightness.dark
+            ? ProjectTheme.cardColorDark
+            : ProjectTheme.cardColorLight,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: const EdgeInsets.only(top: 10),

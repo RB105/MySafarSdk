@@ -104,7 +104,7 @@ class _OfferCard extends StatelessWidget {
     final int transfers = flight.getTransferCount(0);
 
     return Material(
-      color: isDark ? ProjectTheme.cardColorDark : Colors.white,
+      color: isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
@@ -438,7 +438,9 @@ class _OffersShimmer extends StatelessWidget {
         itemBuilder: (_, __) => Container(
           width: cardWidth,
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: isDark
+                ? ProjectTheme.cardColorDark
+                : ProjectTheme.cardColorLight,
             borderRadius: BorderRadius.circular(16),
           ),
         ),

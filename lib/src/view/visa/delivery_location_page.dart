@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
+import 'package:mysafar_sdk/src/core/tools/sdk_sheets.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/custom_input_field_widget.dart';
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
 import 'package:mysafar_sdk/src/view/visa/ordering_visa_card_page.dart';
@@ -105,9 +106,8 @@ class _DeliveryLocationPageState extends State<DeliveryLocationPage> {
     required List<String> values,
     required TextEditingController controller,
   }) async {
-    final selectedValue = await showModalBottomSheet<String>(
+    final selectedValue = await showSdkModalBottomSheet<String>(
       context: context,
-      backgroundColor: context.color.primaryContainer,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),

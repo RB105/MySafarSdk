@@ -15,6 +15,7 @@ import 'package:mysafar_sdk/src/core/tools/currency_provider.dart'
 import 'package:mysafar_sdk/src/core/tools/formatters.dart' show ElementFormatter;
 import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart' show ProjectDialogs;
 import 'package:mysafar_sdk/src/core/tools/project_utils.dart' show ProjectUtils;
+import 'package:mysafar_sdk/src/core/tools/sdk_sheets.dart';
 import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/cubit/search/route_search_cubit.dart'
     show RouteSearchCubit, RouteSearchState;
@@ -178,7 +179,7 @@ class _RouteSearchViewState extends State<_RouteSearchView> {
     HapticFeedback.lightImpact();
     AnalyticsService().trackButtonTap('route_price_chart');
     final s = _cubit.state;
-    final picked = await showModalBottomSheet<Object>(
+    final picked = await showSdkModalBottomSheet<Object>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

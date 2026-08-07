@@ -67,7 +67,7 @@ class _HeroBackButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Material(
-      color: isDark ? ProjectTheme.cardColorDark : Colors.white,
+      color: isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight,
       shape: const CircleBorder(),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -133,7 +133,7 @@ class _WebSearchCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: isDark ? ProjectTheme.cardColorDark : Colors.white,
+        color: isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: isDark ? ProjectTheme.borderDark : const Color(0xFFE7EDF6),
@@ -311,7 +311,7 @@ class _WebSwapButton extends StatelessWidget {
         color: _Web.gold,
         shape: BoxShape.circle,
         border: Border.all(
-          color: isDark ? ProjectTheme.cardColorDark : Colors.white,
+          color: isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight,
           width: 3,
         ),
         boxShadow: const [
@@ -353,7 +353,7 @@ class _WebTogglePill extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Material(
-      color: isDark ? ProjectTheme.cardColorDark : Colors.white,
+      color: isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight,
       clipBehavior: Clip.antiAlias,
       // Fon och bo'lgani uchun oq "pill" ajralib turishi kerak.
       // Diqqat: `shape` bilan `borderRadius` ni birga berib bo'lmaydi

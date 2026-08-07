@@ -179,7 +179,9 @@ class _TicketFiltersWidgetState extends State<TicketFiltersWidget> {
                     indicatorWeight: 1,
                     tabAlignment: TabAlignment.center,
                     splashBorderRadius: BorderRadius.circular(12),
-                    dividerColor: ProjectTheme.borderLight,
+                    dividerColor: context.isDarkMode
+                        ? ProjectTheme.borderDark
+                        : ProjectTheme.borderLight,
                     dividerHeight: 0.5,
                     indicatorAnimation: TabIndicatorAnimation.linear,
                     indicatorSize: TabBarIndicatorSize.tab,
@@ -557,7 +559,9 @@ class _TicketFiltersWidgetState extends State<TicketFiltersWidget> {
               ),
               Divider(
                 thickness: 1.0,
-                color: ProjectTheme.borderLight,
+                color: context.isDarkMode
+                    ? ProjectTheme.borderDark
+                    : ProjectTheme.borderLight,
               ),
               Column(
                 children: List.generate(

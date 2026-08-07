@@ -446,7 +446,7 @@ Future<_ViewFilterValues?> _showViewFiltersSheet(
   required _ViewFilterSection? initialSection,
   required List<_AirlineGroup> airlines,
 }) {
-  return showModalBottomSheet<_ViewFilterValues>(
+  return showSdkModalBottomSheet<_ViewFilterValues>(
     context: context,
     isScrollControlled: true,
     // useSafeArea: false — balandlikni sheet o'zi SafeArea bilan

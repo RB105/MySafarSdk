@@ -558,7 +558,8 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
   /// turadi (Clip.none) — haqiqiy talon effekti.
   Widget _perforation(BuildContext context) {
     final isDark = context.themeProvider.isDark;
-    final Color bg = context.backgroundColor;
+    // Kartaning orqasidagi sahifa foni — notch "teshik" bo'lib ko'rinsin.
+    final Color bg = Theme.of(context).scaffoldBackgroundColor;
     final Color rim =
         isDark ? Colors.white.withAlpha(15) : Colors.black.withAlpha(8);
     final dashColor =
