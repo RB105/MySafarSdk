@@ -17,13 +17,19 @@ class CityChooseCubit extends Cubit<CityChooseStates> {
     AviaService? aviaService,
   })  : _localSearch = localSearch ?? AirportLocalSearchService(),
         _aviaService = aviaService ?? AviaService(),
-        super(CityChooseInitState());
+        super(CityChooseInitState()) {
+    // JSON + index ni ochilishda background’da tayyorlab qo‘yamiz.
+    _localSearch.ensureLoaded();
+  }
 
   final AirportLocalSearchService _localSearch;
   final AviaService _aviaService;
   final LocationAirportService _locationService = LocationAirportService();
 
   TextEditingController controller = TextEditingController();
+
+  /// Eng so‘nggi so‘rov — eski natija kelib qolmasin.
+  int _searchSeq = 0;
 
   /// Load nearby airport based on location (only for 'from' direction)
   Future<void> loadNearbyAirport({String? lang}) async {
@@ -54,8 +60,8 @@ class CityChooseCubit extends Cubit<CityChooseStates> {
   }
 
   /// Qidiruv strategiyasi:
-  /// 1) Har doim local JSON (1+ harf)
-  /// 2) Local bo'sh va so'rov ≥ 3 harf bo'lsa — API fallback
+  /// 1) Har doim local JSON (1+ harf) — isolate’da, Loading emit qilinmaydi
+  /// 2) Local bo'sh va so'rov ≥ 3 harf bo'lsa — API fallback (+ Loading)
   Future<void> getAirports({required String part, String? lang}) async {
     final query = part.trim();
     if (query.isEmpty) {
@@ -64,14 +70,14 @@ class CityChooseCubit extends Cubit<CityChooseStates> {
     }
 
     final searchLang = lang ?? 'en';
-    emit(CityChooseLoadingState());
+    final seq = ++_searchSeq;
 
     try {
       final localResults = await _localSearch.search(
         query: query,
         lang: searchLang,
       );
-      if (isClosed) return;
+      if (isClosed || seq != _searchSeq) return;
 
       if (localResults.isNotEmpty) {
         emit(CityChooseSuccessState(localResults));
@@ -83,10 +89,12 @@ class CityChooseCubit extends Cubit<CityChooseStates> {
         return;
       }
 
+      // API faqat local topmaganda — loading shu yerda.
+      emit(const CityChooseLoadingState());
       final apiLang = searchLang == 'uz' ? 'en' : searchLang;
       final NetworkResponse response =
           await _aviaService.getAirports(part: query, lang: apiLang);
-      if (isClosed) return;
+      if (isClosed || seq != _searchSeq) return;
 
       if (response is NetworkSuccessResponse) {
         final data = response.data;
@@ -100,12 +108,13 @@ class CityChooseCubit extends Cubit<CityChooseStates> {
       }
     } catch (e) {
       debugPrint("CityChooseCubit getAirports error: $e");
-      if (isClosed) return;
+      if (isClosed || seq != _searchSeq) return;
       emit(CityChooseErrorState(e.toString()));
     }
   }
 
   void resetToInit() {
+    _searchSeq++;
     final cachedAirport = _locationService.cachedNearbyAirport;
     emit(CityChooseInitState(
         nearbyAirport: cachedAirport, isLoadingNearby: false));

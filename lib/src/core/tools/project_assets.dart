@@ -211,6 +211,24 @@ class ProjectAssets {
   static const String bookingClicklogo = "packages/mysafar_sdk/assets/img/booking/click_logo.png";
   static const String bookingClicknotselected =
       "packages/mysafar_sdk/assets/img/booking/click_not_selected.png";
+  static const String bookingClickDark =
+      "packages/mysafar_sdk/assets/img/booking/click.png";
+  static const String bookingClickLight =
+      "packages/mysafar_sdk/assets/img/booking/click_light.png";
+  static const String bookingLocalDark =
+      "packages/mysafar_sdk/assets/img/booking/local.png";
+  static const String bookingLocalLight =
+      "packages/mysafar_sdk/assets/img/booking/local_light.png";
+  static const String bookingPaymeDark =
+      "packages/mysafar_sdk/assets/img/booking/payme.png";
+  static const String bookingPaymeLight =
+      "packages/mysafar_sdk/assets/img/booking/payme_light.png";
+  static const String bookingSbp =
+      "packages/mysafar_sdk/assets/img/booking/sbp.png";
+  static const String bookingSbpLight =
+      "packages/mysafar_sdk/assets/img/booking/sbp_light.png";
+  static const String bookingVisaLight =
+      "packages/mysafar_sdk/assets/img/booking/visa_light.png";
   static const String bookingDocumenttext =
       "packages/mysafar_sdk/assets/img/booking/document-text.svg";
   static const String bookingFickalicon = "packages/mysafar_sdk/assets/img/booking/fickal_icon.png";
@@ -232,6 +250,10 @@ class ProjectAssets {
   static const String bookingPhoneicon = "packages/mysafar_sdk/assets/img/booking/phone_icon.svg";
   static const String bookingRuflag = "packages/mysafar_sdk/assets/img/booking/ru_flag.png";
   static const String bookingSaved = "packages/mysafar_sdk/assets/img/booking/saved.png";
+  static const String bookingScanIcon =
+      "packages/mysafar_sdk/assets/img/booking/scan_icon.svg";
+  static const String bookingPeopleIcon =
+      "packages/mysafar_sdk/assets/img/booking/people_icon.svg";
   static const String bookingTicketicon = "packages/mysafar_sdk/assets/img/booking/ticket_icon.svg";
   static const String bookingUzcardnotselected =
       "packages/mysafar_sdk/assets/img/booking/uzcard_not_selected.png";

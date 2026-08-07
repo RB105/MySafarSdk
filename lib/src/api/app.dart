@@ -196,6 +196,15 @@ Widget _sdkMaterialApp(BuildContext context, {required String initialRoute}) {
     themeMode: context.watch<ThemeNotifier>().themeMode,
     debugShowCheckedModeBanner: false,
     initialRoute: initialRoute,
+    // Nested embed'da MediaQuery.platformBrightness host bilan farq qilishi
+    // mumkin — haqiqiy MaterialApp temasi bilan sinxronlashtiramiz.
+    builder: (context, child) {
+      final brightness = Theme.of(context).brightness;
+      return MediaQuery(
+        data: MediaQuery.of(context).copyWith(platformBrightness: brightness),
+        child: child ?? const SizedBox.shrink(),
+      );
+    },
   );
 }
 

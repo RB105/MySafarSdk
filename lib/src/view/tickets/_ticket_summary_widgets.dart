@@ -449,7 +449,9 @@ Future<_ViewFilterValues?> _showViewFiltersSheet(
   return showModalBottomSheet<_ViewFilterValues>(
     context: context,
     isScrollControlled: true,
-    useSafeArea: true,
+    // useSafeArea: false — balandlikni sheet o'zi SafeArea bilan
+    // hisoblaydi; aks holda 0.9*screen + tashqi SafeArea overflow beradi.
+    useSafeArea: false,
     backgroundColor: Colors.transparent,
     builder: (context) => _ViewFiltersSheet(
       initial: initial,
@@ -486,58 +488,64 @@ class _ViewFiltersSheetState extends State<_ViewFiltersSheet> {
   @override
   Widget build(BuildContext context) {
     final t = _TixTheme.of(context);
-    final height = MediaQuery.of(context).size.height * 0.9;
+    final media = MediaQuery.of(context);
+    // Faqat status/notch tepadan ayiriladi; pastki inset footer padding'da.
+    // useSafeArea:false + 0.9*fullScreen overflow bergan edi.
+    final available = media.size.height - media.viewPadding.top;
+    final height = available * 0.9;
 
-    return Container(
-      height: height,
-      decoration: BoxDecoration(
-        color: t.card,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      // Pastki system navigatsiya paneli ostida Tozalash/Qo'llash tugmalari
-      // qolib ketmasligi uchun (useSafeArea faqat tepani himoya qiladi).
-      child: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            const SizedBox(height: 10),
-            Container(
-              width: 44,
-              height: 4,
-              decoration: BoxDecoration(
-                color: t.mid.withAlpha(90),
-                borderRadius: BorderRadius.circular(2),
+    return Padding(
+      padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+      child: Container(
+        height: height,
+        decoration: BoxDecoration(
+          color: t.card,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SafeArea(
+          top: false,
+          bottom: false,
+          child: Column(
+            children: [
+              const SizedBox(height: 10),
+              Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: t.mid.withAlpha(90),
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-            ),
-            // Sarlavha + yopish tugmasi (web'dagi kabi).
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 10, 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      "filter_title".tr(),
-                      style: _TixTheme.style(20, FontWeight.w800, t.hi),
-                    ),
-                  ),
-                  Material(
-                    color: t.line.withAlpha(t.dark ? 40 : 255),
-                    shape: const CircleBorder(),
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      onTap: () => Navigator.of(context).pop(),
-                      child: SizedBox(
-                        width: 38,
-                        height: 38,
-                        child: Icon(Icons.close_rounded, size: 21, color: t.hi),
+              // Sarlavha + yopish tugmasi (web'dagi kabi).
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 10, 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        "filter_title".tr(),
+                        style: _TixTheme.style(20, FontWeight.w800, t.hi),
                       ),
                     ),
-                  ),
-                ],
+                    Material(
+                      color: t.line.withAlpha(t.dark ? 40 : 255),
+                      shape: const CircleBorder(),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: () => Navigator.of(context).pop(),
+                        child: SizedBox(
+                          width: 38,
+                          height: 38,
+                          child:
+                              Icon(Icons.close_rounded, size: 21, color: t.hi),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Expanded(
-              child: ListView(
+              Expanded(
+                child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
                 children: [
                   _SheetSection(
@@ -703,8 +711,10 @@ class _ViewFiltersSheetState extends State<_ViewFiltersSheet> {
               ),
             ),
             // Pastki tugmalar (web'dagi kabi): Tozalash + Qo'llash.
+            // viewPadding.bottom — gesture/nav panel ustida qolishi uchun.
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              padding: EdgeInsets.fromLTRB(
+                  16, 8, 16, 12 + MediaQuery.viewPaddingOf(context).bottom),
               child: Row(
                 children: [
                   Expanded(
@@ -746,6 +756,7 @@ class _ViewFiltersSheetState extends State<_ViewFiltersSheet> {
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -1146,6 +1157,61 @@ class _FilteredEmptyView extends StatelessWidget {
               ),
               child: Text(
                 "filter_clear".tr(),
+                style: _TixTheme.style(
+                    13.5, FontWeight.w700, ProjectTheme.brandColor),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// API / tarmoq xatosi: bo'sh filtr holatiga o'xshash markaziy UI +
+/// qayta so'rov yuboradigan "Qayta urinish" tugmasi.
+class _TicketErrorView extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+
+  const _TicketErrorView({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = _TixTheme.of(context);
+    return Column(
+      children: [
+        const SizedBox(height: 24),
+        SizedBox(
+          height: 48,
+          width: 48,
+          child: Image.asset(Assets.ticketsSearchEmptyIcon),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          message,
+          textAlign: TextAlign.center,
+          style: _TixTheme.style(14, FontWeight.w600, t.hi),
+        ),
+        const SizedBox(height: 14),
+        Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(22),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              AnalyticsService().trackButtonTap('ticket_error_retry');
+              onRetry();
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 11),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: ProjectTheme.brandColor, width: 1.2),
+              ),
+              child: Text(
+                "retry_search".tr(),
                 style: _TixTheme.style(
                     13.5, FontWeight.w700, ProjectTheme.brandColor),
               ),

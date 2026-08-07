@@ -178,17 +178,20 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
       if (!c.isActive) continue;
 
       final base = PaymentConstants.paymentTypeByName(c.name);
-      final hasNetworkImage = c.imageUrl.trim().isNotEmpty;
+      // Firebase rasm faqat ilovada lokal logosi yo'q yangi turlar uchun (mobile-home).
+      final hasNetworkImage =
+          base == null && c.imageUrl.trim().isNotEmpty;
       // Na Firebase rasm, na lokal asset bo'lsa — ko'rsatib bo'lmaydi.
       if (base == null && !hasNetworkImage) continue;
       // Yorliq — joriy tilga mos; bo'sh bo'lsa lokal (hardcoded) yorliqqa qaytadi.
       final label = c.cardNameFor(lang);
       final type = PaymentType(
-        id: base?.id ?? c.name,
+        id: (base?.id ?? c.name).trim().toUpperCase(),
         imagePath: base?.imagePath ?? '',
         // Firebase rasm bo'lsa ikkilamchi (UzCard+Humo) logotip ko'rsatilmaydi.
         secondaryImagePath: hasNetworkImage ? null : base?.secondaryImagePath,
         cardName: label.isNotEmpty ? label : base?.cardName,
+        subtitle: base?.subtitle,
         // Firebase rasm bo'lsa — uni, aks holda lokal asset ishlatiladi.
         imageUrl: hasNetworkImage ? c.imageUrl.trim() : null,
       );
@@ -247,6 +250,8 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Tema almashganda (Sozlamalar / `b`) butun sahifa qayta chiziladi.
+    context.themeWatcher;
     return BlocProvider(
       create: (_) => BookingConfirmCubit(
         widget.bookingCreateModel.billingId ?? '',
@@ -266,6 +271,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
                 top: Platform.isAndroid,
                 bottom: Platform.isAndroid,
                 child: Scaffold(
+                  backgroundColor: Theme.of(context).scaffoldBackgroundColor,
                   appBar: _buildAppBar(context),
                   body: _buildBody(context, state),
                   bottomNavigationBar: _buildBottomButton(context, state),
@@ -443,7 +449,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
   }
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {
-    final isDark = context.themeProvider.isDark;
+    final isDark = context.isDarkMode;
     return AppBar(
       elevation: 0,
       scrolledUnderElevation: 0,
@@ -517,52 +523,6 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: _buildBillingIdInfo(context),
           ),
-          context.szBoxHeight16,
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: _buildOfferAgreement(context),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Oferta roziligi qatori — doim belgilangan (yongan), informativ.
-  /// Foydalanuvchi bosishi shart emas: "Xaridni davom ettirish orqali oferta
-  /// shartlarini qabul qilgan bo'lasiz". Davom etish tugmasini bloklamaydi.
-  Widget _buildOfferAgreement(BuildContext context) {
-    final isDark = context.themeProvider.isDark;
-    final brand = ProjectTheme.brandColor;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      decoration: BoxDecoration(
-        color: brand.withAlpha(isDark ? 38 : 16),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: brand.withAlpha(120)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Container(
-            width: 24,
-            height: 24,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              gradient:
-                  LinearGradient(colors: [brand, ProjectTheme.accentLight]),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(Icons.check_rounded,
-                color: Colors.white, size: 16),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'offer_accept_by_continue'.tr(),
-              softWrap: true,
-              style: context.textTheme.bodyMedium?.copyWith(fontSize: 14),
-            ),
-          ),
         ],
       ),
     );
@@ -575,7 +535,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
     final billingId = widget.bookingCreateModel.billingId ?? '';
     if (billingId.isEmpty) return const SizedBox.shrink();
 
-    final isDark = context.themeProvider.isDark;
+    final isDark = context.isDarkMode;
     final muted = isDark ? const Color(0xffCCCFD3) : const Color(0xff8E8E92);
     final brand = ProjectTheme.brandColor;
 
@@ -708,7 +668,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
   }
 
   Widget _buildRemainingTime(BuildContext context) {
-    final isDark = context.themeProvider.isDark;
+    final isDark = context.isDarkMode;
     final muted = isDark ? const Color(0xffCCCFD3) : const Color(0xff8E8E92);
 
     // Soniyalik yangilanish faqat shu blokni qayta chizadi.
