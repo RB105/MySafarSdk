@@ -17,10 +17,10 @@ Future<void> main() async {
         'SKOTE_BASE_URL',
         defaultValue: 'https://cms.mysafar.uz/api',
       ),
-      partnerToken: String.fromEnvironment(
-        'PARTNER_TOKEN',
-        defaultValue: '***REMOVED-PARTNER-TOKEN***',
-      ),
+      // partnerToken: String.fromEnvironment(
+      //   'PARTNER_TOKEN',
+      //   defaultValue: '***REMOVED-PARTNER-TOKEN***',
+      // ),
       appMetricaApiKey: String.fromEnvironment(
         'APPMETRICA_API_KEY',
         defaultValue: '***REMOVED-APPMETRICA-KEY***',
