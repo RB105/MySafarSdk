@@ -32,6 +32,12 @@
 	<string>We use the camera to scan the passport/ID</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>MySafar uses your location to improve suggestions and show you popular travel destinations near you.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_dartVmService._tcp</string>
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Allow Flutter tools on your computer to connect and debug your application. This prompt will not appear on release builds.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Permission required to record audio</string>
 	<key>NSPhotoLibraryUsageDescription</key>

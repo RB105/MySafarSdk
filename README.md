@@ -40,8 +40,9 @@ Navigator.of(context).push(
     builder: (_) => const MySafarEmbed(
       // Ixtiyoriy: host user'ini telefon raqami bilan bir marta jim
       // ro'yxatdan o'tkazadi (/auth/web-register). Raqam o'zgarsa qayta
-      // ro'yxatdan o'tadi.
+      // ro'yxatdan o'tadi. email berilsa profilga ham yoziladi.
       phoneNumber: '998901234567',
+      email: 'user@example.com',
     ),
   ),
 );

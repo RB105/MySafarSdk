@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:location/location.dart' as loc;
 import 'package:mysafar_sdk/src/core/config/response_config.dart';
+import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/airports_model.dart';
+import 'package:mysafar_sdk/src/service/avia/airport_local_search_service.dart';
 import 'package:mysafar_sdk/src/service/avia_service.dart';
 
 class LocationAirportService {
@@ -14,40 +16,69 @@ class LocationAirportService {
 
   final loc.Location _location = loc.Location();
   final AviaService _aviaService = AviaService();
+  final AirportLocalSearchService _localSearch =
+      AirportLocalSearchService.instance;
 
-  // Cache for the session
+  static const _storageKey = 'last_nearby_airport';
+
   AirPortsModel? _cachedNearbyAirport;
   bool _hasAttemptedLocation = false;
   DateTime? _lastAttemptTime;
 
-  /// Check if we already have a cached airport
   AirPortsModel? get cachedNearbyAirport => _cachedNearbyAirport;
   bool get hasAttemptedLocation => _hasAttemptedLocation;
 
-  /// Clear cache (call this when app restarts or user logs out)
+  AirPortsModel? lastKnownAirport({String? lang}) {
+    if (_cachedNearbyAirport != null) return _cachedNearbyAirport;
+    try {
+      final raw = sdkStorage().read(_storageKey);
+      if (raw is! Map) return null;
+      final map = Map<String, dynamic>.from(raw);
+      final savedLang = map['_lang']?.toString();
+      if (lang != null && savedLang != null && savedLang != lang) return null;
+      final model = AirPortsModel.fromJson(map);
+      if ((model.cityIataCode ?? '').isEmpty) return null;
+      return model;
+    } catch (e) {
+      debugPrint('LocationAirportService: lastKnownAirport read error: $e');
+      return null;
+    }
+  }
+
+  AirPortsModel _remember(AirPortsModel airport, String source, String lang) {
+    _cachedNearbyAirport = airport;
+    debugPrint(
+        "LocationAirportService: [$source] ${airport.cityName} (${airport.cityIataCode})");
+    try {
+      sdkStorage().write(_storageKey, {...airport.toJson(), '_lang': lang});
+    } catch (e) {
+      debugPrint('LocationAirportService: cache write error: $e');
+    }
+    return airport;
+  }
+
   void clearCache() {
     _cachedNearbyAirport = null;
     _hasAttemptedLocation = false;
     _lastAttemptTime = null;
+    try {
+      sdkStorage().remove(_storageKey);
+    } catch (_) {}
   }
 
-  /// Get nearby airport based on current location
   Future<AirPortsModel?> getNearbyAirport({String? lang}) async {
-    // Return cached result if available
     if (_cachedNearbyAirport != null) {
       debugPrint("LocationAirportService: Returning cached nearby airport: ${_cachedNearbyAirport?.cityName}");
       return _cachedNearbyAirport;
     }
 
-    // Allow retry after 5 minutes if previously failed
     final now = DateTime.now();
     if (_hasAttemptedLocation && _cachedNearbyAirport == null) {
-      if (_lastAttemptTime != null && 
+      if (_lastAttemptTime != null &&
           now.difference(_lastAttemptTime!).inMinutes < 5) {
         debugPrint("LocationAirportService: Already attempted recently, returning null");
         return null;
       }
-      // Reset for retry
       _hasAttemptedLocation = false;
     }
 
@@ -56,11 +87,10 @@ class LocationAirportService {
 
     try {
       debugPrint("LocationAirportService: Starting location fetch...");
-      
-      // Check if location service is enabled
+
       bool serviceEnabled = await _location.serviceEnabled();
       debugPrint("LocationAirportService: Service enabled: $serviceEnabled");
-      
+
       if (!serviceEnabled) {
         serviceEnabled = await _location.requestService();
         debugPrint("LocationAirportService: Service requested, result: $serviceEnabled");
@@ -70,10 +100,9 @@ class LocationAirportService {
         }
       }
 
-      // Check permission
       loc.PermissionStatus permission = await _location.hasPermission();
       debugPrint("LocationAirportService: Current permission: $permission");
-      
+
       if (permission == loc.PermissionStatus.denied) {
         debugPrint("LocationAirportService: Requesting permission...");
         permission = await _location.requestPermission();
@@ -90,15 +119,10 @@ class LocationAirportService {
         return null;
       }
 
-      // Shahar darajasidagi aniqlik yetarli — tezroq (va batareyaga yengil)
-      // fix olish uchun balanced aniqlikni o'rnatamiz. Bu 15s timeout'ga
-      // borib qolish ehtimolini kamaytiradi.
       try {
         await _location.changeSettings(accuracy: loc.LocationAccuracy.balanced);
       } catch (_) {}
 
-      // Get current location with timeout. Timeout bo'lsa stacktrace bilan xato
-      // tashlamay, shunchaki null qaytaramiz (GPS fix topilmadi — normal holat).
       debugPrint("LocationAirportService: Getting current location...");
       final loc.LocationData locationData;
       try {
@@ -108,7 +132,7 @@ class LocationAirportService {
         debugPrint("LocationAirportService: Location timeout — returning null");
         return null;
       }
-      
+
       if (locationData.latitude == null || locationData.longitude == null) {
         debugPrint("LocationAirportService: Could not get location coordinates");
         return null;
@@ -116,7 +140,6 @@ class LocationAirportService {
 
       debugPrint("LocationAirportService: Current location: ${locationData.latitude}, ${locationData.longitude}");
 
-      // Get city name from coordinates using geocoding
       List<Placemark> placemarks = [];
       try {
         placemarks = await placemarkFromCoordinates(
@@ -131,27 +154,65 @@ class LocationAirportService {
         );
       } catch (e) {
         debugPrint("LocationAirportService: Geocoding error: $e");
+      }
+
+      final placemark = placemarks.isNotEmpty ? placemarks.first : null;
+
+      final byCoords = await _localSearch.searchByCoordinates(
+        lat: locationData.latitude!,
+        lon: locationData.longitude!,
+        lang: lang ?? 'en',
+        limit: 5,
+      );
+      if (byCoords.isNotEmpty) {
+        return _remember(byCoords.first, 'local/coords', lang ?? 'en');
+      }
+
+      final searchQuery =
+          placemark?.locality ?? placemark?.administrativeArea ?? '';
+      final countryQuery =
+          (placemark?.isoCountryCode?.trim().isNotEmpty == true)
+              ? placemark!.isoCountryCode!.trim()
+              : (placemark?.country ?? '').trim();
+
+      if (searchQuery.isEmpty && countryQuery.isEmpty) {
+        debugPrint("LocationAirportService: No city/country name found in placemark");
         return null;
       }
 
-      if (placemarks.isEmpty) {
-        debugPrint("LocationAirportService: No placemarks found for location");
-        return null;
+      if (searchQuery.isNotEmpty) {
+        debugPrint("LocationAirportService: Local search by city: $searchQuery");
+        final localByCity = await _localSearch.search(
+          query: searchQuery,
+          lang: lang ?? 'en',
+          limit: 5,
+        );
+        if (localByCity.isNotEmpty) {
+          return _remember(localByCity.first, 'local/city', lang ?? 'en');
+        }
       }
 
-      final placemark = placemarks.first;
-      debugPrint("LocationAirportService: Placemark - locality: ${placemark.locality}, admin: ${placemark.administrativeArea}, country: ${placemark.country}");
-      
-      String searchQuery = placemark.locality ?? placemark.administrativeArea ?? '';
-      
+      if (countryQuery.isNotEmpty) {
+        debugPrint("LocationAirportService: Local search by country: $countryQuery");
+        final localByCountry = await _localSearch.searchByCountry(
+          country: countryQuery,
+          lang: lang ?? 'en',
+          limit: 10,
+        );
+        if (localByCountry.isNotEmpty) {
+          debugPrint(
+              "LocationAirportService: davlat bo'yicha ${localByCountry.length} ta shahar topildi");
+          return _remember(localByCountry.first, 'local/country', lang ?? 'en');
+        }
+      }
+
       if (searchQuery.isEmpty) {
-        debugPrint("LocationAirportService: No city name found in placemark");
+        debugPrint("LocationAirportService: No city name for API search");
         return null;
       }
 
       debugPrint("LocationAirportService: Searching airport for city: $searchQuery");
 
-      // Search for airport by city name
       final response = await _aviaService.getAirports(
         part: searchQuery,
         lang: lang ?? 'en',
@@ -161,9 +222,11 @@ class LocationAirportService {
         final airports = response.data as List<AirPortsModel>;
         debugPrint("LocationAirportService: Found ${airports.length} airports");
         if (airports.isNotEmpty) {
-          _cachedNearbyAirport = airports.first;
-          debugPrint("LocationAirportService: Selected nearby airport: ${_cachedNearbyAirport?.cityName} (${_cachedNearbyAirport?.cityIataCode})");
-          return _cachedNearbyAirport;
+          final picked = airports.firstWhere(
+            (a) => (a.cityName ?? '').trim().isNotEmpty,
+            orElse: () => airports.first,
+          );
+          return _remember(picked, 'api/city', lang ?? 'en');
         }
       } else if (response is NetworkErrorResponse) {
         debugPrint("LocationAirportService: Airport search error: ${response.error}");
@@ -178,7 +241,6 @@ class LocationAirportService {
     }
   }
 
-  /// Check if location permission is granted without requesting
   Future<bool> isLocationPermissionGranted() async {
     try {
       final permission = await _location.hasPermission();
@@ -189,7 +251,6 @@ class LocationAirportService {
     }
   }
 
-  /// Request location permission
   Future<bool> requestLocationPermission() async {
     try {
       bool serviceEnabled = await _location.serviceEnabled();
@@ -210,4 +271,3 @@ class LocationAirportService {
     }
   }
 }
-

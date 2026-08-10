@@ -84,6 +84,17 @@ class CityChooseCubit extends Cubit<CityChooseStates> {
         return;
       }
 
+      final localByCountry = await _localSearch.searchByCountry(
+        country: query,
+        lang: searchLang,
+      );
+      if (isClosed || seq != _searchSeq) return;
+
+      if (localByCountry.isNotEmpty) {
+        emit(CityChooseSuccessState(localByCountry));
+        return;
+      }
+
       if (query.length < 3) {
         emit(CityChooseErrorState('nothingFound'.tr()));
         return;

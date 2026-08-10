@@ -30,7 +30,7 @@ Future<void> main() async {
       // themeMode: ThemeMode.dark  ← bu qator bo'lsa `b` ishlamaydi.
       // Production (Unired): themeMode: ThemeMode.dark yoki .light
       // brandColor berilmasa default #0057BE qoladi.
-      brandColor: Colors.pink,
+      brandColor: Colors.green,
       bottomBarStyle: MySafarBottomBarStyle(
         // backgroundColorLight: Colors.amber,
         // borderRadius: 0,
@@ -41,8 +41,9 @@ Future<void> main() async {
         // logo .png va .svg formatni qabul qiladi 
         // logo uchun .svg berilsa logo xira bolib qolmaydi 
         logoAssetPath: 'packages/mysafar_sdk/assets/img/splash/logo.svg',
-        title: 'UNIRED',
-        description: 'ishonchli sayohat qiling!',
+        logoBackgroundColor: Colors.amber,
+        title: 'Asadulloh',
+        description: 'bilan parvoz qiling',
       ),
     ),
   );
@@ -79,12 +80,18 @@ class HostHomePage extends StatelessWidget {
             Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => const MySafarEmbed(
-                  // Host user'ining raqami — SDK bir marta jim ro'yxatdan
-                  // o'tkazadi (--dart-define=USER_PHONE=998... bilan bering).
+                  // Host user'ining raqami/emaili — SDK bir marta jim
+                  // ro'yxatdan o'tkazadi va emailni profilga yozadi.
+                  // (--dart-define=USER_PHONE=998... / USER_EMAIL=... bilan
+                  // berish mumkin).
                   // phoneNumber: String.fromEnvironment('USER_PHONE') == ''
                   //     ? null
                   //     : String.fromEnvironment('USER_PHONE'),
-                  phoneNumber: '998939691500',
+                  // email: String.fromEnvironment('USER_EMAIL') == ''
+                  //     ? null
+                  //     : String.fromEnvironment('USER_EMAIL'),
+                  phoneNumber: '33000000000',
+                  email: 'nomonjonov@gmail.com',
                 ),
               ),
             );
