@@ -50,7 +50,12 @@ class MySafarApp extends StatelessWidget {
 /// Cheklov: global `NavigationService.navigatorKey` tufayli bir vaqtda faqat
 /// BITTA `MySafarEmbed`/`MySafarApp` instance'i mavjud bo'lishi mumkin.
 class MySafarEmbed extends StatefulWidget {
-  const MySafarEmbed({super.key, this.initialRoute, this.phoneNumber});
+  const MySafarEmbed({
+    super.key,
+    this.initialRoute,
+    this.phoneNumber,
+    this.email,
+  });
 
   final String? initialRoute;
 
@@ -59,6 +64,11 @@ class MySafarEmbed extends StatefulWidget {
   /// Bir marta bajariladi; raqam o'zgargan bo'lsa qayta ro'yxatdan o'tadi.
   /// Ro'yxat muvaffaqiyatsiz bo'lsa ham ekran ochiladi (mehmon rejimi).
   final String? phoneNumber;
+
+  /// Host user emaili. [phoneNumber] bilan birga berilsa, register'dan
+  /// keyin profilga yoziladi (booking kontakt maydoni uchun). Telefon
+  /// bo'lmasa email yolg'iz ishlatilmaydi.
+  final String? email;
 
   @override
   State<MySafarEmbed> createState() => _MySafarEmbedState();
@@ -69,8 +79,10 @@ class _MySafarEmbedState extends State<MySafarEmbed> {
   // (aks holda sekin tarmoqda foydalanuvchi bo'sh ekranga qarab qoladi).
   late final Future<void> _ready = widget.phoneNumber == null
       ? Future<void>.value()
-      : MySafarSdk.ensureRegistered(widget.phoneNumber!)
-          .timeout(const Duration(seconds: 10), onTimeout: () => false);
+      : MySafarSdk.ensureRegistered(
+          widget.phoneNumber!,
+          email: widget.email,
+        ).timeout(const Duration(seconds: 10), onTimeout: () => false);
 
   // Debug'da qora ekran o'rniga xatoni ekranda ko'rsatamiz — embed subtree'da
   // yiqilgan har qanday exception shu yerda ushlanadi.

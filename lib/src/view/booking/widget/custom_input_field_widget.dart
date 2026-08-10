@@ -17,6 +17,7 @@ class CustomInputField extends StatefulWidget {
   final TextInputAction textInputAction;
   final bool showError;
   final FocusNode? focusNode;
+  final bool readOnly;
 
   /// Yorliq tepaga suzilganda (maydon fokusda va bo'sh) ko'rsatiladigan
   /// ixtiyoriy ko'rsatma — mas. sana maydonlari uchun "Kun / Oy / Yil".
@@ -39,6 +40,7 @@ class CustomInputField extends StatefulWidget {
     required this.showError,
     this.focusNode,
     this.hintText,
+    this.readOnly = false,
   });
 
   @override
@@ -99,6 +101,8 @@ class _CustomInputFieldState extends State<CustomInputField> {
                 cursorHeight: 16,
                 controller: widget.controller,
                 focusNode: _focusNode,
+                readOnly: widget.readOnly,
+                enableInteractiveSelection: !widget.readOnly,
                 onChanged: (value) {
                   widget.onChanged?.call(value);
                   setState(() {});

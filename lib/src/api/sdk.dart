@@ -10,6 +10,10 @@ import 'package:mysafar_sdk/src/core/config/response_config.dart'
     show NetworkErrorResponse, NetworkSuccessResponse;
 import 'package:mysafar_sdk/src/core/config/sdk_storage.dart'
     show kMySafarStorageContainer, sdkStorage;
+import 'package:mysafar_sdk/src/model/remote/profile/profile_model.dart'
+    show ProfileModel;
+import 'package:mysafar_sdk/src/service/account_service.dart'
+    show AccountService;
 import 'package:mysafar_sdk/src/service/auth_service.dart' show AuthService;
 import 'package:mysafar_sdk/src/service/profile/profile_cache.dart'
     show ProfileCache;
@@ -130,20 +134,34 @@ class MySafarSdk {
   // ── Tez ro'yxatdan o'tish (web-register) ─────────────────────────────────
 
   static const String _kRegisteredPhoneKey = 'web_registered_phone';
+  static const String _kRegisteredEmailKey = 'web_registered_email';
 
   /// [ensureRegistered] orqali saqlangan host user telefoni (`998...`).
   /// Ro'yxatdan o'tilmagan bo'lsa `null`.
   static String? get registeredPhone =>
       sdkStorage().read<String>(_kRegisteredPhoneKey);
 
+  /// [ensureRegistered] orqali saqlangan host user emaili.
+  /// Berilmagan / sync qilinmagan bo'lsa `null`.
+  static String? get registeredEmail =>
+      sdkStorage().read<String>(_kRegisteredEmailKey);
+
   /// Host user'ini telefon raqami bilan MySafar backend'ida jim ro'yxatdan
   /// o'tkazadi (`/auth/web-register`) va tokenlarni saqlaydi.
   ///
+  /// [email] berilsa, register'dan keyin (yoki sessiya allaqachon tirik
+  /// bo'lsa) profilga `updateProfile` orqali yoziladi va ProfileCache'ga
+  /// qo'yiladi — booking kontakt maydoni avtomatik to'ldiriladi.
+  ///
   /// Idempotent: shu raqam bilan allaqachon ro'yxatdan o'tilgan va sessiya
-  /// tirik bo'lsa hech narsa qilmaydi. Raqam o'zgargan bo'lsa (host'da boshqa
-  /// user kirgan) — eski sessiya/keshlar tozalanib, yangi raqam bilan qayta
-  /// ro'yxatdan o'tiladi.
-  static Future<bool> ensureRegistered(String phoneNumber) async {
+  /// tirik bo'lsa hech narsa qilmaydi (email o'zgargan bo'lsa faqat email
+  /// sync qilinadi). Raqam o'zgargan bo'lsa (host'da boshqa user kirgan) —
+  /// eski sessiya/keshlar tozalanib, yangi raqam bilan qayta ro'yxatdan
+  /// o'tiladi.
+  static Future<bool> ensureRegistered(
+    String phoneNumber, {
+    String? email,
+  }) async {
     // Normalizatsiya: "+998 90 123-45-67" ham, "998901234567" ham bitta
     // raqam — formatlash farqi qayta-registratsiyaga sabab bo'lmasin.
     // Backend ham raqamni +siz (998...) formatda kutadi.
@@ -152,25 +170,75 @@ class MySafarSdk {
 
     final store = sdkStorage();
     final registeredPhone = store.read<String>(_kRegisteredPhoneKey);
+    final hostEmail = email?.trim();
+    final hasEmail = hostEmail != null && hostEmail.isNotEmpty;
 
-    if (registeredPhone == phone && tokens.isLoggedIn) return true;
+    var registered = false;
 
-    if (registeredPhone != null && registeredPhone != phone) {
-      // Boshqa user — oldingi sessiya va PII keshlari qoldirilmaydi.
-      await tokens.clear();
-      await ProfileCache().clear();
-      await TicketsCache().clear();
-      await store.remove(_kRegisteredPhoneKey);
+    if (registeredPhone == phone && tokens.isLoggedIn) {
+      registered = true;
+    } else {
+      if (registeredPhone != null && registeredPhone != phone) {
+        // Boshqa user — oldingi sessiya va PII keshlari qoldirilmaydi.
+        await tokens.clear();
+        await ProfileCache().clear();
+        await TicketsCache().clear();
+        await store.remove(_kRegisteredPhoneKey);
+        await store.remove(_kRegisteredEmailKey);
+      }
+
+      final response = await AuthService().webRegister(phoneNumber: phone);
+      if (response is NetworkSuccessResponse) {
+        await store.write(_kRegisteredPhoneKey, phone);
+        registered = true;
+      } else {
+        debugPrint('MySafarSdk.ensureRegistered failed: '
+            '${(response as NetworkErrorResponse).getError()}');
+        return false;
+      }
     }
 
-    final response = await AuthService().webRegister(phoneNumber: phone);
+    if (registered && hasEmail) {
+      await _ensureHostEmail(hostEmail);
+    }
+
+    return registered;
+  }
+
+  /// Host emailini profilga yozadi (idempotent). Muvaffaqiyatsizlik
+  /// register'ni buzmaydi — faqat log.
+  static Future<void> _ensureHostEmail(String email) async {
+    final store = sdkStorage();
+    final saved = store.read<String>(_kRegisteredEmailKey);
+    if (saved == email) {
+      await _mergeEmailIntoProfileCache(email);
+      return;
+    }
+
+    final response = await AccountService()
+        .updateProfile(ProfileModel(email: email).toFormData());
     if (response is NetworkSuccessResponse) {
-      await store.write(_kRegisteredPhoneKey, phone);
-      return true;
+      await store.write(_kRegisteredEmailKey, email);
+      await _mergeEmailIntoProfileCache(email);
+      return;
     }
-    debugPrint('MySafarSdk.ensureRegistered failed: '
+    debugPrint('MySafarSdk._ensureHostEmail failed: '
         '${(response as NetworkErrorResponse).getError()}');
-    return false;
+  }
+
+  /// Booking/profil prefill uchun keshga email (va kerak bo'lsa telefon)
+  /// qo'yiladi — profil sahifasi ochilmagan bo'lsa ham kontakt to'ldiriladi.
+  static Future<void> _mergeEmailIntoProfileCache(String email) async {
+    final cache = ProfileCache();
+    final existing = Map<String, dynamic>.from(cache.read() ?? const {});
+    if (existing['email'] == email) return;
+    existing['email'] = email;
+    final phone = registeredPhone;
+    final cachedPhone = existing['phone_number']?.toString() ?? '';
+    if (phone != null && cachedPhone.isEmpty) {
+      existing['phone_number'] = phone;
+    }
+    await cache.write(existing);
   }
 
   // ── Embed rejimi ─────────────────────────────────────────────────────────
