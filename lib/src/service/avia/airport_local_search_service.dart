@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:isolate';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/services.dart' show rootBundle;
@@ -21,6 +22,10 @@ class AirportLocalSearchService {
 
   static const _assetPath = 'packages/mysafar_sdk/assets/data/airports_iata.json';
 
+  /// Yo'lovchi reysi bor aeroportlar ro'yxati (`rank`: 1..4, katta = yirikroq).
+  static const _rankAssetPath =
+      'packages/mysafar_sdk/assets/data/airportsSearch.json';
+
   SendPort? _workerSend;
   ReceivePort? _responsePort;
   Future<void>? _loadFuture;
@@ -37,6 +42,7 @@ class AirportLocalSearchService {
 
   Future<void> _initWorker() async {
     final raw = await rootBundle.loadString(_assetPath);
+    final ranksRaw = await rootBundle.loadString(_rankAssetPath);
     final responsePort = ReceivePort();
     _responsePort = responsePort;
 
@@ -54,7 +60,8 @@ class AirportLocalSearchService {
         _ready = true;
         if (kDebugMode) {
           debugPrint(
-            'AirportLocalSearchService: loaded ${message['count']} airports (worker)',
+            'AirportLocalSearchService: loaded ${message['count']} airports, '
+            '${message['rankCount']} ranks (worker)',
           );
         }
         if (!ready.isCompleted) ready.complete();
@@ -92,8 +99,28 @@ class AirportLocalSearchService {
     _workerSend!.send(<String, dynamic>{
       'type': 'load',
       'json': raw,
+      'ranksJson': ranksRaw,
     });
     await ready.future;
+  }
+
+  Future<List<AirPortsModel>> _requestResults(Map<String, dynamic> payload) async {
+    await ensureLoaded();
+    final send = _workerSend;
+    if (send == null || !_ready) return const [];
+
+    final id = ++_nextRequestId;
+    final completer = Completer<List<Map<String, dynamic>>>();
+    _pending[id] = completer;
+    send.send(<String, dynamic>{...payload, 'id': id});
+
+    try {
+      final maps = await completer.future;
+      return maps.map(AirPortsModel.fromJson).toList(growable: false);
+    } catch (e, st) {
+      debugPrint('AirportLocalSearchService error: $e\n$st');
+      return const [];
+    }
   }
 
   /// Elastic-like qidiruv. Natijalar shahar / metro kod bo‘yicha guruhlanadi.
@@ -102,28 +129,44 @@ class AirportLocalSearchService {
     String lang = 'en',
     int limit = 40,
   }) async {
-    await ensureLoaded();
-    final send = _workerSend;
-    if (send == null || !_ready) return const [];
-
-    final id = ++_nextRequestId;
-    final completer = Completer<List<Map<String, dynamic>>>();
-    _pending[id] = completer;
-    send.send(<String, dynamic>{
+    return _requestResults(<String, dynamic>{
       'type': 'search',
-      'id': id,
       'query': query,
       'lang': lang,
       'limit': limit,
     });
+  }
 
-    try {
-      final maps = await completer.future;
-      return maps.map(AirPortsModel.fromJson).toList(growable: false);
-    } catch (e, st) {
-      debugPrint('AirportLocalSearchService search error: $e\n$st');
-      return const [];
-    }
+  /// Koordinata bo'yicha eng yaqin aeroportlar (JSON dagi `lat`/`lon`).
+  Future<List<AirPortsModel>> searchByCoordinates({
+    required double lat,
+    required double lon,
+    String lang = 'en',
+    int limit = 5,
+    double maxDistanceKm = 400,
+  }) async {
+    return _requestResults(<String, dynamic>{
+      'type': 'searchByCoordinates',
+      'lat': lat,
+      'lon': lon,
+      'lang': lang,
+      'limit': limit,
+      'maxDistanceKm': maxDistanceKm,
+    });
+  }
+
+  /// Faqat davlat bo'yicha qidiruv (JSON dan).
+  Future<List<AirPortsModel>> searchByCountry({
+    required String country,
+    String lang = 'en',
+    int limit = 40,
+  }) async {
+    return _requestResults(<String, dynamic>{
+      'type': 'searchByCountry',
+      'country': country,
+      'lang': lang,
+      'limit': limit,
+    });
   }
 
   /// Qidiruv normalizatsiyasi: lower, diacritic, apostrof olib tashlash.
@@ -141,6 +184,7 @@ void _airportSearchWorkerMain(SendPort mainSend) {
 
   List<_IndexedAirport>? airports;
   Map<String, _IndexedAirport>? byIata;
+  Map<String, int>? ranks;
 
   inbox.listen((message) {
     if (message is! Map) return;
@@ -148,12 +192,15 @@ void _airportSearchWorkerMain(SendPort mainSend) {
     try {
       if (type == 'load') {
         final jsonStr = message['json'] as String;
+        final ranksJsonStr = message['ranksJson'] as String? ?? '[]';
+        ranks = _parseRanks(ranksJsonStr);
         final parsed = _parseAndIndex(jsonStr);
         airports = parsed.$1;
         byIata = parsed.$2;
         mainSend.send(<String, dynamic>{
           'type': 'ready',
           'count': airports!.length,
+          'rankCount': ranks!.length,
         });
       } else if (type == 'search') {
         final id = message['id'] as int;
@@ -171,6 +218,59 @@ void _airportSearchWorkerMain(SendPort mainSend) {
           airports: list,
           byIata: map,
           query: message['query'] as String? ?? '',
+          lang: message['lang'] as String? ?? 'en',
+          limit: message['limit'] as int? ?? 40,
+        );
+        mainSend.send(<String, dynamic>{
+          'type': 'result',
+          'id': id,
+          'data': results.map((e) => e.toJson()).toList(growable: false),
+        });
+      } else if (type == 'searchByCoordinates') {
+        final id = message['id'] as int;
+        final list = airports;
+        final map = byIata;
+        final rankMap = ranks;
+        if (list == null || map == null || rankMap == null) {
+          mainSend.send(<String, dynamic>{
+            'type': 'result',
+            'id': id,
+            'data': <Map<String, dynamic>>[],
+          });
+          return;
+        }
+        final results = _searchByCoordinatesIndexed(
+          airports: list,
+          byIata: map,
+          ranks: rankMap,
+          lat: (message['lat'] as num?)?.toDouble() ?? 0,
+          lon: (message['lon'] as num?)?.toDouble() ?? 0,
+          lang: message['lang'] as String? ?? 'en',
+          limit: message['limit'] as int? ?? 5,
+          maxDistanceKm:
+              (message['maxDistanceKm'] as num?)?.toDouble() ?? 400,
+        );
+        mainSend.send(<String, dynamic>{
+          'type': 'result',
+          'id': id,
+          'data': results.map((e) => e.toJson()).toList(growable: false),
+        });
+      } else if (type == 'searchByCountry') {
+        final id = message['id'] as int;
+        final list = airports;
+        final map = byIata;
+        if (list == null || map == null) {
+          mainSend.send(<String, dynamic>{
+            'type': 'result',
+            'id': id,
+            'data': <Map<String, dynamic>>[],
+          });
+          return;
+        }
+        final results = _searchByCountryIndexed(
+          airports: list,
+          byIata: map,
+          country: message['country'] as String? ?? '',
           lang: message['lang'] as String? ?? 'en',
           limit: message['limit'] as int? ?? 40,
         );
@@ -208,8 +308,32 @@ void _airportSearchWorkerMain(SendPort mainSend) {
     list.add(indexed);
     byIata[indexed.iata] = indexed;
   }
+  list.sort((a, b) => a.popularRank.compareTo(b.popularRank));
   return (list, byIata);
 }
+
+Map<String, int> _parseRanks(String jsonStr) {
+  final map = <String, int>{};
+  try {
+    final decoded = jsonDecode(jsonStr);
+    if (decoded is List) {
+      for (final e in decoded) {
+        if (e is! Map) continue;
+        final iata = (e['iata']?.toString() ?? '').toUpperCase();
+        final rank = (e['rank'] as num?)?.toInt();
+        if (iata.isEmpty || rank == null || rank <= 0) continue;
+        map[iata] = rank;
+      }
+    }
+  } catch (_) {}
+  return map;
+}
+
+/// Yo'lovchi reysi bo'lmaydigan obyektlar (koordinata qidiruvida chetlanadi).
+final RegExp _nonCommercial = RegExp(
+  r'air ?base|air force|military|heliport|airstrip|seaplane|balloonport|naval|army|airfield',
+  caseSensitive: false,
+);
 
 /// O'zbekistondan eng ko'p uchiladigan yo'nalishlar (yuqoridagi — ustunroq).
 const List<String> _popularFromUz = [
@@ -297,6 +421,134 @@ List<AirPortsModel> _searchIndexed({
 
   if (scored.isEmpty) return const [];
 
+  return _groupScoredResults(
+    scored,
+    byIata: byIata,
+    lang: lang,
+    limit: limit,
+    maxCandidates: 400,
+    maxScanBreakAt: 50,
+  );
+}
+
+List<AirPortsModel> _searchByCoordinatesIndexed({
+  required List<_IndexedAirport> airports,
+  required Map<String, _IndexedAirport> byIata,
+  required Map<String, int> ranks,
+  required double lat,
+  required double lon,
+  required String lang,
+  required int limit,
+  required double maxDistanceKm,
+}) {
+  final candidates = <_ScoredAirport>[];
+
+  for (final a in airports) {
+    if (a.isCityCode) continue;
+    if (a.lat == 0 && a.lon == 0) continue;
+    if (_nonCommercial.hasMatch(a.nameEn)) continue;
+
+    final rank = ranks[a.iata] ?? 0;
+    if (ranks.isNotEmpty && rank <= 0) continue;
+
+    final d = _distanceKm(lat, lon, a.lat, a.lon);
+    if (d > maxDistanceKm) continue;
+
+    var score = ((1 - d / maxDistanceKm) * 10000).round();
+    score += rank * 800;
+    candidates.add(_ScoredAirport(a, score < 1 ? 1 : score));
+  }
+
+  if (candidates.isEmpty) return const [];
+
+  return _groupScoredResults(
+    candidates,
+    byIata: byIata,
+    lang: lang,
+    limit: limit,
+    maxCandidates: 200,
+    maxScanBreakAt: 30,
+  );
+}
+
+List<AirPortsModel> _searchByCountryIndexed({
+  required List<_IndexedAirport> airports,
+  required Map<String, _IndexedAirport> byIata,
+  required String country,
+  required String lang,
+  required int limit,
+}) {
+  final q = _normalize(country);
+  if (q.isEmpty) return const [];
+
+  final scored = <_ScoredAirport>[];
+  for (final a in airports) {
+    final score = _scoreCountry(a, q);
+    if (score > 0) {
+      scored.add(_ScoredAirport(a, score));
+    }
+  }
+
+  if (scored.isEmpty) return const [];
+
+  return _groupScoredResults(
+    scored,
+    byIata: byIata,
+    lang: lang,
+    limit: limit,
+    maxCandidates: 1200,
+    maxScanBreakAt: 30,
+  );
+}
+
+int _scoreCountry(_IndexedAirport a, String q) {
+  final boost = a.popularRank >= 9999 ? 0 : 5000 - a.popularRank * 40;
+
+  if (a.countryLower.isNotEmpty && a.countryLower == q) return 9000 + boost;
+
+  final names = <String>[a.countryEnNorm, a.countryRuNorm, a.countryUzNorm];
+  for (final name in names) {
+    if (name.isEmpty) continue;
+    if (name == q) return 8500 + boost;
+  }
+  if (q.length < 2) return 0;
+
+  for (final name in names) {
+    if (name.isEmpty) continue;
+    if (name.startsWith(q)) return 8000 + boost;
+  }
+  if (q.length >= 3) {
+    for (final name in names) {
+      if (name.isEmpty) continue;
+      if (name.contains(q)) return 7500 + boost;
+    }
+  }
+  return 0;
+}
+
+double _distanceKm(double lat1, double lon1, double lat2, double lon2) {
+  const earthRadiusKm = 6371.0;
+  final dLat = _toRad(lat2 - lat1);
+  final dLon = _toRad(lon2 - lon1);
+  final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+      math.cos(_toRad(lat1)) *
+          math.cos(_toRad(lat2)) *
+          math.sin(dLon / 2) *
+          math.sin(dLon / 2);
+  final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+  return earthRadiusKm * c;
+}
+
+double _toRad(double deg) => deg * math.pi / 180.0;
+
+List<AirPortsModel> _groupScoredResults(
+  List<_ScoredAirport> scored, {
+  required Map<String, _IndexedAirport> byIata,
+  required String lang,
+  required int limit,
+  required int maxCandidates,
+  required int maxScanBreakAt,
+}) {
   scored.sort((a, b) {
     final byScore = b.score.compareTo(a.score);
     if (byScore != 0) return byScore;
@@ -309,7 +561,7 @@ List<AirPortsModel> _searchIndexed({
   });
 
   final groups = <String, _CityGroup>{};
-  final maxScan = scored.length < 400 ? scored.length : 400;
+  final maxScan = scored.length < maxCandidates ? scored.length : maxCandidates;
 
   for (var i = 0; i < maxScan; i++) {
     final item = scored[i];
@@ -390,7 +642,7 @@ List<AirPortsModel> _searchIndexed({
       }
     }
 
-    if (groups.length >= limit && i > 50) break;
+    if (groups.length >= limit && i > maxScanBreakAt) break;
   }
 
   final ordered = groups.values.toList()
@@ -663,6 +915,11 @@ class _IndexedAirport {
   final String countryRu;
   final String countryUz;
 
+  final double lat;
+  final double lon;
+  final String nameEn;
+  final int popularRank;
+
   const _IndexedAirport({
     required this.iata,
     required this.iataLower,
@@ -696,6 +953,10 @@ class _IndexedAirport {
     required this.countryEn,
     required this.countryRu,
     required this.countryUz,
+    required this.lat,
+    required this.lon,
+    required this.nameEn,
+    required this.popularRank,
   });
 
   factory _IndexedAirport.fromAirport(LocalAirport a) {
@@ -721,6 +982,16 @@ class _IndexedAirport {
     for (final t in a.searchTokens) {
       final n = _normalize(t);
       if (n.isNotEmpty) tokens.add(n);
+    }
+
+    final codes = <String>{
+      a.iata.toUpperCase(),
+      if (a.cityCode.isNotEmpty) a.cityCode,
+    };
+    var rank = 9999;
+    for (final c in codes) {
+      final r = _popularRankCode(c);
+      if (r < rank) rank = r;
     }
 
     return _IndexedAirport(
@@ -756,6 +1027,10 @@ class _IndexedAirport {
       countryEn: countryEn,
       countryRu: countryRu,
       countryUz: countryUz,
+      lat: a.lat,
+      lon: a.lon,
+      nameEn: airportEn,
+      popularRank: rank,
     );
   }
 
