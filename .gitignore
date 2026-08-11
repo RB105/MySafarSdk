@@ -6,4 +6,6 @@ pubspec.lock
 *.iml
 .DS_Store
 example/build/
+example/env.json
+example/.env
 .port_marker
