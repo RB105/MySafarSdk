@@ -147,7 +147,13 @@ class _BookingCreatePageState extends State<BookingCreatePage> {
           _handleBookingCreated(context, state.data);
         } else if (state is BookingcreateErrorState) {
           LoadingDialog.dismiss(context);
-          ResponseState.errorState(state.error, context);
+          // Bronlash xatosida TID ko'rsatiladi — foydalanuvchi nusxalab
+          // qo'llab-quvvatga yuborishi mumkin (mobile ilova bilan bir xil).
+          ResponseState.errorState(
+            state.error,
+            context,
+            tid: widget.trId,
+          );
         }
       }, builder: (context, state) {
         return Scaffold(

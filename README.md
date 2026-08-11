@@ -82,10 +82,20 @@ tinglanadi va SDK'ga uzatiladi: `MySafarSdk.handleLink(uri)`.
 
 ## Example
 
+Local secretlar `env.json` orqali beriladi (`env.json` gitignore'da; template: `env.json.example`).
+
 ```bash
 cd example
-flutter run --dart-define=PARTNER_TOKEN=xxx           # to'liq app rejimi
-flutter run -t lib/main_embed.dart --dart-define=PARTNER_TOKEN=xxx  # embed
+cp env.json.example env.json   # bir marta — PARTNER_TOKEN / USER_PHONE / USER_EMAIL
+flutter run --dart-define-from-file=env.json                          # to'liq app
+flutter run -t lib/main_embed.dart --dart-define-from-file=env.json   # embed
+```
+
+Yoki alohida:
+
+```bash
+flutter run --dart-define=PARTNER_TOKEN=xxx
+flutter run -t lib/main_embed.dart --dart-define=PARTNER_TOKEN=xxx
 ```
 
 ## Test
