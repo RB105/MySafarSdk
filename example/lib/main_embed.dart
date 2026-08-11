@@ -4,8 +4,15 @@ import 'package:mysafar_sdk/mysafar_sdk.dart';
 /// Embed rejimi: host app (Unired stsenariysi) SDK'ni oddiy route sifatida
 /// push qiladi.
 ///
-/// Ishga tushirish:
-///   flutter run -t lib/main_embed.dart --dart-define=PARTNER_TOKEN=xxx
+/// Ishga tushirish (local secretlar `env.json` dan):
+///   cp env.json.example env.json   # bir marta
+///   flutter run -t lib/main_embed.dart --dart-define-from-file=env.json
+///
+/// Yoki alohida:
+///   flutter run -t lib/main_embed.dart \
+///     --dart-define=PARTNER_TOKEN=xxx \
+///     --dart-define=USER_PHONE=998... \
+///     --dart-define=USER_EMAIL=...
 Future<void> main() async {
   await MySafarSdk.init(
     config: const MySafarConfig(
@@ -17,10 +24,7 @@ Future<void> main() async {
         'SKOTE_BASE_URL',
         defaultValue: 'https://cms.mysafar.uz/api',
       ),
-      // partnerToken: String.fromEnvironment(
-      //   'PARTNER_TOKEN',
-      //   defaultValue: '***REMOVED-PARTNER-TOKEN***',
-      // ),
+      partnerToken: String.fromEnvironment('PARTNER_TOKEN'), ///
       appMetricaApiKey: String.fromEnvironment(
         'APPMETRICA_API_KEY',
         defaultValue: '***REMOVED-APPMETRICA-KEY***',
@@ -30,21 +34,20 @@ Future<void> main() async {
       // themeMode: ThemeMode.dark  ← bu qator bo'lsa `b` ishlamaydi.
       // Production (Unired): themeMode: ThemeMode.dark yoki .light
       // brandColor berilmasa default #0057BE qoladi.
-      brandColor: Colors.green,
-      bottomBarStyle: MySafarBottomBarStyle(
-        // backgroundColorLight: Colors.amber,
-        // borderRadius: 0,
-
-        // backgroundColorDark: Colors.blue,
-      ),
-      homeHeaderStyle: MySafarHomeHeaderStyle(
-        // logo .png va .svg formatni qabul qiladi 
-        // logo uchun .svg berilsa logo xira bolib qolmaydi 
-        logoAssetPath: 'packages/mysafar_sdk/assets/img/splash/logo.svg',
-        logoBackgroundColor: Colors.amber,
-        title: 'Asadulloh',
-        description: 'bilan parvoz qiling',
-      ),
+      // brandColor: Colors.green,
+      // bottomBarStyle: MySafarBottomBarStyle(
+      //   backgroundColorLight: Colors.amber,
+      //   borderRadius: 0,
+      //   backgroundColorDark: Colors.blue,
+      // ),
+      // homeHeaderStyle: MySafarHomeHeaderStyle(
+      //   // logo .png va .svg formatni qabul qiladi
+      //   // logo uchun .svg berilsa logo xira bolib qolmaydi
+      //   logoAssetPath: 'packages/mysafar_sdk/assets/img/splash/logo.svg',
+      //   logoBackgroundColor: Colors.amber,
+      //   title: 'Asadulloh',
+      //   description: 'bilan parvoz qiling',
+      // ),
     ),
   );
 
@@ -68,6 +71,9 @@ class HostApp extends StatelessWidget {
 class HostHomePage extends StatelessWidget {
   const HostHomePage({super.key});
 
+  static const String _userPhone = String.fromEnvironment('USER_PHONE');
+  static const String _userEmail = String.fromEnvironment('USER_EMAIL');
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -79,19 +85,12 @@ class HostHomePage extends StatelessWidget {
           onPressed: () {
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => const MySafarEmbed(
+                builder: (_) => MySafarEmbed(
                   // Host user'ining raqami/emaili — SDK bir marta jim
                   // ro'yxatdan o'tkazadi va emailni profilga yozadi.
-                  // (--dart-define=USER_PHONE=998... / USER_EMAIL=... bilan
-                  // berish mumkin).
-                  // phoneNumber: String.fromEnvironment('USER_PHONE') == ''
-                  //     ? null
-                  //     : String.fromEnvironment('USER_PHONE'),
-                  // email: String.fromEnvironment('USER_EMAIL') == ''
-                  //     ? null
-                  //     : String.fromEnvironment('USER_EMAIL'),
-                  phoneNumber: '33000000000',
-                  email: 'nomonjonov@gmail.com',
+                  // Qiymatlar env.json / --dart-define orqali beriladi.
+                  phoneNumber: _userPhone.isEmpty ? null : _userPhone,
+                  email: _userEmail.isEmpty ? null : _userEmail,
                 ),
               ),
             );
