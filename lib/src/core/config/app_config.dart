@@ -1,3 +1,5 @@
+import 'dart:convert' show base64, utf8;
+
 import 'package:mysafar_sdk/src/api/config.dart' show MySafarConfig;
 
 /// App-level konfiguratsiya. Ilgari native `MySafarChannel` platform kanalidan
@@ -29,8 +31,23 @@ class AppConfig {
     return Future.value();
   }
 
-  /// Whether the partner token is present and not an unresolved build
-  /// placeholder such as `$(PARTNER_TOKEN)`.
+  /// Bekor qilingan (leaked) partner token(lar)ining base64 ko'rinishi.
+  /// Xom holda saqlanmaydi: (1) tarix-scrub bu faylni buzmasligi uchun,
+  /// (2) qayta nusxa-ko'chirishni qiyinlashtirish uchun. Har bir partner o'z
+  /// tokenini berishi shart — bu token backend'da bekor qilingan.
+  static const Set<String> _revokedPartnerTokensB64 = {
+    'NGRiNzM5ZDNmMmIxNzk3MDk3MjE4OWE5YjEzM2MyOGU0MzQ3NDQ4MA==',
+  };
+
+  static bool _isRevokedPartnerToken(String token) =>
+      _revokedPartnerTokensB64.contains(base64.encode(utf8.encode(token)));
+
+  /// Whether the partner token is present, is not an unresolved build
+  /// placeholder such as `$(PARTNER_TOKEN)`, and is not a known revoked token.
+  /// Revoked bo'lsa `false` — Dio interceptor so'rovni rad etadi, shu sabab
+  /// hech bir partner umumiy/sizib chiqqan token bilan ishlay olmaydi.
   static bool get hasValidPartnerToken =>
-      partnerToken.isNotEmpty && !partnerToken.startsWith(r'$(');
+      partnerToken.isNotEmpty &&
+      !partnerToken.startsWith(r'$(') &&
+      !_isRevokedPartnerToken(partnerToken);
 }

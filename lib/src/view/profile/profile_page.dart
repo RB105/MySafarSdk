@@ -820,10 +820,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                     ),
                                     const SizedBox(width: 8),
                                     Text(
-                                      state.profileModel?.phoneNumber ==
-                                              "998940874676"
-                                          ? "delete_account_title".tr()
-                                          : "logout".tr(),
+                                      "logout".tr(),
                                       style: context.textTheme.bodyMedium
                                           ?.copyWith(
                                         color: ProjectTheme.error,

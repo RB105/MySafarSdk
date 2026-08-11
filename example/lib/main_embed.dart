@@ -24,11 +24,7 @@ Future<void> main() async {
         'SKOTE_BASE_URL',
         defaultValue: 'https://cms.mysafar.uz/api',
       ),
-      partnerToken: String.fromEnvironment('PARTNER_TOKEN'), ///
-      appMetricaApiKey: String.fromEnvironment(
-        'APPMETRICA_API_KEY',
-        defaultValue: '***REMOVED-APPMETRICA-KEY***',
-      ),
+      partnerToken: String.fromEnvironment('PARTNER_TOKEN'),
 
       // MUHIM — terminal `b` bilan sinash uchun themeMode YOZMASLIK kerak!
       // themeMode: ThemeMode.dark  ← bu qator bo'lsa `b` ishlamaydi.

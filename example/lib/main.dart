@@ -14,7 +14,6 @@ Future<void> main() async {
         'BASE_URL',
         defaultValue: 'https://api.mysafar.ru',
       ),
-      
       skoteBaseUrl: String.fromEnvironment(
         'SKOTE_BASE_URL',
         defaultValue: 'https://cms.mysafar.uz/api',

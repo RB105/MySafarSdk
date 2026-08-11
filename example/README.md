@@ -2,6 +2,25 @@
 
 A new Flutter project.
 
+## Ishga tushirish (embed rejimi)
+
+Maxfiy qiymatlar `env.json` faylidan olinadi (git'ga kirmaydi):
+
+```bash
+cd example
+cp env.json.example env.json     # bir marta, keyin env.json ichini to'ldiring
+flutter run -t lib/main_embed.dart --dart-define-from-file=env.json
+```
+
+> `env.json` faqat sof JSON bo'lishi kerak (izoh/qo'shimcha matn qo'shmang) —
+> aks holda `--dart-define-from-file` uni o'qiy olmaydi.
+
+To'liq app rejimi uchun:
+
+```bash
+flutter run --dart-define=PARTNER_TOKEN=xxx
+```
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.

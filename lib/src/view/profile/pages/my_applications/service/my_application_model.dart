@@ -85,7 +85,7 @@ class MyApplicationModel {
     );
   }
 
-  /// "ABDUMALIKOV RASULJON BAHODIR OGLI"
+  /// lastName + firstName + middleName tartibida (masalan "FAMILIYA ISM OTASINING").
   String get fullName {
     final parts = [lastName, firstName, middleName]
         .whereType<String>()
