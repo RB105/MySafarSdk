@@ -120,10 +120,21 @@ class ConfirmedTicketsCubit extends Cubit<ConfirmedTicketsState> {
 
   /// Xom JSON ro'yxatini modellarga o'giradi — Map bo'lmagan (null yoki boshqa)
   /// elementlarni o'tkazib yuboradi.
-  List<ConfirmedTicketsModel> _parse(List raw) => raw
-      .whereType<Map>()
-      .map((e) => ConfirmedTicketsModel.fromJson(Map<String, dynamic>.from(e)))
-      .toList();
+  /// Bitta bilet parse bo'lmasa (server maydon shaklini o'zgartirsa) FAQAT
+  /// o'sha bilet tashlab ketiladi — ilgari bitta buzuq element butun ro'yxatni
+  /// yo'q qilardi.
+  List<ConfirmedTicketsModel> _parse(List raw) {
+    final result = <ConfirmedTicketsModel>[];
+    for (final item in raw.whereType<Map>()) {
+      try {
+        result.add(
+            ConfirmedTicketsModel.fromJson(Map<String, dynamic>.from(item)));
+      } catch (e) {
+        debugPrint("❌ Ticket parse skipped (id=${item['id']}): $e");
+      }
+    }
+    return result;
+  }
 
   /// Partner tickets uchun telefon: avval embed registered phone, yo'q bo'lsa
   /// profil keshidagi `phone_number` (faqat raqamlar).

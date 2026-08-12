@@ -18,7 +18,7 @@ import 'package:mysafar_sdk/src/core/tools/project_utils.dart' show ProjectUtils
 import 'package:mysafar_sdk/src/core/tools/sdk_sheets.dart';
 import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/cubit/search/route_search_cubit.dart'
-    show RouteSearchCubit, RouteSearchState;
+    show RouteSearchCubit, RouteSearchState, RouteLeg;
 import 'package:mysafar_sdk/src/model/remote/avia/airports_model.dart'
     show AirPortsModel;
 import 'package:mysafar_sdk/src/model/remote/avia/ticket_date_price_model.dart'
@@ -40,6 +40,7 @@ import 'package:syncfusion_flutter_datepicker/datepicker.dart'
 import 'dart:math' as math;
 
 part 'route_search_header.dart';
+part 'route_search_multiway.dart';
 part 'route_search_price_chart.dart';
 part 'route_search_best_offers.dart';
 
@@ -100,10 +101,14 @@ class _RouteSearchView extends StatefulWidget {
   State<_RouteSearchView> createState() => _RouteSearchViewState();
 }
 
-class _RouteSearchViewState extends State<_RouteSearchView> {
+class _RouteSearchViewState extends State<_RouteSearchView>
+    with SingleTickerProviderStateMixin {
   RouteSearchCubit get _cubit => context.read<RouteSearchCubit>();
 
   final ScrollController _scrollController = ScrollController();
+
+  /// Rejim tabi: 0 — oddiy qidiruv, 1 — murakkab marshrut.
+  late final TabController _tabController;
 
   /// AppBar fonining to'yinganligi (0..1). Hero ko'k bo'lgani uchun status
   /// bar ikonkalari doim oq — scroll qilinganda ostidagi och fon ko'rinmasligi
@@ -114,6 +119,18 @@ class _RouteSearchViewState extends State<_RouteSearchView> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    _tabController = TabController(length: 2, vsync: this)
+      ..addListener(_onTabChanged);
+  }
+
+  void _onTabChanged() {
+    if (_tabController.indexIsChanging) return;
+    final bool multi = _tabController.index == 1;
+    if (_cubit.state.multiMode == multi) return;
+    HapticFeedback.selectionClick();
+    AnalyticsService()
+        .trackButtonTap(multi ? 'route_tab_multiway' : 'route_tab_simple');
+    _cubit.setMultiMode(multi);
   }
 
   void _onScroll() {
@@ -127,6 +144,8 @@ class _RouteSearchViewState extends State<_RouteSearchView> {
   void dispose() {
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    _tabController.removeListener(_onTabChanged);
+    _tabController.dispose();
     _headerColorT.dispose();
     super.dispose();
   }
@@ -171,6 +190,42 @@ class _RouteSearchViewState extends State<_RouteSearchView> {
       klass: r['klass'] ?? 'a',
     );
   }
+
+  // ── Murakkab marshrut tanlovlari ──────────────────────────────────────
+
+  Future<void> _pickLegCity(int index, int directionType) async {
+    final r = await ProjectDialogs.showCitySearchPicker(context, directionType);
+    if (!mounted || r == null) return;
+    directionType == 0 ? _cubit.setLegFrom(index, r) : _cubit.setLegTo(index, r);
+  }
+
+  Future<void> _pickLegDate(int index) async {
+    final leg = _cubit.state.legs[index];
+    final r = await ProjectDialogs.showCalendartPicker(
+      context,
+      0,
+      leg.date != null ? PickerDateRange(leg.date, null) : null,
+      leg.from,
+      leg.to,
+    );
+    if (!mounted || r == null || r.startDate == null) return;
+    _cubit.setLegDate(index, r.startDate!);
+  }
+
+  void _addLeg() {
+    _cubit.addLeg();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      _scrollController.animateTo(
+        (_scrollController.offset + 150)
+            .clamp(0.0, _scrollController.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  void _removeLeg(int index) => _cubit.removeLeg(index);
 
   /// Narxlar jadvali bottom sheet'ini ochadi. "Bir tomonga" rejimida bitta
   /// sana (DateTime), "Borish-kelish"da esa ikkala sana (PickerDateRange)
@@ -220,6 +275,10 @@ class _RouteSearchViewState extends State<_RouteSearchView> {
 
   void _search() {
     final state = _cubit.state;
+    if (state.multiMode) {
+      _searchMulti();
+      return;
+    }
     // Webda tugma doim faol — sana tanlanmagan bo'lsa ogohlantiramiz
     // (bosh sahifadagi forma bilan bir xil xatti-harakat).
     if (!state.hasDate) {
@@ -234,6 +293,22 @@ class _RouteSearchViewState extends State<_RouteSearchView> {
     // `ticket_searched` eventi endi TicketCubit'da — so'rov servicega
     // ketayotgan paytda yuboriladi (bu yerda takrorlanmaydi).
     final params = _cubit.buildRequest();
+    ProjectUtils.setRecommendationParams(params);
+    Navigator.pushNamed(
+      context,
+      RecommendationsTicketPage.routeName,
+      arguments: params,
+    );
+  }
+
+  void _searchMulti() {
+    final String? error = _cubit.validateLegs();
+    if (error != null) {
+      showToastMessage(error.tr());
+      return;
+    }
+    HapticFeedback.mediumImpact();
+    final params = _cubit.buildMultiRequest();
     ProjectUtils.setRecommendationParams(params);
     Navigator.pushNamed(
       context,
@@ -264,28 +339,80 @@ class _RouteSearchViewState extends State<_RouteSearchView> {
   /// ko'k gradient emas — sahifa fonida turadi.
   Widget _hero(BuildContext context, RouteSearchState state) {
     final double topInset = MediaQuery.of(context).padding.top;
-    // AppBar balandligi bilan bir xil; karta back tugmasi tagiga yaqin.
     const double appBarH = 36;
     return Padding(
-      // Yuqorida AppBar (shaffof) turadi — karta uning ostidan boshlanadi.
       padding: EdgeInsets.fromLTRB(16, topInset + appBarH, 16, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _WebSearchCard(
-            from: state.from,
-            to: state.to,
-            dateText: _dateFieldText(state),
-            dateIsPlaceholder: state.date == null,
-            paxText: _paxFieldText(state),
-            onFromTap: () => _pickCity(0),
-            onToTap: () => _pickCity(1),
-            onSwap: _swap,
-            onDateTap: _pickDate,
-            onPaxTap: _pickPassengers,
+          _RouteModeTabBar(controller: _tabController),
+          const SizedBox(height: 10),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 280),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              layoutBuilder: (currentChild, previousChildren) => Stack(
+                alignment: Alignment.topCenter,
+                children: [
+                  ...previousChildren,
+                  if (currentChild != null) currentChild,
+                ],
+              ),
+              transitionBuilder: (child, animation) {
+                final bool isMultiChild = child.key == const ValueKey('multi');
+                final bool isIncoming = isMultiChild == state.multiMode;
+                final double beginDx = isIncoming
+                    ? (state.multiMode ? 0.12 : -0.12)
+                    : (state.multiMode ? -0.12 : 0.12);
+                return FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: Offset(beginDx, 0),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
+                  ),
+                );
+              },
+              child: state.multiMode
+                  ? KeyedSubtree(
+                      key: const ValueKey('multi'),
+                      child: _MultiRouteCard(
+                        legs: state.legs,
+                        paxText: _paxFieldText(state),
+                        canAdd: state.canAddLeg,
+                        canRemove: state.canRemoveLeg,
+                        onFromTap: (i) => _pickLegCity(i, 0),
+                        onToTap: (i) => _pickLegCity(i, 1),
+                        onDateTap: _pickLegDate,
+                        onRemove: _removeLeg,
+                        onAdd: _addLeg,
+                        onPaxTap: _pickPassengers,
+                      ),
+                    )
+                  : KeyedSubtree(
+                      key: const ValueKey('simple'),
+                      child: _WebSearchCard(
+                        from: state.from,
+                        to: state.to,
+                        dateText: _dateFieldText(state),
+                        dateIsPlaceholder: state.date == null,
+                        paxText: _paxFieldText(state),
+                        onFromTap: () => _pickCity(0),
+                        onToTap: () => _pickCity(1),
+                        onSwap: _swap,
+                        onDateTap: _pickDate,
+                        onPaxTap: _pickPassengers,
+                      ),
+                    ),
+            ),
           ),
           const SizedBox(height: 8),
-          // Filtr kalitlari (web: mx-1 gap-2).
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Row(
@@ -365,25 +492,34 @@ class _RouteSearchViewState extends State<_RouteSearchView> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _hero(context, state),
-                // Narxlar jadvali kartasi (sarlavhasiz). Bosilganda 365 kunlik
-                // sheet ochiladi.
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                  child: _PriceChartCard(
-                    prices: state.monthPrices,
-                    loading: state.monthLoading,
-                    onTap: _openPriceChart,
-                  ),
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 320),
+                  curve: Curves.easeOutCubic,
+                  alignment: Alignment.topCenter,
+                  child: state.multiMode
+                      ? const SizedBox(width: double.infinity)
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                              child: _PriceChartCard(
+                                prices: state.monthPrices,
+                                loading: state.monthLoading,
+                                onTap: _openPriceChart,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            _BestOffersSection(
+                              offers: state.offers,
+                              loading: state.offersLoading,
+                              date: state.offersDate,
+                              onTap: _openOffer,
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                        ),
                 ),
-                const SizedBox(height: 16),
-                // "Eng yaxshi takliflar" — eng arzon kun uchun topilgan reyslar.
-                _BestOffersSection(
-                  offers: state.offers,
-                  loading: state.offersLoading,
-                  date: state.offersDate,
-                  onTap: _openOffer,
-                ),
-                const SizedBox(height: 8),
               ],
             ),
           );

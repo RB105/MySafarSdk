@@ -19,6 +19,8 @@ import 'package:mysafar_sdk/src/model/remote/avia/top_city_model.dart'
     show TopCityModel;
 
 class AviaService with RequestConfig {
+  static final Map<String, TicketDatePriceModel> _monthPriceCache = {};
+
   Future<NetworkResponse> getAirports(
       {required String part, String? lang}) async {
     // sorov yuboriladi success bolsa AirPortsModelga parse qilinadi
@@ -137,17 +139,62 @@ class AviaService with RequestConfig {
     return response;
   }
 
-  Future<NetworkResponse> getPriceByMonth(String from, String to) async {
+  Future<NetworkResponse> getPriceByMonth(
+    String from,
+    String to, {
+    DateTime? date,
+    int adt = 1,
+    int chd = 0,
+    int inf = 0,
+    String klass = 'a',
+    String lang = 'ru',
+    int count = 30,
+    bool direct = false,
+    bool baggage = false,
+  }) async {
+    final DateTime start = date ?? DateTime.now();
+    final String startText = '${start.day.toString().padLeft(2, '0')}.'
+        '${start.month.toString().padLeft(2, '0')}.${start.year}';
+
+    final String cacheKey =
+        '$from-$to-$startText-$adt-$chd-$inf-$klass-$count-$direct-$baggage';
+    final cached = _monthPriceCache[cacheKey];
+    if (cached != null) {
+      return NetworkSuccessResponse(data: cached);
+    }
+
+    final params = <String, dynamic>{
+      "adt": "$adt",
+      "chd": "$chd",
+      "inf": "$inf",
+      "ins": 0,
+      "src": 0,
+      "yth": 0,
+      "lang": lang,
+      "class_": klass,
+      "count": count,
+      "filter_airlines": <String>[],
+      "gds_black_list": <String>[],
+      "gds_white_list": <String>[],
+      "is_charter": false,
+      if (direct) "is_direct_only": 1,
+      if (baggage) "baggage": "1",
+      "segments": [
+        {"from": from, "to": to, "date": startText}
+      ],
+      "token": "",
+    };
+
     final response = await postRequest(
-        partnerToken: true,
-        endPoint: EndPoints.ticket_price_by_month,
-        params: {
-          "segments": {"from": from, "to": to}
-        });
+      partnerToken: true,
+      endPoint: EndPoints.ticket_price_by_month,
+      params: params,
+    );
 
     if (response is NetworkSuccessResponse) {
-      return NetworkSuccessResponse(
-          data: TicketDatePriceModel.fromJson(response.data));
+      final model = TicketDatePriceModel.fromJson(response.data);
+      _monthPriceCache[cacheKey] = model;
+      return NetworkSuccessResponse(data: model);
     }
 
     return response;

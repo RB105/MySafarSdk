@@ -46,6 +46,11 @@ class MyTicketWidget extends StatefulWidget {
 class _MyTicketWidgetState extends State<MyTicketWidget> {
   bool _isLoading = false;
 
+  /// Ko'p segmentli (multi-marshrut / vtrip) biletda karta juda uzayib
+  /// ketmasligi uchun boshida FAQAT birinchi parvoz ko'rsatiladi. Foydalanuvchi
+  /// tugmani bosganda qolgan segmentlar ochiladi, qayta bosilganda yig'iladi.
+  bool _segmentsExpanded = false;
+
   /// Perforatsiya "kesik"larining radiusi.
   static const double _notchRadius = 10;
 
@@ -137,6 +142,11 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
     String callbackStatus = widget.ticketsModel.callbackStatus ?? "";
     final isDark = context.themeProvider.isDark;
     final segments = responseData.book?.flight?.segments ?? [];
+    // Yig'ilgan holatda faqat birinchi parvoz ko'rinadi (bir segmentli oddiy
+    // biletda esa farq yo'q — u baribir bitta).
+    final visibleSegments = (segments.length > 1 && !_segmentsExpanded)
+        ? segments.sublist(0, 1)
+        : segments;
     final Widget? action = _actionFor(callbackStatus, responseData);
 
     return Container(
@@ -175,9 +185,23 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                for (int i = 0; i < segments.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 16),
-                  _segmentBlock(segments[i]),
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  alignment: Alignment.topCenter,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (int i = 0; i < visibleSegments.length; i++) ...[
+                        if (i > 0) const SizedBox(height: 16),
+                        _segmentBlock(visibleSegments[i]),
+                      ],
+                    ],
+                  ),
+                ),
+                if (segments.length > 1) ...[
+                  const SizedBox(height: 12),
+                  _segmentsToggle(segments.length - 1),
                 ],
               ],
             ),
@@ -435,6 +459,61 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
           ],
         ),
       ],
+    );
+  }
+
+  /// "Yana N ta ko'rsatish" / "Yashirish" tugmasi — ko'p segmentli biletda
+  /// qolgan parvozlarni ochib-yopadi. Butun qator bosiladi (kichik ikonaga
+  /// tegish shart emas).
+  Widget _segmentsToggle(int hiddenCount) {
+    final isDark = context.themeProvider.isDark;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => setState(() => _segmentsExpanded = !_segmentsExpanded),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: _accent.withAlpha(isDark ? 30 : 14),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: _accent.withAlpha(isDark ? 70 : 45),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Flexible(
+              child: Text(
+                _segmentsExpanded
+                    ? "ticket_show_less".tr()
+                    : "ticket_show_more_count"
+                        .tr(namedArgs: {"count": "$hiddenCount"}),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: context.textTheme.bodySmall?.copyWith(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: _accent,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            AnimatedRotation(
+              turns: _segmentsExpanded ? 0.5 : 0,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutCubic,
+              child: Icon(
+                Icons.keyboard_arrow_down_rounded,
+                size: 18,
+                color: _accent,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

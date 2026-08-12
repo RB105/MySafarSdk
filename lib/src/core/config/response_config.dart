@@ -1,5 +1,6 @@
+import 'dart:convert' show jsonDecode;
+
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
-import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 
 abstract class NetworkResponse {
   const NetworkResponse();
@@ -31,14 +32,141 @@ final class NetworkErrorResponse<T> extends NetworkResponse {
     // Client xatolari (400/401/403/404/409): backend odatda ma'noli biznes
     // xabarini yuboradi — avval o'shani, topilmasa tarjima matnini ko'rsatamiz.
     final err = error;
-    final locale = sdkStorage().read<String>('lang') ?? 'uz';
+    // Server xabarlari faqat uz/ru/en da keladi — qo'shimcha tillar
+    // (kk, tg → ru; tr → en) shu uchtasiga moslanadi.
+    final locale = dataLang();
 
     if (err is Map) {
       final extracted = _extractErrorMessage(err, locale);
       if (extracted != null && extracted.isNotEmpty) return extracted;
     }
 
+    // Xabar matn ko'rinishida ham kelishi mumkin: servis qatlami body'dan
+    // chiqarib olgan xabar, JSON matni yoki `{uz: ..., ru: ..., en: ...}`
+    // ko'rinishidagi Map'ning matnga aylantirilgani. Bularning hammasidan
+    // foydalanuvchi tilidagi xabarni ajratib olamiz — aks holda server
+    // aytgan aniq sabab o'rniga umumiy "static" matn chiqib qoladi.
+    if (err is String) {
+      final extracted = _messageFromText(err, locale);
+      if (extracted != null && extracted.isNotEmpty) return extracted;
+    }
+
     return _localizedMessage();
+  }
+
+  /// Matn ko'rinishidagi xatodan foydalanuvchiga ko'rsatiladigan xabarni
+  /// ajratadi. Ichki/texnik matnlar (HTTP status matni, "No connection" kabi
+  /// zaxira qiymatlar, HTML) uchun `null` qaytaradi — bunday holatda tayyor
+  /// tarjima matni ko'rsatiladi.
+  String? _messageFromText(String raw, String locale) {
+    final text = raw.trim();
+    if (text.isEmpty || _isTechnicalMessage(text)) return null;
+    // HTML/stack trace — foydalanuvchiga ko'rsatilmaydi.
+    if (text.startsWith('<')) return null;
+
+    if (text.startsWith('{') || text.startsWith('[')) {
+      // 1. To'g'ri JSON matni bo'lsa — Map bo'yicha odatiy qidiruv.
+      try {
+        final decoded = jsonDecode(text);
+        if (decoded is Map) {
+          final extracted = _extractErrorMessage(decoded, locale);
+          if (extracted != null && extracted.isNotEmpty) return extracted;
+        }
+      } catch (_) {
+        // JSON emas — quyida Dart Map matni sifatida tekshiriladi.
+      }
+      // 2. `{uz: ..., ru: ..., en: ...}` — Map.toString() ko'rinishi
+      //    (kalitlar tirnoqsiz, shu sababli JSON sifatida o'qilmaydi).
+      final inline = _parseInlineLocaleMap(text);
+      if (inline != null) {
+        final picked = _pickLocale(inline, locale);
+        if (picked != null) return picked;
+      }
+      return null;
+    }
+
+    return text;
+  }
+
+  /// `{uz: ..., ru: ..., en: ...}` matnini til→xabar Map'iga o'giradi.
+  /// Qiymat ichidagi vergul xabarni bo'lib yubormaydi — ajratish faqat
+  /// keyingi til kaliti uchraganda bo'ladi.
+  Map<String, String>? _parseInlineLocaleMap(String text) {
+    if (!text.startsWith('{') || !text.endsWith('}')) return null;
+    final inner = text.substring(1, text.length - 1);
+    final matches = _inlineLocaleKey.allMatches(inner).toList();
+    if (matches.isEmpty) return null;
+    final map = <String, String>{};
+    for (int i = 0; i < matches.length; i++) {
+      final key = matches[i].group(1)!;
+      final int start = matches[i].end;
+      final int end = i + 1 < matches.length ? matches[i + 1].start : inner.length;
+      final value = inner.substring(start, end).trim();
+      if (value.isNotEmpty) map[key] = value;
+    }
+    return map.isEmpty ? null : map;
+  }
+
+  static final RegExp _inlineLocaleKey =
+      RegExp(r'(?:^|,)\s*(uz|ru|en)\s*:\s*');
+
+  /// Ichki (foydalanuvchiga ma'nosiz) matnlar: HTTP status matni va kod
+  /// ichidagi zaxira qiymatlar. Bularning o'rniga tarjima matni chiqadi.
+  static const Set<String> _technicalMessages = {
+    'cancelled',
+    'null',
+    'empty',
+    'error',
+    'unknown error',
+    'something went wrong',
+    'bad response',
+    'no connection',
+    'connect timeout',
+    'receive timeout',
+    'send timeout',
+    'failed to parse tariffs',
+    'unexpected airports response',
+    'unexpected centrum response',
+    // HTTP status matnlari (`response.statusMessage`).
+    'bad request',
+    'unauthorized',
+    'payment required',
+    'forbidden',
+    'not found',
+    'method not allowed',
+    'conflict',
+    'payload too large',
+    'request entity too large',
+    'unprocessable entity',
+    'too many requests',
+    'internal server error',
+    'not implemented',
+    'bad gateway',
+    'service unavailable',
+    'gateway timeout',
+  };
+
+  /// Dart istisnolari matnga aylanib kelganda ham foydalanuvchiga
+  /// ko'rsatilmasligi kerak ("Exception: ...", "type 'Null' is not a
+  /// subtype ...", stack trace va h.k.).
+  static const List<String> _exceptionMarkers = [
+    'exception',
+    'stack trace',
+    'is not a subtype',
+    'null check operator',
+    'nosuchmethod',
+    '#0 ',
+  ];
+
+  bool _isTechnicalMessage(String text) {
+    final lower = text.toLowerCase();
+    if (_technicalMessages.contains(lower)) return true;
+    // Juda uzun matn — deyarli har doim texnik chiqindi (HTML, trace).
+    if (text.length > 400) return true;
+    for (final marker in _exceptionMarkers) {
+      if (lower.contains(marker)) return true;
+    }
+    return false;
   }
 
   /// Server o'chishi, ulanish yo'qligi yoki 5xx kabi infratuzilma xatolarimi?
@@ -114,10 +242,18 @@ final class NetworkErrorResponse<T> extends NetworkResponse {
   String? _extractErrorMessage(Map err, String locale) {
     // 1. Til bo'yicha lokalizatsiyalangan xabarlar ({uz, ru, en} Map'i).
     const localizedRoots = <List<String>>[
+      // Yangi backend formati: {"code": "...", "detail": {uz, ru, en}}
+      // (masalan bilet vozvrati endpointlari).
+      ['detail'],
+      ['data', 'detail'],
+      ['error', 'detail'],
       ['message'],
+      ['messages'],
       ['data', 'message'],
+      ['data', 'messages'],
       ['error', 'data', 'message'],
       ['error', 'message'],
+      ['error', 'messages'],
       ['data', 'humo', 'error', 'message'],
       ['humo', 'error', 'message'],
       ['data', 'uzcard', 'error', 'message'],
@@ -139,7 +275,9 @@ final class NetworkErrorResponse<T> extends NetworkResponse {
     // 2. Oddiy matnli xabarlar (String yoki String'lar ro'yxati).
     const stringPaths = <List<String>>[
       ['message'],
+      ['messages'],
       ['data', 'message'],
+      ['data', 'messages'],
       ['error', 'data', 'message'],
       ['detail'],
       ['data', 'detail'],
