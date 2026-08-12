@@ -53,6 +53,14 @@ class EndPoints {
   static const String user_confirmed_tickets =
       '/avia/user-confirmed-tickets'; // hearder 
   static const String user_ofd_cheques = '/main/cheques'; // hearder
+
+  // ── Bilet vozvrati (refund) — foydalanuvchi ARIZA qoldiradi, refundni
+  //    support bajaradi. `/tickets/refund` (to'g'ridan-to'g'ri) MOBILDA
+  //    chaqirilmaydi.
+  static const String refund_request = '/tickets/refund/request'; // hearder
+  static const String refund_requests = '/tickets/refund/requests'; // hearder
+  static const String refund_amounts = '/tickets/refund/amounts'; // hearder
+
   static const String get_user_date = '/get-user-data'; // hearder
   static const String create_user_date = '/create-user-data'; // hearder
   static const String delete_user_date = '/delete-user-data'; // hearder
