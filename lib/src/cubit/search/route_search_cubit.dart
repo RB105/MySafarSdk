@@ -20,9 +20,6 @@ part 'route_search_state.dart';
 /// Yo'nalish qidiruv oynasining biznes-mantig'i (RouteSearchPage). Barcha
 /// forma holati va yuklanadigan ma'lumot shu yerda — sahifaning o'zi faqat
 /// holatni chizadi va foydalanuvchi tanlovlarini shu cubit'ga uzatadi.
-///
-/// Bog'liqliklar (servislar) konstruktordan beriladi — get_it orqali ulanadi,
-/// testda esa mock berish mumkin (testlanuvchanlik).
 class RouteSearchCubit extends Cubit<RouteSearchState> {
   RouteSearchCubit({
     required AirPortsModel from,
@@ -46,13 +43,11 @@ class RouteSearchCubit extends Cubit<RouteSearchState> {
 
   // ── Forma tanlovlari ──────────────────────────────────────────────────
 
-  /// "Qayerdan" o'zgardi — narxlar qayta yuklanadi.
   void setFrom(AirPortsModel value) {
     emit(state.copyWith(from: value));
     _loadMonthPrices();
   }
 
-  /// "Qayerga" o'zgardi — narxlar va shahar ma'lumoti qayta yuklanadi.
   void setTo(AirPortsModel value) {
     emit(state.copyWith(to: value));
     _loadMonthPrices();
@@ -65,14 +60,12 @@ class RouteSearchCubit extends Cubit<RouteSearchState> {
     _loadDestInfo();
   }
 
-  /// Kalendardan sana(lar) tanlandi — [endDate] null bo'lsa bir tomonlama.
   void setDates(DateTime date, DateTime? endDate) {
     emit(endDate == null
         ? state.copyWith(date: date, clearEndDate: true)
         : state.copyWith(date: date, endDate: endDate));
   }
 
-  /// Tezkor chip yoki "Eng arzon kunlar" qatoridan bir tomonlama sana.
   void pickDay(DateTime day) {
     emit(state.copyWith(
       date: DateTime(day.year, day.month, day.day),
@@ -89,26 +82,92 @@ class RouteSearchCubit extends Cubit<RouteSearchState> {
     emit(state.copyWith(adt: adt, chd: chd, inf: inf, klass: klass));
   }
 
+  /// Filtr kalitlari — narxlar kalendari ham shu filtrlar bilan qayta so'raladi
+  /// (o'chiq filtr so'rovga umuman qo'shilmaydi).
   void setFilters({required bool direct, required bool baggage}) {
+    if (state.direct == direct && state.baggage == baggage) return;
     emit(state.copyWith(direct: direct, baggage: baggage));
+    _loadMonthPrices();
+  }
+
+  // ── Murakkab marshrut (tab 2) ─────────────────────────────────────────
+
+  void setMultiMode(bool value) {
+    if (state.multiMode == value) return;
+    if (value && state.legs.isEmpty) {
+      emit(state.copyWith(
+        multiMode: true,
+        legs: [
+          RouteLeg(from: state.from, to: state.to, date: state.date),
+          RouteLeg(from: state.to),
+        ],
+      ));
+      return;
+    }
+    emit(state.copyWith(multiMode: value));
+  }
+
+  void addLeg() {
+    if (!state.canAddLeg) return;
+    final last = state.legs.isEmpty ? null : state.legs.last;
+    emit(state.copyWith(legs: [...state.legs, RouteLeg(from: last?.to)]));
+  }
+
+  void removeLeg(int index) {
+    if (!state.canRemoveLeg || index < 0 || index >= state.legs.length) return;
+    final legs = [...state.legs]..removeAt(index);
+    emit(state.copyWith(legs: legs));
+  }
+
+  void setLegFrom(int index, AirPortsModel value) =>
+      _updateLeg(index, (leg) => leg.copyWith(from: value));
+
+  void setLegTo(int index, AirPortsModel value) =>
+      _updateLeg(index, (leg) => leg.copyWith(to: value));
+
+  void setLegDate(int index, DateTime value) => _updateLeg(
+        index,
+        (leg) => leg.copyWith(date: DateTime(value.year, value.month, value.day)),
+      );
+
+  void _updateLeg(int index, RouteLeg Function(RouteLeg leg) update) {
+    if (index < 0 || index >= state.legs.length) return;
+    final legs = [...state.legs];
+    legs[index] = update(legs[index]);
+    emit(state.copyWith(legs: legs));
+  }
+
+  String? validateLegs() {
+    final legs = state.legs;
+    if (legs.length < RouteSearchState.minLegs) return "home_fill_search";
+    DateTime? previous;
+    for (final leg in legs) {
+      if (!leg.isComplete) return "home_fill_search";
+      if (leg.isSameCity) return "same_airport_warning";
+      if (previous != null && leg.date!.isBefore(previous)) {
+        return "routes_date_order_warning";
+      }
+      previous = leg.date;
+    }
+    return null;
   }
 
   // ── Ma'lumot yuklash ──────────────────────────────────────────────────
 
-  /// Oylik narxlar — sessiya keshidan o'qiladi (takror so'rov ketmaydi).
-  /// Yuklash tugaganda yo'nalish o'zgargan bo'lsa natija tashlanadi.
   Future<void> _loadMonthPrices() async {
     final key = _routeKey;
-    emit(state.copyWith(
-      monthLoading: true,
-      clearMonthPrices: true,
-      offersLoading: true,
-      offers: const [],
-    ));
+    emit(state.copyWith(monthLoading: true, clearMonthPrices: true));
     try {
       final response = await _avia.getPriceByMonth(
         state.from.cityIataCode ?? '',
         state.to.cityIataCode ?? '',
+        date: state.date,
+        adt: state.adt,
+        chd: state.chd,
+        inf: state.inf,
+        klass: state.klass,
+        direct: state.direct,
+        baggage: state.baggage,
       );
       if (isClosed || key != _routeKey) return;
       emit(state.copyWith(
@@ -118,8 +177,6 @@ class RouteSearchCubit extends Cubit<RouteSearchState> {
             : null,
         clearMonthPrices: response is! NetworkSuccessResponse,
       ));
-      // Narxlar kelgach eng arzon kun ma'lum bo'ladi — o'sha sanaga aniq
-      // reyslar qidiriladi (webdagi "Eng yaxshi takliflar" bo'limi).
       _loadBestOffers();
     } catch (_) {
       if (!isClosed && key == _routeKey) {
@@ -128,9 +185,6 @@ class RouteSearchCubit extends Cubit<RouteSearchState> {
     }
   }
 
-  /// "Eng yaxshi takliflar" — eng arzon kunga qidiruv.
-  /// Parallel so'rovlar, natijalar birlashtiriladi, eng arzon [_maxOffers]
-  /// reys saqlanadi.
   static const int _maxOffers = 6;
 
   Future<void> _loadBestOffers() async {
@@ -199,7 +253,6 @@ class RouteSearchCubit extends Cubit<RouteSearchState> {
     }
   }
 
-  /// Oylik narxlardagi eng arzon kun (bugundan boshlab).
   DateTime? _cheapestDate() {
     final m = state.monthPrices;
     if (m == null) return null;
@@ -240,13 +293,21 @@ class RouteSearchCubit extends Cubit<RouteSearchState> {
     return v == null || v <= 0 ? null : v * mult;
   }
 
-  static double _price(FlightElement e) =>
-      double.tryParse(e.price?.uzs?.amount ?? '') ?? double.maxFinite;
+  static double _price(FlightElement e) {
+    double parse(String? s) {
+      if (s == null || s.isEmpty || s == 'null') return double.maxFinite;
+      final cleaned = s.replaceAll(',', '').replaceAll(RegExp(r'[^0-9.]'), '');
+      final v = double.tryParse(cleaned);
+      return (v == null || v <= 0) ? double.maxFinite : v;
+    }
 
-  /// "Qayerga" shahri v1 bazasida bo'lsa yo'nalish ma'lumotini yuklaydi;
-  /// bo'lmasa (yoki xato) blok ko'rsatilmaydi. Moslashtirish SHAHAR NOMI
-  /// bo'yicha bajariladi (aeroport kodi emas — u ro'yxatdagi kod bilan
-  /// farq qilishi mumkin).
+    final uzs = parse(e.price?.uzs?.amount);
+    if (uzs != double.maxFinite) return uzs;
+    final usd = parse(e.price?.usd?.amount);
+    if (usd != double.maxFinite) return usd;
+    return parse(e.price?.rub?.amount);
+  }
+
   Future<void> _loadDestInfo() async {
     final cityName = state.to.cityName ?? '';
     emit(state.copyWith(clearDestInfo: true));
@@ -262,8 +323,6 @@ class RouteSearchCubit extends Cubit<RouteSearchState> {
 
   // ── Qidiruv so'rovi ───────────────────────────────────────────────────
 
-  /// Joriy holatdan chipta qidiruvi so'rovini quradi (sana tanlangan deb
-  /// hisoblanadi — chaqirishdan oldin [RouteSearchState.hasDate] tekshiriladi).
   RecommendationRequestBody buildRequest() {
     final date = state.date!;
     final endDate = state.endDate;
@@ -290,4 +349,26 @@ class RouteSearchCubit extends Cubit<RouteSearchState> {
       isBaggage: state.baggage,
     );
   }
+
+  RecommendationRequestBody buildMultiRequest() {
+    return RecommendationRequestBody(
+      adt: state.adt,
+      chd: state.chd,
+      inf: state.inf,
+      segments: [
+        for (final leg in state.legs)
+          RecommendationReqBodySegment(
+            from: leg.from,
+            to: leg.to,
+            date: _formatDate(leg.date!),
+          ),
+      ],
+      flight_Type: 2,
+      klass: state.klass,
+      isDirectOnly: state.direct ? 1 : 0,
+      isBaggage: state.baggage,
+    );
+  }
+
+  static String _formatDate(DateTime d) => "${d.day}.${d.month}.${d.year}";
 }
