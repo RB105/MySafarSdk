@@ -9,8 +9,6 @@ import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
 import 'package:mysafar_sdk/src/view/profile/pages/my_applications/view/my_applications_page.dart';
 import 'package:mysafar_sdk/src/view/profile/pages/my_data_page.dart';
 import 'package:mysafar_sdk/src/view/profile/pages/ofd_cheques_page.dart';
-import 'package:mysafar_sdk/src/view/profile/pages/refund/view/refund_requests_page.dart'
-    show RefundRequestsPage;
 import 'package:mysafar_sdk/src/view/profile/pages/edit_profile_page.dart';
 import 'package:mysafar_sdk/src/view/visa/myid_verification_page.dart';
 import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart' show showToastMessage;
@@ -65,8 +63,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _buildProfileActionTile({
     required BuildContext context,
-    String? assetPath,
-    IconData? icon,
+    required String assetPath,
     required String title,
     required VoidCallback onTap,
     required Color iconBgColor,
@@ -76,7 +73,6 @@ class _ProfilePageState extends State<ProfilePage> {
     double iconWidth = 22,
     BoxFit fit = BoxFit.contain,
   }) {
-    assert(assetPath != null || icon != null);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -94,18 +90,15 @@ class _ProfilePageState extends State<ProfilePage> {
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Center(
-                  child: icon != null
-                      ? Icon(icon, color: iconColor, size: iconHeight)
-                      : SizedBox(
-                          width: iconWidth,
-                          height: iconHeight,
-                          child: SvgPicture.asset(
-                            assetPath!,
-                            fit: fit,
-                            colorFilter:
-                                ColorFilter.mode(iconColor, BlendMode.srcIn),
-                          ),
-                        ),
+                  child: SizedBox(
+                    width: iconWidth,
+                    height: iconHeight,
+                    child: SvgPicture.asset(
+                      assetPath,
+                      fit: fit,
+                      colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
+                    ),
+                  ),
                 ),
               ),
               context.szBoxWidth12,
@@ -736,19 +729,6 @@ class _ProfilePageState extends State<ProfilePage> {
                                     onTap: () => Navigator.pushNamed(
                                       context,
                                       OFDChequesPage.routeName,
-                                    ),
-                                  ),
-                                  _buildDivider(context),
-                                  _buildProfileActionTile(
-                                    context: context,
-                                    icon: Icons.assignment_return_rounded,
-                                    title: "refund_title".tr(),
-                                    iconBgColor:
-                                        ProjectTheme.error.withOpacity(0.12),
-                                    iconColor: ProjectTheme.error,
-                                    onTap: () => Navigator.pushNamed(
-                                      context,
-                                      RefundRequestsPage.routeName,
                                     ),
                                   ),
                                   ],

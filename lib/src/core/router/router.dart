@@ -27,8 +27,6 @@ import 'package:mysafar_sdk/src/view/profile/pages/my_contracts/view/my_contract
 import 'package:mysafar_sdk/src/view/profile/pages/my_data_page.dart';
 import 'package:mysafar_sdk/src/view/profile/pages/ofd_cheques_page.dart'
     show OFDChequesPage;
-import 'package:mysafar_sdk/src/view/profile/pages/refund/view/refund_requests_page.dart'
-    show RefundArgs, RefundRequestsPage;
 import 'package:mysafar_sdk/src/view/profile/pages/identification_page.dart';
 import 'package:mysafar_sdk/src/view/profile/pages/personal_information_page.dart';
 import 'package:mysafar_sdk/src/view/profile/pages/settings_page.dart';
@@ -131,15 +129,6 @@ class RouterGenerator {
         );
       case OFDChequesPage.routeName:
         return _navigate(OFDChequesPage(), settings);
-      case RefundRequestsPage.routeName:
-        return _navigate(
-          RefundRequestsPage(
-            args: settings.arguments is RefundArgs
-                ? settings.arguments as RefundArgs
-                : null,
-          ),
-          settings,
-        );
       case MyApplicationsPage.routeName:
         return _navigate(const MyApplicationsPage(), settings);
       case MyContractsPage.routeName:
