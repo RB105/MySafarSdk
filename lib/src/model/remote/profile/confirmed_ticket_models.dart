@@ -9,6 +9,11 @@ class ConfirmedTicketsModel {
   int? expireRemain;
   int? user;
   String? callbackStatus;
+
+  /// Yo'nalish qisqartmasi ("TAS-IST") va aviakompaniya kodi ("HY") —
+  /// serverdan tayyor keladi, vozvrat oynasi sarlavhasida ishlatiladi.
+  String? direction;
+  String? airline;
   ConfirmTicketResponse? response;
   Transaction?transaction;
 
@@ -23,6 +28,8 @@ class ConfirmedTicketsModel {
       this.expireRemain,
       this.user,
       this.callbackStatus,
+      this.direction,
+      this.airline,
       this.transaction,
       this.response});
 
@@ -48,6 +55,8 @@ class ConfirmedTicketsModel {
     expireRemain = _getInt(json['expire_remain']);
     user = _getInt(json['user']);
     callbackStatus=json["callback_status"]??"";
+    direction = _getString(json['direction']);
+    airline = _getString(json['airline']);
     response = json['response'] != null
         ? ConfirmTicketResponse.fromJson(json['response'])
         : null;
@@ -64,6 +73,8 @@ class ConfirmedTicketsModel {
     data['is_deleted'] = isDeleted;
     data['deleted_at'] = deletedAt;
     data['billing_id'] = billingId;
+    data['direction'] = direction;
+    data['airline'] = airline;
     data['expire_remain'] = expireRemain;
     data['user'] = user;
     return data;
@@ -152,7 +163,7 @@ class ConfirmTicketResponse {
 
   factory ConfirmTicketResponse.fromJson(Map<String, dynamic> json) =>
       ConfirmTicketResponse(
-        pid: json["pid"],
+        pid: _getString(json["pid"]),
         code: _getInt(json["code"]),
         data: json["data"] == null
             ? null
@@ -255,7 +266,7 @@ class Book {
             ? []
             : List<Passenger>.from(
                 json["passengers"]!.map((x) => Passenger.fromJson(x))),
-        payedData: json["payed_data"],
+        payedData: _getString(json["payed_data"]),
         isPriceChanged: json["is_price_changed"],
         agentModePrices: json["agent_mode_prices"] == null
             ? null
@@ -268,13 +279,13 @@ class Book {
             ? null
             : RefundAvailability.fromJson(json["refund_availability"]),
         isEticketAvailable: json["is_eticket_available"],
-        disablingReasonTicket: json["disabling_reason_ticket"],
+        disablingReasonTicket: _getString(json["disabling_reason_ticket"]),
         isSearchPriceChanged: json["is_search_price_changed"],
         passengersPriceDetails: json["passengers_price_details"] == null
             ? []
             : List<PassengersPriceDetail>.from(json["passengers_price_details"]!
                 .map((x) => PassengersPriceDetail.fromJson(x))),
-        paymentDisablingReason: json["payment_disabling_reason"],
+        paymentDisablingReason: _getString(json["payment_disabling_reason"]),
         refundRequestAlreadySent: json["refund_request_already_sent"],
       );
 
@@ -358,7 +369,7 @@ class ConfirmedTicketPassengersAmountsDetail {
   factory ConfirmedTicketPassengersAmountsDetail.fromJson(
           Map<String, dynamic> json) =>
       ConfirmedTicketPassengersAmountsDetail(
-        key: json["key"],
+        key: _getString(json["key"]),
         serviceAmountForActiveAgentMode:
             _getInt(json["service_amount_for_active_agent_mode"]),
         serviceAmountForNonActiveAgentMode:
@@ -417,7 +428,7 @@ class BookFlight {
   });
 
   factory BookFlight.fromJson(Map<String, dynamic> json) => BookFlight(
-        type: json["type"],
+        type: _getString(json["type"]),
         duration: _getInt(json["duration"]),
         isVtrip: json["is_vtrip"],
         provider: json["provider"] == null
@@ -427,7 +438,7 @@ class BookFlight {
             ? []
             : List<ConfirmedTicketSegment>.from(json["segments"]!
                 .map((x) => ConfirmedTicketSegment.fromJson(x))),
-        fareFamilyType: json["fare_family_type"],
+        fareFamilyType: _getString(json["fare_family_type"]),
         isTourOperator: json["is_tour_operator"],
       );
 
@@ -457,7 +468,7 @@ class FlightProvider {
 
   factory FlightProvider.fromJson(Map<String, dynamic> json) => FlightProvider(
         gds: _getInt(json["gds"]),
-        name: json["name"],
+        name: _getString(json["name"]),
         supplier: json["supplier"] == null
             ? null
             : ConfirmedTicketCarrier.fromJson(json["supplier"]),
@@ -486,9 +497,9 @@ class ConfirmedTicketCarrier {
   factory ConfirmedTicketCarrier.fromJson(Map<String, dynamic> json) =>
       ConfirmedTicketCarrier(
         id: _getInt(json["id"]),
-        code: json["code"],
-        title: json["title"],
-        providerCode: json["provider_code"],
+        code: _getString(json["code"]),
+        title: _getString(json["title"]),
+        providerCode: _getString(json["provider_code"]),
       );
 
   Map<String, dynamic> toJson() => {
@@ -564,7 +575,7 @@ class ConfirmedTicketSegment {
         dep: json["dep"] == null
             ? null
             : ConfirmedTicketArr.fromJson(json["dep"]),
-        type: json["type"],
+        type: _getString(json["type"]),
         segmentClass:
             json["class"] == null ? null : Class.fromJson(json["class"]),
         stops: json["stops"] == null
@@ -579,8 +590,8 @@ class ConfirmedTicketSegment {
         carrier: json["carrier"] == null
             ? null
             : ConfirmedTicketCarrier.fromJson(json["carrier"]),
-        comment: json["comment"],
-        aircraft: json["aircraft"],
+        comment: _getString(json["comment"]),
+        aircraft: _getString(json["aircraft"]),
         cbaggage: json["cbaggage"] == null
             ? null
             : CbaggageClass.fromJson(json["cbaggage"]),
@@ -591,15 +602,15 @@ class ConfirmedTicketSegment {
             ? null
             : FlightProvider.fromJson(json["provider"]),
         direction: _getInt(json["direction"]),
-        fareCode: json["fare_code"],
+        fareCode: _getString(json["fare_code"]),
         isChange: json["is_change"],
         isRefund: json["is_refund"],
-        flightNumber: json["flight_number"],
+        flightNumber: _getString(json["flight_number"]),
         flightChanges: json["flight_changes"] == null
             ? []
             : List<dynamic>.from(json["flight_changes"]!.map((x) => x)),
         baggageRecheck: json["baggage_recheck"],
-        refundedStatus: json["refunded_status"],
+        refundedStatus: _getString(json["refunded_status"]),
         ticketDuration: _getInt(json["ticket_duration"]),
         aircraftDetails: json["aircraft_details"] == null
             ? null
@@ -660,8 +671,8 @@ class AircraftDetails {
 
   factory AircraftDetails.fromJson(Map<String, dynamic> json) =>
       AircraftDetails(
-        code: json["code"],
-        title: json["title"],
+        code: _getString(json["code"]),
+        title: _getString(json["title"]),
       );
 
   Map<String, dynamic> toJson() => {
@@ -696,8 +707,8 @@ class ConfirmedTicketArr {
         city: json["city"] == null
             ? null
             : ConfirmedTicketCarrier.fromJson(json["city"]),
-        date: json["date"],
-        time: json["time"],
+        date: _getString(json["date"]),
+        time: _getString(json["time"]),
         region: json["region"] == null
             ? null
             : ConfirmedTicketRegion.fromJson(json["region"]),
@@ -707,8 +718,8 @@ class ConfirmedTicketArr {
         country: json["country"] == null
             ? null
             : ConfirmedTicketCarrier.fromJson(json["country"]),
-        datetime: json["datetime"],
-        terminal: json["terminal"],
+        datetime: _getString(json["datetime"]),
+        terminal: _getString(json["terminal"]),
       );
 
   Map<String, dynamic> toJson() => {
@@ -737,8 +748,8 @@ class ConfirmedTicketRegion {
   factory ConfirmedTicketRegion.fromJson(Map<String, dynamic> json) =>
       ConfirmedTicketRegion(
         id: json["id"],
-        code: json["code"],
-        title: json["title"],
+        code: _getString(json["code"]),
+        title: _getString(json["title"]),
       );
 
   Map<String, dynamic> toJson() => {
@@ -836,17 +847,17 @@ class ParametersForEachPassenger {
 
   factory ParametersForEachPassenger.fromJson(Map<String, dynamic> json) =>
       ParametersForEachPassenger(
-        brand: json["brand"],
+        brand: _getString(json["brand"]),
         baggage: json["baggage"] == null
             ? null
             : CarryOnBaggageClass.fromJson(json["baggage"]),
         flightClass: json["flight_class"] == null
             ? null
             : ConfirmedTicketCarrier.fromJson(json["flight_class"]),
-        passengerId: json["passenger_id"],
+        passengerId: _getString(json["passenger_id"]),
         isRefundable: json["is_refundable"],
-        ticketNumber: json["ticket_number"],
-        flightComment: json["flight_comment"],
+        ticketNumber: _getString(json["ticket_number"]),
+        flightComment: _getString(json["flight_comment"]),
         isExchangeable: json["is_exchangeable"],
         carryOnBaggage: json["carry_on_baggage"] == null
             ? null
@@ -886,7 +897,7 @@ class CarryOnBaggageClass {
         dimensions: json["dimensions"] != null
             ? ConfirmedTicketDimensions.fromJson(json["dimensions"])
             : null,
-        weightUnit: json["weight_unit"],
+        weightUnit: _getString(json["weight_unit"]),
       );
 
   Map<String, dynamic> toJson() => {
@@ -931,8 +942,8 @@ class Class {
   });
 
   factory Class.fromJson(Map<String, dynamic> json) => Class(
-        name: json["name"],
-        title: json["title"],
+        name: _getString(json["name"]),
+        title: _getString(json["title"]),
         typeId: _getInt(json["type_id"]),
       );
 
@@ -953,8 +964,8 @@ class SegmentStatus {
   });
 
   factory SegmentStatus.fromJson(Map<String, dynamic> json) => SegmentStatus(
-        code: json["code"],
-        description: json["description"],
+        code: _getString(json["code"]),
+        description: _getString(json["description"]),
       );
 
   Map<String, dynamic> toJson() => {
@@ -997,17 +1008,17 @@ class Order {
   });
 
   factory Order.fromJson(Map<String, dynamic> json) => Order(
-        sig: json["sig"],
+        sig: _getString(json["sig"]),
         price: json["price"] == null ? null : Price.fromJson(json["price"]),
-        expire: json["expire"],
+        expire: _getString(json["expire"]),
         status: json["status"] == null
             ? null
             : OrderStatus.fromJson(json["status"]),
         channel:
             json["channel"] == null ? null : Channel.fromJson(json["channel"]),
-        created: json["created"],
+        created: _getString(json["created"]),
         isReal: json["is_real"],
-        payment: json["payment"],
+        payment: _getString(json["payment"]),
         userId: _getInt(json["user_id"]),
         orderId: _getInt(json["order_id"]),
         payments: json["payments"] == null
@@ -1016,7 +1027,7 @@ class Order {
                 json["payments"]!.map((x) => Payment.fromJson(x))),
         expireRemain: _getInt(json["expire_remain"]),
         billingNumber: _getInt(json["billing_number"]),
-        alfaPodeliPayment: json["alfa_podeli_payment"],
+        alfaPodeliPayment: _getString(json["alfa_podeli_payment"]),
       );
 
   Map<String, dynamic> toJson() => {
@@ -1049,7 +1060,7 @@ class Channel {
   });
 
   factory Channel.fromJson(Map<String, dynamic> json) => Channel(
-        code: json["code"],
+        code: _getString(json["code"]),
         source: json["source"] == null ? null : Source.fromJson(json["source"]),
       );
 
@@ -1067,7 +1078,7 @@ class Source {
   });
 
   factory Source.fromJson(Map<String, dynamic> json) => Source(
-        code: json["code"],
+        code: _getString(json["code"]),
       );
 
   Map<String, dynamic> toJson() => {
@@ -1094,7 +1105,7 @@ class Payment {
 
   factory Payment.fromJson(Map<String, dynamic> json) => Payment(
         orderAmount: _getInt(json["order_amount"]),
-        merchantName: json["merchant_name"],
+        merchantName: _getString(json["merchant_name"]),
         isAffiliateFee: json["is_affiliate_fee"],
         agentModePrices: json["agent_mode_prices"] == null
             ? null
@@ -1205,8 +1216,8 @@ class OrderStatus {
   });
 
   factory OrderStatus.fromJson(Map<String, dynamic> json) => OrderStatus(
-        sign: json["sign"],
-        title: json["title"],
+        sign: _getString(json["sign"]),
+        title: _getString(json["title"]),
       );
 
   Map<String, dynamic> toJson() => {
@@ -1305,25 +1316,25 @@ class Passenger {
 
   factory Passenger.fromJson(Map<String, dynamic> json) => Passenger(
         id: _getInt(json["id"]),
-        age: json["age"],
-        key: json["key"],
+        age: _getString(json["age"]),
+        key: _getString(json["key"]),
         name: json["name"] == null ? null : Name.fromJson(json["name"]),
-        uuid: json["uuid"],
-        email: json["email"],
-        phone: json["phone"],
-        gender: json["gender"],
+        uuid: _getString(json["uuid"]),
+        email: _getString(json["email"]),
+        phone: _getString(json["phone"]),
+        gender: _getString(json["gender"]),
         document: json["document"] == null
             ? null
             : PassengerDocument.fromJson(json["document"]),
-        birthdate: json["birthdate"],
-        bonusCard: json["bonus_card"],
+        birthdate: _getString(json["birthdate"]),
+        bonusCard: _getString(json["bonus_card"]),
         insurances: json["insurances"] == null
             ? []
             : List<dynamic>.from(json["insurances"]!.map((x) => x)),
         ticketData: json["ticketData"] == null
             ? null
             : TicketData.fromJson(json["ticketData"]),
-        citizenship: json["citizenship"],
+        citizenship: _getString(json["citizenship"]),
         accompanyingAdults: json["accompanying_adults"] == null
             ? []
             : List<dynamic>.from(json["accompanying_adults"]!.map((x) => x)),
@@ -1367,12 +1378,12 @@ class PassengerDocument {
 
   factory PassengerDocument.fromJson(Map<String, dynamic> json) =>
       PassengerDocument(
-        num: json["num"],
-        type: json["type"],
+        num: _getString(json["num"]),
+        type: _getString(json["type"]),
         expire: json["expire"] == null
             ? null
             : DateTime.tryParse(json["expire"]),
-        originalNumber: json["original_number"],
+        originalNumber: _getString(json["original_number"]),
       );
 
   Map<String, dynamic> toJson() => {
@@ -1395,9 +1406,9 @@ class Name {
   });
 
   factory Name.fromJson(Map<String, dynamic> json) => Name(
-        last: json["last"],
-        first: json["first"],
-        middle: json["middle"],
+        last: _getString(json["last"]),
+        first: _getString(json["first"]),
+        middle: _getString(json["middle"]),
       );
 
   Map<String, dynamic> toJson() => {
@@ -1415,7 +1426,7 @@ class Transaction {
   Transaction({this.trId, this.amount, this.currency, this.status});
 
   Transaction.fromJson(Map<String, dynamic> json) {
-    trId = json['tr_id'];
+    trId = _getString(json['tr_id']);
     amount = json['amount'];
     currency = json['currency'];
     status = json['status'];
@@ -1443,8 +1454,8 @@ class TicketData {
   });
 
   factory TicketData.fromJson(Map<String, dynamic> json) => TicketData(
-        text: json["text"],
-        number: json["number"],
+        text: _getString(json["text"]),
+        number: _getString(json["number"]),
         refunded: json["refunded"],
       );
 
@@ -1495,9 +1506,9 @@ class PassengersPriceDetail {
   factory PassengersPriceDetail.fromJson(Map<String, dynamic> json) =>
       PassengersPriceDetail(
         fee: _getInt(json["fee"]),
-        key: json["key"],
+        key: _getString(json["key"]),
         vat: _getInt(json["vat"]),
-        uuid: json["uuid"],
+        uuid: _getString(json["uuid"]),
         comsa: _getInt(json["comsa"]),
         taxes: json["taxes"] == null
             ? []
@@ -1511,7 +1522,7 @@ class PassengersPriceDetail {
         taxesAmount: _getInt(json["taxes_amount"]),
         ticketPrice: _getInt(json["ticket_price"]),
         affiliateFee: _getInt(json["affiliate_fee"]),
-        refundAmounts: json["refund_amounts"],
+        refundAmounts: _getString(json["refund_amounts"]),
         insurancePrice: _getInt(json["insurance_price"]),
         agentAffiliateFee: _getInt(json["agent_affiliate_fee"]),
         partnerAffiliateFee: _getInt(json["partner_affiliate_fee"]),
@@ -1568,9 +1579,9 @@ class ConfirmedTicketTax {
 
   factory ConfirmedTicketTax.fromJson(Map<String, dynamic> json) =>
       ConfirmedTicketTax(
-        code: json["code"],
+        code: _getString(json["code"]),
         amount: _getInt(json["amount"]),
-        currency: json["currency"],
+        currency: _getString(json["currency"]),
       );
 
   Map<String, dynamic> toJson() => {
@@ -1641,7 +1652,7 @@ class ConfirmedTicket {
         carrier: json["carrier"] == null
             ? null
             : ConfirmedTicketCarrier.fromJson(json["carrier"]),
-        locator: json["locator"],
+        locator: _getString(json["locator"]),
         duration: json["duration"] == null
             ? null
             : ConfirmedTicketDuration.fromJson(json["duration"]),
@@ -1655,14 +1666,14 @@ class ConfirmedTicket {
             ? []
             : List<Passenger>.from(
                 json["passengers"]!.map((x) => Passenger.fromJson(x))),
-        receiptText: json["receipt_text"],
+        receiptText: _getString(json["receipt_text"]),
         vndLocators: json["vnd_locators"] == null
             ? []
             : List<dynamic>.from(json["vnd_locators"]!.map((x) => x)),
-        bookingProvider: json["booking_provider"],
-        bookingOfficeId: json["booking_office_id"],
-        specialTariffType: json["special_tariff_type"],
-        fareFamilyMarketingName: json["fare_family_marketing_name"],
+        bookingProvider: _getString(json["booking_provider"]),
+        bookingOfficeId: _getString(json["booking_office_id"]),
+        specialTariffType: _getString(json["special_tariff_type"]),
+        fareFamilyMarketingName: _getString(json["fare_family_marketing_name"]),
       );
 
   Map<String, dynamic> toJson() => {
@@ -1695,7 +1706,7 @@ class ConfirmedTicketDocuments {
 
   factory ConfirmedTicketDocuments.fromJson(Map<String, dynamic> json) =>
       ConfirmedTicketDocuments(
-        ticketReceipt: json["ticket_receipt"],
+        ticketReceipt: _getString(json["ticket_receipt"]),
       );
 
   Map<String, dynamic> toJson() => {
@@ -1714,8 +1725,8 @@ class ConfirmedTicketProvider {
 
   factory ConfirmedTicketProvider.fromJson(Map<String, dynamic> json) =>
       ConfirmedTicketProvider(
-        name: json["name"],
-        currency: json["currency"],
+        name: _getString(json["name"]),
+        currency: _getString(json["currency"]),
       );
 
   Map<String, dynamic> toJson() => {
@@ -1758,4 +1769,30 @@ int _getInt(dynamic param) {
   } catch (e) {
     return 0;
   }
+}
+
+/// Serverdan kelgan qiymatni xavfsiz `String?` ga o'giradi.
+///
+/// Backend ba'zi maydonlarni goh matn/null, goh OBYEKT qilib qaytaradi
+/// (masalan `payment` to'lanmagan buyurtmada `null`, to'langanida esa map).
+/// Oddiy `json["payment"]` cast bunday holatda
+/// `type '_Map<String, dynamic>' is not a subtype of type 'String?'` xatosini
+/// beradi va BUTUN biletlar ro'yxati parse bo'lmay qoladi. Shu sabab:
+///   • String  → o'zi;
+///   • num/bool → matn ko'rinishi;
+///   • Map/List → null (bu maydonlar UI'da ishlatilmaydi, faqat model uchun).
+String? _getString(dynamic value) {
+  if (value == null) return null;
+  if (value is String) return value;
+  if (value is num || value is bool) return '$value';
+  // Ba'zan matn o'rniga obyekt keladi (masalan `aircraft` goh "Boeing 737-800",
+  // goh {"code": "73X", "title": ""}) — ichidan o'qiladigan nomni olamiz.
+  if (value is Map) {
+    for (final key in const ['title', 'name', 'description', 'code']) {
+      final inner = value[key];
+      if (inner is String && inner.trim().isNotEmpty) return inner;
+    }
+    return null;
+  }
+  return null;
 }
