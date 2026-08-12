@@ -1,6 +1,4 @@
 import 'package:flutter/gestures.dart';
-import 'package:mysafar_sdk/src/core/tools/card_number_validator.dart'
-    show CardNumberValidator;
 import 'package:mysafar_sdk/src/service/profile/profile_cache.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/card_payment_constants.dart';
@@ -54,14 +52,7 @@ class _AddCardPageState extends State<AddCardPage> {
   void _onCardChanged() {
     final unmasked = _cardFormatter.getUnmaskedText();
     if (unmasked.length == 16) {
-      // Avval lokal tekshiruv (Luhn): raqam xato terilgan bo'lsa serverga
-      // umuman bormaymiz — xato shu yerda, darhol ko'rsatiladi.
-      if (!CardNumberValidator.passesLuhn(unmasked)) {
-        _cardInfo = const CardInfo();
-        _cardInfoError = "card_number_checksum_invalid".tr();
-        // Raqam tuzatilgach so'rov qayta ishga tushsin.
-        _lastQueriedCard = '';
-      } else if (unmasked != _lastQueriedCard && !_cardInfoLoading) {
+      if (unmasked != _lastQueriedCard && !_cardInfoLoading) {
         _fetchCardInfo(unmasked);
       }
     } else {
