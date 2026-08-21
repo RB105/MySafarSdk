@@ -31,6 +31,10 @@ Future<void> main() async {
       // Production (Unired): themeMode: ThemeMode.dark yoki .light
       // brandColor berilmasa default #0057BE qoladi.
       // brandColor: Colors.green,
+      // support: MySafarSupportConfig(
+      //   phone: '+998 99 000 00 00',
+      //   telegramUrl: 'https://t.me/nom0n0v',
+      // ),
       // bottomBarStyle: MySafarBottomBarStyle(
       //   backgroundColorLight: Colors.amber,
       //   borderRadius: 0,

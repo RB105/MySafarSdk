@@ -37,4 +37,41 @@ void main() {
       expect(AppConfig.hasValidPartnerToken, isFalse);
     });
   });
+
+  group('MySafarConfig.support', () {
+    test('berilmasa default telefon va telegram', () {
+      const config = MySafarConfig(
+        baseUrl: 'https://api.example.com',
+        skoteBaseUrl: 'https://cms.example.com/api',
+      );
+
+      expect(config.supportPhone, MySafarSupportConfig.defaultPhone);
+      expect(
+          config.supportTelegramUrl, MySafarSupportConfig.defaultTelegramUrl);
+    });
+
+    test('host telefon va telegram berilsa shular ishlatiladi', () {
+      const config = MySafarConfig(
+        baseUrl: 'https://api.example.com',
+        skoteBaseUrl: 'https://cms.example.com/api',
+        support: MySafarSupportConfig(
+          phone: '+998 90 111 22 33',
+          telegramUrl: 'https://t.me/partner_bot',
+        ),
+      );
+
+      expect(config.supportPhone, '+998 90 111 22 33');
+      expect(config.supportTelegramUrl, 'https://t.me/partner_bot');
+    });
+
+    test('telegram @handle to\'liq URL ga aylanadi', () {
+      const config = MySafarConfig(
+        baseUrl: 'https://api.example.com',
+        skoteBaseUrl: 'https://cms.example.com/api',
+        support: MySafarSupportConfig(telegramUrl: '@partner_bot'),
+      );
+
+      expect(config.supportTelegramUrl, 'https://t.me/partner_bot');
+    });
+  });
 }
