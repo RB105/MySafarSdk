@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mysafar_sdk/mysafar_sdk.dart';
+import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -38,5 +39,20 @@ void main() {
     expect(tester.takeException(), isNull);
     // Ichki nested MaterialApp qurilgan bo'lishi kerak
     expect(find.byType(MaterialApp), findsNWidgets(2));
+  });
+
+  testWidgets('MySafarEmbed locale host tiliga sync qiladi', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: MySafarEmbed(locale: Locale('ru'))),
+    );
+    // rootBundle (til JSON) real async — fake timer bilan yetmaydi.
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(tester.takeException(), isNull);
+    expect(SdkLocalization.locale.languageCode, 'ru');
   });
 }
