@@ -87,6 +87,8 @@ class HostHomePage extends StatelessWidget {
                   // Qiymatlar env.json / --dart-define orqali beriladi.
                   phoneNumber: _userPhone.isEmpty ? null : _userPhone,
                   email: _userEmail.isEmpty ? null : _userEmail,
+                  // Host joriy tili — SDK shu tilda ochiladi.
+                  locale: Localizations.localeOf(context),
                 ),
               ),
             );

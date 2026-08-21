@@ -55,6 +55,7 @@ class MySafarEmbed extends StatefulWidget {
     this.initialRoute,
     this.phoneNumber,
     this.email,
+    this.locale,
   });
 
   final String? initialRoute;
@@ -70,19 +71,34 @@ class MySafarEmbed extends StatefulWidget {
   /// bo'lmasa email yolg'iz ishlatilmaydi.
   final String? email;
 
+  /// Host appning joriy tili. Berilsa SDK shu tilda ochiladi (masalan
+  /// `Locale('ru')`). Saqlanmaydi — keyingi ochilishda yana host tilini
+  /// berish kerak. `null` bo'lsa `MySafarConfig.startLocale` / saqlangan /
+  /// default `uz` qoladi. Qo'llab-quvvatlanadi: en, ru, uz, kk, tg, tr.
+  final Locale? locale;
+
   @override
   State<MySafarEmbed> createState() => _MySafarEmbedState();
 }
 
 class _MySafarEmbedState extends State<MySafarEmbed> {
-  // Ro'yxatdan o'tish 10s dan oshsa kutmaymiz — mehmon rejimida ochamiz
-  // (aks holda sekin tarmoqda foydalanuvchi bo'sh ekranga qarab qoladi).
-  late final Future<void> _ready = widget.phoneNumber == null
-      ? Future<void>.value()
-      : MySafarSdk.ensureRegistered(
-          widget.phoneNumber!,
-          email: widget.email,
-        ).timeout(const Duration(seconds: 10), onTimeout: () => false);
+  // Til + (ixtiyoriy) jim ro'yxatdan o'tish — UI ochilishidan oldin.
+  // Ro'yxat 10s dan oshsa kutmaymiz — mehmon rejimida ochamiz.
+  late final Future<void> _ready = _prepare();
+
+  Future<void> _prepare() async {
+    final locale = widget.locale;
+    if (locale != null) {
+      // Host tiliga sync — SDK storage'ga yozilmaydi (save: false).
+      await SdkLocalization.setLocale(locale, save: false);
+    }
+    final phone = widget.phoneNumber;
+    if (phone == null) return;
+    await MySafarSdk.ensureRegistered(
+      phone,
+      email: widget.email,
+    ).timeout(const Duration(seconds: 10), onTimeout: () => false);
+  }
 
   // Debug'da qora ekran o'rniga xatoni ekranda ko'rsatamiz — embed subtree'da
   // yiqilgan har qanday exception shu yerda ushlanadi.

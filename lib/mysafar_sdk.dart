@@ -4,7 +4,8 @@
 /// ```dart
 /// await MySafarSdk.init(config: MySafarConfig(baseUrl: ..., skoteBaseUrl: ...));
 /// runApp(const MySafarApp());            // to'liq app rejimi
-/// // yoki host ichida: Navigator.push(... => const MySafarEmbed());
+/// // yoki host ichida:
+/// // Navigator.push(... => MySafarEmbed(locale: Locale(hostLang)));
 /// ```
 library;
 
