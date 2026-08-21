@@ -24,7 +24,8 @@ class MySafarConfig {
       this.themeMode,
       this.brandColor,
       this.bottomBarStyle,
-      this.homeHeaderStyle});
+      this.homeHeaderStyle,
+      this.support});
 
   /// Asosiy backend (masalan `https://api.mysafar.ru`).
   final String baseUrl;
@@ -94,6 +95,51 @@ class MySafarConfig {
   /// Bosh sahifadagi slogan qismi ko'rinishi. `null` bo'lsa hozirgi
   /// lokalizatsiya matni (`home_slogan`) ishlatiladi.
   final MySafarHomeHeaderStyle? homeHeaderStyle;
+
+  /// Qo'llab-quvvatlash telefoni va Telegram. `null` / bo'sh maydonlar
+  /// MySafar defaultlariga tushadi.
+  final MySafarSupportConfig? support;
+
+  /// Support telefon (UI + `tel:`). Host bermasa default.
+  String get supportPhone {
+    final value = support?.phone?.trim();
+    return (value != null && value.isNotEmpty)
+        ? value
+        : MySafarSupportConfig.defaultPhone;
+  }
+
+  /// Support Telegram URL. Host bermasa default.
+  String get supportTelegramUrl {
+    final value = support?.telegramUrl?.trim();
+    if (value == null || value.isEmpty) {
+      return MySafarSupportConfig.defaultTelegramUrl;
+    }
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      return value;
+    }
+    final handle = value.replaceFirst(RegExp(r'^@'), '');
+    return 'https://t.me/$handle';
+  }
+}
+
+/// Qo'llab-quvvatlash kontaktlari — host `MySafarConfig.support` orqali beradi.
+class MySafarSupportConfig {
+  const MySafarSupportConfig({this.phone, this.telegramUrl});
+
+  /// Default MySafar call-center raqami (ko'rsatish uchun bo'shliqli).
+  static const String defaultPhone = '+998 55 512 00 08';
+
+  /// Default MySafar Telegram bot.
+  static const String defaultTelegramUrl =
+      'https://t.me/My_Safar_call_center_bot';
+
+  /// Qo'llab-quvvatlash telefoni. Masalan `+998 55 512 00 08` yoki
+  /// `+998555120008`. `tel:` ochilganda bo'shliqlar olib tashlanadi.
+  final String? phone;
+
+  /// Telegram havolasi. To'liq URL (`https://t.me/...`) yoki `@username`
+  /// / `username` — SDK `https://t.me/...` ga normalizatsiya qiladi.
+  final String? telegramUrl;
 }
 
 /// Pastki navbar panelining tashqi ko'rinishi (faqat Container qatlami).

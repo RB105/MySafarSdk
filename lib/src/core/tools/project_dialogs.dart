@@ -456,7 +456,8 @@ class ProjectDialogs {
         case 0:
           // MUHIM: `tel:` path'da bo'shliq bo'lmasligi kerak — aks holda URI
           // buziladi va telefon ilovasi ochilmaydi.
-          final Uri phoneUri = Uri(scheme: 'tel', path: "+998555120008");
+          final phone = MySafarSdk.config.supportPhone.replaceAll(' ', '');
+          final Uri phoneUri = Uri(scheme: 'tel', path: phone);
           try {
             await launchUrl(phoneUri, mode: LaunchMode.externalApplication);
           } catch (_) {
@@ -464,7 +465,7 @@ class ProjectDialogs {
           }
           break;
         case 2:
-          final Uri uri = Uri.parse("https://t.me/My_Safar_call_center_bot");
+          final Uri uri = Uri.parse(MySafarSdk.config.supportTelegramUrl);
           if (await canLaunchUrl(uri)) {
             await launchUrl(uri, mode: LaunchMode.externalApplication);
           } else {

@@ -1,5 +1,6 @@
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -10,7 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 class SupportWidget extends StatelessWidget {
   const SupportWidget({super.key});
 
-  static const String _phone = "+998 55 512 00 08";
+  String get _phone => MySafarSdk.config.supportPhone;
 
   Future<void> _call() async {
     // MUHIM: `tel:` path'da bo'shliq bo'lmasligi kerak — aks holda URI
