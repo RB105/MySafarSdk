@@ -1,8 +1,12 @@
 // ignore_for_file: unused_element
 
+import 'dart:async' show unawaited;
 import 'dart:math' as math;
 
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
+import 'package:mysafar_sdk/src/core/config/response_config.dart'
+    show NetworkErrorResponse, NetworkSuccessResponse;
+import 'package:mysafar_sdk/src/service/avia_service.dart' show AviaService;
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mysafar_sdk/src/core/enum/currency.dart' show AppCurrency;
@@ -11,6 +15,7 @@ import 'package:mysafar_sdk/src/core/styles/theme.dart';
 import 'package:mysafar_sdk/src/core/tools/currency_provider.dart'
     show CurrencyProvider;
 import 'package:mysafar_sdk/src/core/tools/formatters.dart';
+import 'package:mysafar_sdk/src/core/tools/lang_helper.dart' show currentLang;
 import 'package:mysafar_sdk/src/core/tools/project_assets.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart';
@@ -63,11 +68,72 @@ class _TicketInfoPageState extends State<TicketInfoPage> {
 
   late FlightElement flightElement;
 
+  final AviaService _aviaService = AviaService();
+  bool _checking = true;
+  String? _checkError;
+  bool _checkStarted = false;
+  bool _checkErrorDialogOpen = false;
+
   @override
   void initState() {
     flightElement = widget.flightElement;
     super.initState();
   }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_checkStarted) return;
+    _checkStarted = true;
+    unawaited(_checkFlight(currentLang()));
+  }
+
+  Future<void> _checkFlight(String lang) async {
+    final id = flightElement.id;
+    if (id.isEmpty) {
+      if (mounted) setState(() => _checking = false);
+      return;
+    }
+
+    final response = await _aviaService.getFlightInfo(id, lang: lang);
+    if (!mounted) return;
+
+    NetworkErrorResponse? error;
+    setState(() {
+      _checking = false;
+      if (response is NetworkSuccessResponse) {
+        _checkError = null;
+        flightElement = response.data as FlightElement;
+      } else if (response is NetworkErrorResponse) {
+        _checkError = response.getError();
+        error = response;
+      }
+    });
+
+    if (error != null) await _showCheckErrorDialog(error!, lang);
+  }
+
+  Future<void> _showCheckErrorDialog(
+      NetworkErrorResponse response, String lang) async {
+    if (!mounted || _checkErrorDialogOpen) return;
+    _checkErrorDialogOpen = true;
+    final action = await ProjectDialogs.showApiErrorDialog(
+      context,
+      message: response.getError(),
+      errorType: response.errorType,
+    );
+    _checkErrorDialogOpen = false;
+    if (!mounted) return;
+
+    if (action == ErrorDialogAction.retry) {
+      setState(() => _checking = true);
+      unawaited(_checkFlight(lang));
+    } else {
+      Navigator.of(context).maybePop();
+    }
+  }
+
+  bool get _canBook => !_checking && _checkError == null;
 
   @override
   Widget build(BuildContext context) {
@@ -201,18 +267,29 @@ class _TicketInfoPageState extends State<TicketInfoPage> {
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(16, 8, 16, 12),
                   child: _BookButton(
+                    enabled: _canBook,
+                    isLoading: _checking,
                     priceLabel: currencyProvider
                         .getElementPrice(flightElement.price),
                     onTap: () {
                       HapticFeedback.lightImpact();
-                      Navigator.of(context).push(MaterialPageRoute(
+                      // Sheet ochiq qolsa uning ListenableBuilder eski parent
+                      // context bilan rebuild bo'lishi mumkin — avval sheetni
+                      // yopib, keyin yo'lovchi sahifasini push qilamiz.
+                      final navigator = Navigator.of(context);
+                      final element = flightElement;
+                      final adt = params.adt;
+                      final chd = params.chd;
+                      final inf = params.inf;
+                      navigator.pop();
+                      navigator.push(MaterialPageRoute(
                         settings: RouteSettings(
                             name: PassengerInformationPage.routeName),
-                        builder: (context) => PassengerInformationPage(
-                          adt: params.adt,
-                          chd: params.chd,
-                          inf: params.inf,
-                          element: flightElement,
+                        builder: (_) => PassengerInformationPage(
+                          adt: adt,
+                          chd: chd,
+                          inf: inf,
+                          element: element,
                         ),
                       ));
                     },

@@ -32,6 +32,10 @@ class EndPoints {
   static const String main_search_history = '/main/search-history'; // hearder
   static const String ticket_price_by_month = '/avia/one-month-ticket-price';
   static const String avia_get_tariff = '/avia/get-flight-tariffs';
+
+  /// Bron qilishdan OLDIN reysni qayta tekshirish — narx/joy o'zgargan yoki
+  /// reys endi mavjud bo'lmasa backend xato qaytaradi va bron bloklanadi.
+  static const String avia_get_flight_info = '/avia/get-flight-info';
   static const String avia_centrum_recommendatins = '/centrum/find-ticket';
   static const String avia_centrum_rec = '/centrum/find-ticket';
 

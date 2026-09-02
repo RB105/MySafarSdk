@@ -773,6 +773,7 @@
   "server_error_message": "Serverda vaqtinchalik muammo yuz berdi. Birozdan so‘ng qayta urinib ko‘ring",
   "error_generic_title": "Xatolik yuz berdi",
   "error_generic_message": "Kutilmagan xatolik yuz berdi. Qayta urinib ko‘ring",
+  "flight_info_unavailable": "Reys ma’lumotini olib bo‘lmadi. Qaytadan qidirib ko‘ring",
   "refund_title": "Biletni qaytarish",
   "refund_my_requests": "Arizalarim",
   "refund_new_request": "Yangi ariza",

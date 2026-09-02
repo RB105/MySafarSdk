@@ -8,6 +8,7 @@ import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart'
 import 'package:mysafar_sdk/src/core/localization/tg_fallback_localizations.dart';
 import 'package:mysafar_sdk/src/core/router/navigation_service.dart';
 import 'package:mysafar_sdk/src/core/router/router.dart' show RouterGenerator;
+import 'package:mysafar_sdk/src/core/router/sdk_embed_back_handler.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart' show ProjectTheme;
 import 'package:mysafar_sdk/src/core/styles/theme_notifier.dart'
     show ThemeNotifier;
@@ -81,7 +82,7 @@ class MySafarEmbed extends StatefulWidget {
   State<MySafarEmbed> createState() => _MySafarEmbedState();
 }
 
-class _MySafarEmbedState extends State<MySafarEmbed> {
+class _MySafarEmbedState extends State<MySafarEmbed> with WidgetsBindingObserver {
   // Til + (ixtiyoriy) jim ro'yxatdan o'tish — UI ochilishidan oldin.
   // Ro'yxat 10s dan oshsa kutmaymiz — mehmon rejimida ochamiz.
   late final Future<void> _ready = _prepare();
@@ -108,6 +109,7 @@ class _MySafarEmbedState extends State<MySafarEmbed> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Embed ochilganda faqat portrait — host landscape bo'lsa ham.
     MySafarSdk.lockPortrait();
     // Home ekranidagi "orqaga" tugmasi shu orqali host route'ini yopadi.
@@ -129,6 +131,7 @@ class _MySafarEmbedState extends State<MySafarEmbed> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     if (kDebugMode && _prevOnError != null) {
       FlutterError.onError = _prevOnError;
     }
@@ -136,6 +139,26 @@ class _MySafarEmbedState extends State<MySafarEmbed> {
     // Host app o'z orientation siyosatiga qaytsin.
     MySafarSdk.restoreOrientations();
     super.dispose();
+  }
+
+  /// Android/iOS tizim back — PopScope va [didPopRoute] uchun umumiy handler.
+  void _handleEmbedSystemBack() {
+    if (SdkEmbedBackHandler.isHandlingInternalPop) return;
+    if (SdkEmbedBackHandler.handleSystemBack()) return;
+    if (mounted) MySafarSdk.exitEmbed();
+  }
+
+  /// Android/iOS tizim back — host navigator o'rniga SDK stack yoki embed
+  /// yopish. `true` qaytarsak platforma default pop (app'dan chiqish) ishlamaydi.
+  @override
+  Future<bool> didPopRoute() async {
+    if (SdkEmbedBackHandler.isHandlingInternalPop) return false;
+    if (SdkEmbedBackHandler.handleSystemBack()) return true;
+    if (!MySafarSdk.isEmbedded) return false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _handleEmbedSystemBack();
+    });
+    return true;
   }
 
   Widget _debugErrorScreen(FlutterErrorDetails details) {
@@ -167,12 +190,7 @@ class _MySafarEmbedState extends State<MySafarEmbed> {
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        final nav = NavigationService.navigatorKey.currentState;
-        if (nav != null && nav.canPop()) {
-          nav.pop();
-          return;
-        }
-        Navigator.of(context).pop();
+        _handleEmbedSystemBack();
       },
       child: FutureBuilder<void>(
         future: _ready,
@@ -203,9 +221,14 @@ class _MySafarEmbedState extends State<MySafarEmbed> {
 /// to'liq SDK'niki. easy_localization YO'Q: `SdkLocalization` global holatga
 /// tegmaydi, shuning uchun host app'ning tarjimalari buzilmaydi.
 Widget _sdkMaterialApp(BuildContext context, {required String initialRoute}) {
+  final observers = <NavigatorObserver>[
+    NavigationService.routeObserver,
+    if (MySafarSdk.isEmbedded) NavigationService.embedStackObserver,
+  ];
+
   return MaterialApp(
     navigatorKey: NavigationService.navigatorKey,
-    navigatorObservers: [NavigationService.routeObserver],
+    navigatorObservers: observers,
     locale: SdkLocalization.locale,
     localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
       ...tgFallbackDelegates,
@@ -232,10 +255,11 @@ Widget _sdkMaterialApp(BuildContext context, {required String initialRoute}) {
     // mumkin — haqiqiy MaterialApp temasi bilan sinxronlashtiramiz.
     builder: (context, child) {
       final brightness = Theme.of(context).brightness;
-      return MediaQuery(
+      final content = MediaQuery(
         data: MediaQuery.of(context).copyWith(platformBrightness: brightness),
         child: child ?? const SizedBox.shrink(),
       );
+      return SdkEmbedBackHandler(child: content);
     },
   );
 }

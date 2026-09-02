@@ -200,6 +200,51 @@ class AviaService with RequestConfig {
     return response;
   }
 
+  /// Bron qilishdan oldin reysni qayta tekshiradi (`/avia/get-flight-info`).
+  ///
+  /// Backend `{success, data: {flight: {...}}}` qaytaradi. `data.flight` —
+  /// qidiruv natijasidagi bilan bir xil tuzilma, ya'ni [FlightElement] ga
+  /// o'giriladi (yangilangan narx, qolgan joy, bagaj, shartlar).
+  ///
+  /// MUHIM: javobdagi `flight.id` qidiruvdagidan farq qiladi — u bron uchun
+  /// amaldagi token. Bron sahifasiga aynan shu yangi element uzatilishi kerak.
+  Future<NetworkResponse> getFlightInfo(String tid, {String? lang}) async {
+    final response = await postRequest(
+      partnerToken: true,
+      endPoint: EndPoints.avia_get_flight_info,
+      params: {"lang": lang ?? "ru", "tid": tid},
+    );
+
+    if (response is! NetworkSuccessResponse) return response;
+
+    try {
+      final body = response.data;
+      if (body is! Map || body['success'] != true) {
+        final message =
+            body is Map ? (body['data']?['message'] ?? body['message']) : null;
+        return NetworkErrorResponse(
+          error: message ?? body,
+          errorType: ErrorType.other,
+        );
+      }
+
+      final flight = body['data']?['flight'];
+      if (flight is! Map<String, dynamic>) {
+        return NetworkErrorResponse(
+          error: "flight_info_unavailable".tr(),
+          errorType: ErrorType.other,
+        );
+      }
+      return NetworkSuccessResponse(data: FlightElement.fromJson(flight));
+    } catch (e) {
+      debugPrint('getFlightInfo parse error: $e');
+      return const NetworkErrorResponse(
+        error: 'Failed to parse flight info',
+        errorType: ErrorType.other,
+      );
+    }
+  }
+
   Future<NetworkResponse> getTariff(String tid) async {
     final response = await postRequest(
         partnerToken: true,
