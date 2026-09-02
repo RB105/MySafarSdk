@@ -773,6 +773,7 @@
   "server_error_message": "Sunucuda geçici bir sorun oluştu. Biraz sonra tekrar deneyin",
   "error_generic_title": "Bir hata oluştu",
   "error_generic_message": "Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin",
+  "flight_info_unavailable": "Uçuş bilgisi alınamadı. Lütfen yeniden arayın",
   "refund_title": "Bilet iadesi",
   "refund_my_requests": "Taleplerim",
   "refund_new_request": "Yeni talep",

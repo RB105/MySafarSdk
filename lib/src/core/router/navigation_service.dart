@@ -16,6 +16,13 @@ class NavigationService {
   /// Navigatsiya o'zgarishlarini kuzatib, [currentRouteName] ni yangilab turadi.
   /// [MaterialApp.navigatorObservers] ga qo'shilishi kerak.
   static final AppRouteObserver routeObserver = AppRouteObserver();
+
+  /// Embed rejimida iOS chetdan swipe faqat SDK root'ida yoqilishi uchun
+  /// ichki stack o'zgarishlarini bildiradi.
+  static final ValueNotifier<int> embedStackGeneration = ValueNotifier(0);
+
+  static final EmbedStackNavigatorObserver embedStackObserver =
+      EmbedStackNavigatorObserver();
 }
 
 /// Har bir push/pop/replace da eng yuqoridagi ekran nomini [NavigationService]
@@ -49,6 +56,39 @@ class AppRouteObserver extends NavigatorObserver {
   @override
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
     _update(newRoute);
+    super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
+  }
+}
+
+/// Embed back handler iOS swipe uchun stack chuqurligini kuzatadi.
+class EmbedStackNavigatorObserver extends NavigatorObserver {
+  void _notify() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      NavigationService.embedStackGeneration.value++;
+    });
+  }
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _notify();
+    super.didPush(route, previousRoute);
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _notify();
+    super.didPop(route, previousRoute);
+  }
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _notify();
+    super.didRemove(route, previousRoute);
+  }
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    _notify();
     super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
   }
 }

@@ -773,6 +773,7 @@
   "server_error_message": "Серверде уақытша ақаулық. Сәлден соң қайта көріңіз",
   "error_generic_title": "Қате шықты",
   "error_generic_message": "Күтпеген қате шықты. Қайта көріңіз",
+  "flight_info_unavailable": "Рейс туралы ақпаратты алу мүмкін болмады. Қайта іздеп көріңіз",
   "refund_title": "Билетті қайтару",
   "refund_my_requests": "Менің өтініштерім",
   "refund_new_request": "Жаңа өтініш",

@@ -40,9 +40,7 @@ class _PriceFeatureCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(22),
       child: DecoratedBox(
         decoration: BoxDecoration(
-        color: isDark
-            ? ProjectTheme.cardColorDark
-            : ProjectTheme.cardColorLight,
+          color: context.color.primaryContainer,
           borderRadius: BorderRadius.circular(22),
           boxShadow: context.shadowDown,
         ),

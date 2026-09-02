@@ -10,8 +10,8 @@ import 'package:mysafar_sdk/src/core/styles/theme_notifier.dart';
 /// Shu helperlar doim SDK ichki navigator'da ochadi.
 ///
 /// Tema **jonli**: `ThemeNotifier` o'zgaganda ochiq sheet ham yangilanadi.
-/// Rang manbai — MaterialApp'da chizilayotgan `Theme.of(parent)` brightness
-/// (`ThemeNotifier.isDark` bilan sinxrondan chiqmaslik uchun).
+/// Rang manbai — sheet ichidagi [BuildContext] (yoki ochilishdagi fallback),
+/// deactivate bo'lgan parent contextga qayta murojaat qilinmaydi.
 
 ThemeNotifier? _tryThemeNotifier(BuildContext context) {
   try {
@@ -21,36 +21,51 @@ ThemeNotifier? _tryThemeNotifier(BuildContext context) {
   }
 }
 
-/// Sahifada ko'rinayotgan tema — sheet ham shunga moslashadi.
-ThemeData _pageTheme(BuildContext parentContext) {
-  final isDark = Theme.of(parentContext).brightness == Brightness.dark;
-  return isDark ? ProjectTheme.dark : ProjectTheme.light;
+/// Context hali tree'da bo'lsa undan brightness olinadi; aks holda
+/// [ThemeNotifier] yoki light fallback.
+ThemeData _resolveTheme({
+  required BuildContext? liveContext,
+  required ThemeNotifier? notifier,
+  required ThemeData fallback,
+}) {
+  if (liveContext != null && liveContext.mounted) {
+    try {
+      final isDark = Theme.of(liveContext).brightness == Brightness.dark;
+      return isDark ? ProjectTheme.dark : ProjectTheme.light;
+    } catch (_) {
+      // Deactivated / InheritedWidget yo'q — pastdagi fallback.
+    }
+  }
+  if (notifier != null) {
+    return notifier.isDark ? ProjectTheme.dark : ProjectTheme.light;
+  }
+  return fallback;
 }
 
-Color? _liveSheetFill({
+Color? _sheetFill({
   required Color? backgroundColor,
-  required BuildContext parentContext,
+  required ThemeData theme,
 }) {
   if (backgroundColor == Colors.transparent) return null;
-
-  final isDark = Theme.of(parentContext).brightness == Brightness.dark;
+  final isDark = theme.brightness == Brightness.dark;
   return isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight;
 }
 
 Widget _wrapLiveTheme({
-  required BuildContext parentContext,
+  required ThemeData initialTheme,
   required ThemeNotifier? notifier,
   required Color? backgroundColor,
   required ShapeBorder? shape,
   required Clip? clipBehavior,
   required WidgetBuilder builder,
 }) {
-  Widget buildFor() {
-    final theme = _pageTheme(parentContext);
-    final fill = _liveSheetFill(
-      backgroundColor: backgroundColor,
-      parentContext: parentContext,
+  Widget buildFor(BuildContext sheetContext) {
+    final theme = _resolveTheme(
+      liveContext: sheetContext,
+      notifier: notifier,
+      fallback: initialTheme,
     );
+    final fill = _sheetFill(backgroundColor: backgroundColor, theme: theme);
     Widget result = Theme(
       data: theme,
       child: Builder(builder: builder),
@@ -66,13 +81,16 @@ Widget _wrapLiveTheme({
     return result;
   }
 
-  if (notifier == null) return buildFor();
+  if (notifier == null) {
+    return Builder(builder: buildFor);
+  }
 
-  // ThemeNotifier → MaterialApp qayta chiziladi → Theme.of(parent) yangilanadi.
-  // Sheet ham shu notify'da qayta chizilsin.
+  // ThemeNotifier → sheet qayta chizilsin. Temani sheetContext yoki
+  // notifier'dan olamiz — ochilishdagi parentContextga qayta tegmaymiz
+  // (u deactivate bo'lishi mumkin: sheet ustiga push / pop).
   return ListenableBuilder(
     listenable: notifier,
-    builder: (_, __) => buildFor(),
+    builder: (sheetContext, _) => buildFor(sheetContext),
   );
 }
 
@@ -93,6 +111,12 @@ Future<T?> showSdkModalBottomSheet<T>({
   BoxConstraints? constraints,
 }) {
   final notifier = _tryThemeNotifier(context);
+  // Ochilish paytidagi tema — keyin parent deactivate bo'lsa fallback.
+  final initialTheme = _resolveTheme(
+    liveContext: context,
+    notifier: notifier,
+    fallback: ProjectTheme.light,
+  );
 
   return showModalBottomSheet<T>(
     context: context,
@@ -109,7 +133,7 @@ Future<T?> showSdkModalBottomSheet<T>({
     showDragHandle: showDragHandle,
     constraints: constraints,
     builder: (_) => _wrapLiveTheme(
-      parentContext: context,
+      initialTheme: initialTheme,
       notifier: notifier,
       backgroundColor: backgroundColor,
       shape: shape,
@@ -129,9 +153,18 @@ Future<T?> showSdkCupertinoModalPopup<T>({
   bool semanticsDismissible = false,
 }) {
   final notifier = _tryThemeNotifier(context);
+  final initialTheme = _resolveTheme(
+    liveContext: context,
+    notifier: notifier,
+    fallback: ProjectTheme.light,
+  );
 
-  Widget buildFor() => Theme(
-        data: _pageTheme(context),
+  Widget buildFor(BuildContext sheetContext) => Theme(
+        data: _resolveTheme(
+          liveContext: sheetContext,
+          notifier: notifier,
+          fallback: initialTheme,
+        ),
         child: Builder(builder: builder),
       );
 
@@ -142,11 +175,11 @@ Future<T?> showSdkCupertinoModalPopup<T>({
     filter: filter,
     barrierColor: barrierColor ?? kCupertinoModalBarrierColor,
     semanticsDismissible: semanticsDismissible,
-    builder: (_) {
-      if (notifier == null) return buildFor();
+    builder: (sheetContext) {
+      if (notifier == null) return buildFor(sheetContext);
       return ListenableBuilder(
         listenable: notifier,
-        builder: (_, __) => buildFor(),
+        builder: (ctx, _) => buildFor(ctx),
       );
     },
   );

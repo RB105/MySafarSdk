@@ -50,6 +50,52 @@ import 'package:url_launcher/url_launcher.dart'
 import 'formatters.dart';
 import 'package:mysafar_sdk/src/core/tools/sdk_sheets.dart';
 import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
+import 'package:mysafar_sdk/src/core/config/response_config.dart'
+    show ErrorType;
+
+/// Xato dialogida foydalanuvchi tanlagan amal.
+enum ErrorDialogAction {
+  retry,
+  close,
+}
+
+/// Xatoning foydalanuvchiga ko'rsatiladigan turi — sarlavha va izoh shunga
+/// qarab tanlanadi. [ErrorType] (dio/HTTP kodlari) shu guruhlarga jamlanadi.
+enum ErrorDialogKind {
+  network,
+  server,
+  generic;
+
+  static ErrorDialogKind fromErrorType(ErrorType? type) {
+    switch (type) {
+      case ErrorType.connectTimeout:
+      case ErrorType.receiveTimeout:
+      case ErrorType.sendTimeout:
+      case ErrorType.connectionError:
+      case ErrorType.dio_error:
+        return ErrorDialogKind.network;
+      case ErrorType.internalServer_500:
+      case ErrorType.badGateway_502:
+      case ErrorType.serviceUnavailable_503:
+      case ErrorType.gatewayTimeout_504:
+        return ErrorDialogKind.server;
+      default:
+        return ErrorDialogKind.generic;
+    }
+  }
+
+  String get title => switch (this) {
+        ErrorDialogKind.network => "connection_error_title".tr(),
+        ErrorDialogKind.server => "server_error_title".tr(),
+        ErrorDialogKind.generic => "error_generic_title".tr(),
+      };
+
+  String get fallbackMessage => switch (this) {
+        ErrorDialogKind.network => "connection_error_message".tr(),
+        ErrorDialogKind.server => "server_error_message".tr(),
+        ErrorDialogKind.generic => "error_generic_message".tr(),
+      };
+}
 
 class ProjectDialogs {
   static BuildContext? _dialogContext;
@@ -984,6 +1030,120 @@ class ProjectDialogs {
       },
     );
     return result ?? false;
+  }
+
+  /// API'dan kelgan xatolarni ko'rsatadi — tarmoq, timeout, 4xx, 5xx va h.k.
+  static Future<ErrorDialogAction> showApiErrorDialog(
+    BuildContext context, {
+    String? message,
+    ErrorType? errorType,
+    ErrorDialogKind? kind,
+    bool showRetry = true,
+    String? secondaryLabel,
+  }) async {
+    final bool isDark = context.isDarkMode;
+    final ErrorDialogKind errorKind =
+        kind ?? ErrorDialogKind.fromErrorType(errorType);
+    final String title = errorKind.title;
+    final String rawMessage = message?.trim() ?? '';
+    final String body = (rawMessage.isEmpty || rawMessage == title)
+        ? errorKind.fallbackMessage
+        : rawMessage;
+    final result = await showDialog<ErrorDialogAction>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return PopScope(
+          canPop: false,
+          child: Dialog(
+            backgroundColor: context.color.primaryContainer,
+            insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (title.isNotEmpty) ...[
+                    Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      style: context.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 18,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  Text(
+                    body,
+                    textAlign: TextAlign.center,
+                    style: context.textTheme.bodyMedium?.copyWith(
+                      fontSize: 15,
+                      height: 1.35,
+                      color: context.color.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  if (showRetry) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(
+                            dialogContext, ErrorDialogAction.retry),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: ProjectTheme.brandColor,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        child: Text(
+                          "retry_search".tr(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () =>
+                          Navigator.pop(dialogContext, ErrorDialogAction.close),
+                      style: ElevatedButton.styleFrom(
+                        elevation: 0,
+                        backgroundColor: isDark
+                            ? Colors.white.withAlpha(20)
+                            : ProjectTheme.brandColor.withAlpha(20),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      child: Text(
+                        secondaryLabel ?? "close".tr(),
+                        style: context.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w500,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    return result ?? ErrorDialogAction.close;
   }
 
   /// Qidiruv natijalari eskirgani (masalan, 5 daqiqa o'tgani) haqida ogohlantirib,

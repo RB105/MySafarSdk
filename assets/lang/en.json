@@ -773,6 +773,7 @@
   "server_error_message": "The server is temporarily unavailable. Please try again in a moment",
   "error_generic_title": "Something went wrong",
   "error_generic_message": "An unexpected error occurred. Please try again",
+  "flight_info_unavailable": "Couldn't retrieve flight info. Please search again",
   "refund_title": "Ticket refund",
   "refund_my_requests": "My requests",
   "refund_new_request": "New request",
