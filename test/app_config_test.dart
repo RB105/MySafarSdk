@@ -73,5 +73,33 @@ void main() {
 
       expect(config.supportTelegramUrl, 'https://t.me/partner_bot');
     });
+
+    test('partnerSupport — default ishlatilmaydi, faqat aniq berilgan', () {
+      const empty = MySafarConfig(
+        baseUrl: 'https://api.example.com',
+        skoteBaseUrl: 'https://cms.example.com/api',
+      );
+      expect(empty.partnerSupportPhone, isNull);
+      expect(empty.partnerSupportTelegramUrl, isNull);
+      expect(empty.hasPartnerSupport, isFalse);
+
+      const phoneOnly = MySafarConfig(
+        baseUrl: 'https://api.example.com',
+        skoteBaseUrl: 'https://cms.example.com/api',
+        support: MySafarSupportConfig(phone: '+998 90 111 22 33'),
+      );
+      expect(phoneOnly.partnerSupportPhone, '+998 90 111 22 33');
+      expect(phoneOnly.partnerSupportTelegramUrl, isNull);
+      expect(phoneOnly.hasPartnerSupport, isTrue);
+
+      const tgOnly = MySafarConfig(
+        baseUrl: 'https://api.example.com',
+        skoteBaseUrl: 'https://cms.example.com/api',
+        support: MySafarSupportConfig(telegramUrl: '@partner_bot'),
+      );
+      expect(tgOnly.partnerSupportPhone, isNull);
+      expect(tgOnly.partnerSupportTelegramUrl, 'https://t.me/partner_bot');
+      expect(tgOnly.hasPartnerSupport, isTrue);
+    });
   });
 }
