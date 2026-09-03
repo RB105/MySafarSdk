@@ -211,21 +211,35 @@ class _PriceCard extends StatelessWidget {
   }
 }
 
-/// Kontakt kartasi: xabar + telefon + telegram (bosilganda ochiladi).
+/// Kontakt kartasi: faqat partner `init` da aniq bergan telefon / Telegram.
+/// Default MySafar kontaktlari bu yerda ishlatilmaydi.
 class _ContactCard extends StatelessWidget {
-  final DestinationContact contact;
-  final String Function(DestLocalizedText) lt;
   final void Function(String uri) onOpen;
 
-  const _ContactCard({
-    required this.contact,
-    required this.lt,
-    required this.onOpen,
-  });
+  const _ContactCard({required this.onOpen});
+
+  String get _messageKey {
+    final hasPhone = MySafarSdk.config.partnerSupportPhone != null;
+    final hasTelegram = MySafarSdk.config.partnerSupportTelegramUrl != null;
+    if (hasPhone && hasTelegram) return 'dest_contact_call_or_telegram';
+    if (hasPhone) return 'dest_contact_call_only';
+    return 'dest_contact_telegram_only';
+  }
+
+  /// `https://t.me/foo` → `@foo` (UI uchun qisqa yorliq).
+  String _telegramLabel(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri != null && uri.pathSegments.isNotEmpty) {
+      return '@${uri.pathSegments.first}';
+    }
+    return url;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final String telegramHandle = contact.telegram.replaceAll('@', '');
+    final phone = MySafarSdk.config.partnerSupportPhone;
+    final telegramUrl = MySafarSdk.config.partnerSupportTelegramUrl;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -235,18 +249,18 @@ class _ContactCard extends StatelessWidget {
         boxShadow: context.shadowDown,
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!contact.message.isEmpty)
-            Text(
-              lt(contact.message),
-              style: context.textTheme.headlineSmall
-                  ?.copyWith(fontSize: 13.5, height: 1.45),
-            ),
+          Text(
+            _messageKey.tr(),
+            style: context.textTheme.headlineSmall
+                ?.copyWith(fontSize: 13.5, height: 1.45),
+          ),
           const SizedBox(height: 10),
-          if (contact.phone.isNotEmpty)
+          if (phone != null)
             InkWell(
-              onTap: () => onOpen("tel:${contact.phone.replaceAll(' ', '')}"),
+              onTap: () => onOpen('tel:${phone.replaceAll(' ', '')}'),
               borderRadius: BorderRadius.circular(8),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
@@ -256,7 +270,7 @@ class _ContactCard extends StatelessWidget {
                         size: 17, color: ProjectTheme.brandColor),
                     const SizedBox(width: 8),
                     Text(
-                      contact.phone,
+                      phone,
                       style: context.textTheme.bodyMedium
                           ?.copyWith(fontWeight: FontWeight.w700, fontSize: 14),
                     ),
@@ -264,9 +278,9 @@ class _ContactCard extends StatelessWidget {
                 ),
               ),
             ),
-          if (telegramHandle.isNotEmpty)
+          if (telegramUrl != null)
             InkWell(
-              onTap: () => onOpen("https://t.me/$telegramHandle"),
+              onTap: () => onOpen(telegramUrl),
               borderRadius: BorderRadius.circular(8),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
@@ -276,7 +290,7 @@ class _ContactCard extends StatelessWidget {
                         size: 17, color: ProjectTheme.brandColor),
                     const SizedBox(width: 8),
                     Text(
-                      contact.telegram,
+                      _telegramLabel(telegramUrl),
                       style: context.textTheme.bodyMedium
                           ?.copyWith(fontWeight: FontWeight.w700, fontSize: 14),
                     ),

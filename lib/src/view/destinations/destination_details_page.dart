@@ -19,6 +19,7 @@ import 'package:mysafar_sdk/src/model/remote/fornex/pop_destinations.dart';
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart';
 import 'package:mysafar_sdk/src/view/destinations/destinations_info_map_page.dart'
     show DestinationInfoMapWidget;
+import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
 import 'package:mysafar_sdk/src/view/search/route_search_page.dart'
     show RouteSearchPage;
@@ -258,13 +259,9 @@ class _DestinationDetailsPageState extends State<DestinationDetailsPage> {
                     priceOf: (currency) => _price(detail, currency),
                     onSearch: () => _searchTickets(detail),
                   ),
-                  if (detail.contact != null) ...[
+                  if (MySafarSdk.config.hasPartnerSupport) ...[
                     const SizedBox(height: 16),
-                    _ContactCard(
-                      contact: detail.contact!,
-                      lt: _lt,
-                      onOpen: _openUri,
-                    ),
+                    _ContactCard(onOpen: _openUri),
                   ],
                 ]),
               ),

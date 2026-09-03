@@ -97,29 +97,44 @@ class MySafarConfig {
   final MySafarHomeHeaderStyle? homeHeaderStyle;
 
   /// Qo'llab-quvvatlash telefoni va Telegram. `null` / bo'sh maydonlar
-  /// MySafar defaultlariga tushadi.
+  /// umumiy support UI da MySafar defaultlariga tushadi. Destination
+  /// details kontakt kartasi esa faqat partner aniq bergan qiymatlarni
+  /// ko'rsatadi (`hasPartnerSupport` / `partnerSupport*`).
   final MySafarSupportConfig? support;
 
   /// Support telefon (UI + `tel:`). Host bermasa default.
   String get supportPhone {
-    final value = support?.phone?.trim();
-    return (value != null && value.isNotEmpty)
-        ? value
-        : MySafarSupportConfig.defaultPhone;
+    return partnerSupportPhone ?? MySafarSupportConfig.defaultPhone;
   }
 
   /// Support Telegram URL. Host bermasa default.
   String get supportTelegramUrl {
+    return partnerSupportTelegramUrl ??
+        MySafarSupportConfig.defaultTelegramUrl;
+  }
+
+  /// Partner initda aniq bergan telefon (default emas). Bo'sh → `null`.
+  String? get partnerSupportPhone {
+    final value = support?.phone?.trim();
+    return (value != null && value.isNotEmpty) ? value : null;
+  }
+
+  /// Partner initda aniq bergan Telegram URL (default emas). Bo'sh → `null`.
+  /// `@handle` / `handle` → `https://t.me/...` ga normalizatsiya qilinadi.
+  String? get partnerSupportTelegramUrl {
     final value = support?.telegramUrl?.trim();
-    if (value == null || value.isEmpty) {
-      return MySafarSupportConfig.defaultTelegramUrl;
-    }
+    if (value == null || value.isEmpty) return null;
     if (value.startsWith('http://') || value.startsWith('https://')) {
       return value;
     }
     final handle = value.replaceFirst(RegExp(r'^@'), '');
     return 'https://t.me/$handle';
   }
+
+  /// Destination details kontakt kartasi uchun: partner hech narsa
+  /// bermagan bo'lsa kartani yashirish.
+  bool get hasPartnerSupport =>
+      partnerSupportPhone != null || partnerSupportTelegramUrl != null;
 }
 
 /// Qo'llab-quvvatlash kontaktlari — host `MySafarConfig.support` orqali beradi.
