@@ -89,7 +89,11 @@ class SdkEmbedBackHandler extends StatelessWidget {
 
     _lastBackAt = now;
     try {
-      showToastMessage('press_again_to_exit'.tr());
+      showToastMessage(
+        'press_again_to_exit'.tr(
+          defaultValue: 'Chiqish uchun yana bosing',
+        ),
+      );
     } catch (_) {
       // Test / toast plugin yo'q muhit — silent.
     }

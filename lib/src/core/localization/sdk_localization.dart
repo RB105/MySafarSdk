@@ -78,10 +78,14 @@ class SdkLocalization {
 
   /// easy_localization bilan bir xil format: pozitsion `{}` va nomlangan
   /// `{name}` placeholderlar.
+  /// [defaultValue] — kalit topilmasa (masalan asset hali reload bo'lmagan).
   static String translate(String key,
-      {List<String>? args, Map<String, String>? namedArgs}) {
-    var value =
-        (_strings[key] ?? _fallbackStrings[key])?.toString() ?? key;
+      {List<String>? args,
+      Map<String, String>? namedArgs,
+      String? defaultValue}) {
+    var value = (_strings[key] ?? _fallbackStrings[key])?.toString() ??
+        defaultValue ??
+        key;
     if (namedArgs != null) {
       namedArgs.forEach((k, v) => value = value.replaceAll('{$k}', v));
     }
@@ -96,8 +100,12 @@ class SdkLocalization {
 
 /// easy_localization'ning `'key'.tr()` sintaksisi bilan drop-in mos.
 extension SdkStringTr on String {
-  String tr({List<String>? args, Map<String, String>? namedArgs}) =>
-      SdkLocalization.translate(this, args: args, namedArgs: namedArgs);
+  String tr(
+          {List<String>? args,
+          Map<String, String>? namedArgs,
+          String? defaultValue}) =>
+      SdkLocalization.translate(this,
+          args: args, namedArgs: namedArgs, defaultValue: defaultValue);
 }
 
 /// easy_localization'ning `context.locale` / `context.setLocale` o'rnini
