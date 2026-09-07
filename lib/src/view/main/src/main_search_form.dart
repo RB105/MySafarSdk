@@ -242,11 +242,11 @@ class _MainSearchFormState extends State<MainSearchForm> {
   void _search() {
     HapticFeedback.mediumImpact();
     if (!isFilled) {
-      showToastMessage("home_fill_search".tr());
+      showToastTr("home_fill_search");
       return;
     }
     if (isSameAirport) {
-      showToastMessage("same_airport_warning".tr());
+      showToastTr("same_airport_warning");
       return;
     }
     AnalyticsService().trackTicketSearched(

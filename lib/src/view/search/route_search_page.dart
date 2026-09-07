@@ -282,11 +282,11 @@ class _RouteSearchViewState extends State<_RouteSearchView>
     // Webda tugma doim faol — sana tanlanmagan bo'lsa ogohlantiramiz
     // (bosh sahifadagi forma bilan bir xil xatti-harakat).
     if (!state.hasDate) {
-      showToastMessage("home_fill_search".tr());
+      showToastTr("home_fill_search");
       return;
     }
     if (state.isSameAirport) {
-      showToastMessage("same_airport_warning".tr());
+      showToastTr("same_airport_warning");
       return;
     }
     HapticFeedback.mediumImpact();
@@ -304,7 +304,7 @@ class _RouteSearchViewState extends State<_RouteSearchView>
   void _searchMulti() {
     final String? error = _cubit.validateLegs();
     if (error != null) {
-      showToastMessage(error.tr());
+      showToastTr(error);
       return;
     }
     HapticFeedback.mediumImpact();
