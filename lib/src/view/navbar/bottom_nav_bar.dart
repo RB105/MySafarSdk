@@ -12,6 +12,7 @@ import 'package:mysafar_sdk/src/view/profile/pages/booked_tickets_page.dart';
 import 'package:mysafar_sdk/src/view/profile/profile_page.dart';
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
+import 'package:mysafar_sdk/src/core/router/sdk_embed_back_handler.dart';
 
 class BottomNavBarPage extends StatefulWidget {
   final int? pageIndex;
@@ -27,6 +28,10 @@ class BottomNavBarPage extends StatefulWidget {
   /// Ichki sahifalardan tab almashtirish so'rovi (masalan bosh sahifadagi
   /// "Hammasi" → Yo'nalishlar tabi). `null` — so'rov yo'q.
   static final ValueNotifier<int?> tabRequest = ValueNotifier<int?>(null);
+
+  /// Hozirgi tab indeksi (0-bosh, 1-buyurtmalar, 2-yo'nalishlar, 3-profil).
+  /// Embed back handler Main vs boshqa tabni shu orqali biladi.
+  static final ValueNotifier<int> currentTabIndex = ValueNotifier<int>(0);
 
   /// Berilgan indeksdagi tabga o'tishni so'raydi (0-bosh, 1-buyurtmalar,
   /// 2-yo'nalishlar, 3-profil).
@@ -55,6 +60,7 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
   void initState() {
     _pageIndex = (widget.pageIndex ?? 0).clamp(0, _pages.length - 1);
     _loaded[_pageIndex] = true;
+    BottomNavBarPage.currentTabIndex.value = _pageIndex;
     super.initState();
     BottomNavBarPage.tabRequest.addListener(_onTabRequest);
     _shouldShowcase = MySafarSdk.config.enableShowcaseTour &&
@@ -68,7 +74,20 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
   @override
   void dispose() {
     BottomNavBarPage.tabRequest.removeListener(_onTabRequest);
+    if (BottomNavBarPage.currentTabIndex.value == _pageIndex) {
+      BottomNavBarPage.currentTabIndex.value = 0;
+    }
     super.dispose();
+  }
+
+  void _setPageIndex(int index) {
+    if (_pageIndex == index) return;
+    setState(() {
+      _pageIndex = index;
+      _loaded[index] = true;
+    });
+    BottomNavBarPage.currentTabIndex.value = index;
+    SdkEmbedBackHandler.resetDoubleBack();
   }
 
   void _onTabRequest() {
@@ -76,11 +95,7 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
     if (index == null) return;
     BottomNavBarPage.tabRequest.value = null;
     if (!mounted || index < 0 || index >= _pages.length) return;
-    if (_pageIndex == index) return;
-    setState(() {
-      _pageIndex = index;
-      _loaded[index] = true;
-    });
+    _setPageIndex(index);
   }
 
   @override
@@ -215,10 +230,7 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
       onTap: () {
         if (_pageIndex != index) {
           HapticFeedback.selectionClick();
-          setState(() {
-            _pageIndex = index;
-            _loaded[index] = true;
-          });
+          _setPageIndex(index);
         }
       },
       child: AnimatedContainer(

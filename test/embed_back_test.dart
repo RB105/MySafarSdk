@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mysafar_sdk/mysafar_sdk.dart';
 import 'package:mysafar_sdk/src/core/router/navigation_service.dart';
 import 'package:mysafar_sdk/src/core/router/sdk_embed_back_handler.dart';
+import 'package:mysafar_sdk/src/view/navbar/bottom_nav_bar.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -26,6 +27,11 @@ void main() {
         enableServicesTab: false,
       ),
     );
+  });
+
+  setUp(() {
+    SdkEmbedBackHandler.resetDoubleBack();
+    BottomNavBarPage.currentTabIndex.value = 0;
   });
 
   Future<void> openEmbed(WidgetTester tester) async {
@@ -61,20 +67,39 @@ void main() {
     final handled = await tester.binding.handlePopRoute();
     expect(handled, isTrue);
     await tester.pump();
+    // Root-back lock (PopScope + didPopRoute dedupe) ochilsin.
+    await tester.pump(SdkEmbedBackHandler.rootBackLock);
     await tester.pumpAndSettle();
   }
 
-  testWidgets('system back at embed root closes embed, not host app',
+  testWidgets('system back on Main requires two presses to close embed',
       (tester) async {
     await openEmbed(tester);
 
     await triggerSystemBack(tester);
+    expect(MySafarSdk.isEmbedded, isTrue);
+    expect(find.byType(MySafarEmbed), findsOneWidget);
 
+    await triggerSystemBack(tester);
     expect(MySafarSdk.isEmbedded, isFalse);
     expect(find.byType(MySafarEmbed), findsNothing);
   });
 
-  testWidgets('system back pops inner SDK route before closing embed',
+  testWidgets('system back from non-home tab switches to Main once',
+      (tester) async {
+    await openEmbed(tester);
+
+    BottomNavBarPage.switchTo(3);
+    await tester.pumpAndSettle();
+    expect(BottomNavBarPage.currentTabIndex.value, 3);
+
+    await triggerSystemBack(tester);
+
+    expect(MySafarSdk.isEmbedded, isTrue);
+    expect(BottomNavBarPage.currentTabIndex.value, 0);
+  });
+
+  testWidgets('system back pops inner SDK route before double-back exit',
       (tester) async {
     await openEmbed(tester);
 
@@ -97,18 +122,24 @@ void main() {
     expect(find.text('Inner SDK Page'), findsNothing);
 
     await triggerSystemBack(tester);
+    expect(MySafarSdk.isEmbedded, isTrue);
 
+    await triggerSystemBack(tester);
     expect(MySafarSdk.isEmbedded, isFalse);
     expect(find.byType(MySafarEmbed), findsNothing);
   });
 
-  testWidgets('SdkEmbedBackHandler.handleBack mirrors exitEmbed at root',
+  testWidgets('SdkEmbedBackHandler.handleBack double-back exits at Main',
       (tester) async {
     await openEmbed(tester);
 
     SdkEmbedBackHandler.handleBack();
+    await tester.pump(SdkEmbedBackHandler.rootBackLock);
     await tester.pumpAndSettle();
+    expect(MySafarSdk.isEmbedded, isTrue);
 
+    SdkEmbedBackHandler.handleBack();
+    await tester.pumpAndSettle();
     expect(MySafarSdk.isEmbedded, isFalse);
   });
 }
