@@ -144,19 +144,19 @@ class _MySafarEmbedState extends State<MySafarEmbed> with WidgetsBindingObserver
   /// Android/iOS tizim back — PopScope va [didPopRoute] uchun umumiy handler.
   void _handleEmbedSystemBack() {
     if (SdkEmbedBackHandler.isHandlingInternalPop) return;
-    if (SdkEmbedBackHandler.handleSystemBack()) return;
-    if (mounted) MySafarSdk.exitEmbed();
+    SdkEmbedBackHandler.handleBack();
   }
 
-  /// Android/iOS tizim back — host navigator o'rniga SDK stack yoki embed
-  /// yopish. `true` qaytarsak platforma default pop (app'dan chiqish) ishlamaydi.
+  /// Android/iOS tizim back — host navigator o'rniga SDK stack, tab→Main yoki
+  /// Main da double-back exit. `true` qaytarsak platforma default pop ishlamaydi.
   @override
   Future<bool> didPopRoute() async {
     if (SdkEmbedBackHandler.isHandlingInternalPop) return false;
     if (SdkEmbedBackHandler.handleSystemBack()) return true;
     if (!MySafarSdk.isEmbedded) return false;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _handleEmbedSystemBack();
+      if (!mounted) return;
+      SdkEmbedBackHandler.handleRootBack();
     });
     return true;
   }

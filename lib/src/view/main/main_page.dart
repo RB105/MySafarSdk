@@ -9,6 +9,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/services.dart'
     show HapticFeedback, SystemUiOverlayStyle;
 import 'package:mysafar_sdk/src/core/enum/currency.dart';
+import 'package:mysafar_sdk/src/core/router/sdk_embed_back_handler.dart';
 import 'package:mysafar_sdk/src/service/profile/profile_cache.dart';
 import 'package:mysafar_sdk/src/core/tools/app_cache_manager.dart';
 import 'package:mysafar_sdk/src/core/tools/currency_provider.dart';
@@ -202,13 +203,12 @@ class _MainPageState extends State<MainPage> {
                       Colors.transparent, const Color(0xFF3E5788), t)!,
                 ),
               ),
-              // Embed rejimda host app'ga (masalan Unired) qaytish
-              // tugmasi — SDK'ning o'z stack'ida emas, host route'ini
-              // yopadi.
+              // Embed: Main da 2× orqaga → host (AnjirPay/MigSend).
               leading: MySafarSdk.isEmbedded
                   ? Padding(
                       padding: const EdgeInsets.only(left: 12),
-                      child: _circleIconButton(null, MySafarSdk.exitEmbed,
+                      child: _circleIconButton(
+                          null, SdkEmbedBackHandler.handleBack,
                           iconData: Icons.arrow_back_rounded, isDark: isDark),
                     )
                   : null,
