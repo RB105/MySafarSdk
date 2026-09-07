@@ -106,7 +106,7 @@ class ProfileCubit extends Cubit<ProfileState> {
 
     if (res is NetworkSuccessResponse) {
       emit(state.copyWith(updateProfileStatus: ActionStatus.isSuccess));
-      showToastMessage('profile_success_update'.tr());
+      showToastTr('profile_success_update');
 
       try {
         await _cache.write(profileModel.toJson());

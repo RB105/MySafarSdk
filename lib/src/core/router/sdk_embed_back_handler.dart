@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
-import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:mysafar_sdk/src/core/router/navigation_service.dart';
 import 'package:mysafar_sdk/src/core/widgets/edge_swipe_back.dart';
 import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
@@ -89,7 +88,7 @@ class SdkEmbedBackHandler extends StatelessWidget {
 
     _lastBackAt = now;
     try {
-      showToastMessage('press_again_to_exit'.tr());
+      showToastTr('press_again_to_exit');
     } catch (_) {
       // Test / toast plugin yo'q muhit — silent.
     }
