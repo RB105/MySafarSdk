@@ -84,6 +84,15 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
+  # Android tomonidagi yagona qism: Android 16 da tizim back'ini ushlash uchun
+  # `OnBackInvokedDispatcher`ga callback ro'yxatdan o'tkazadi. Host app qanday
+  # Activity ishlatishidan qat'i nazar ishlaydi. Batafsil — MySafarBackPlugin.
+  plugin:
+    platforms:
+      android:
+        package: uz.mysafar.mysafar_sdk
+        pluginClass: MySafarBackPlugin
+
   assets:
     - assets/
     - assets/img/auth/
