@@ -9,7 +9,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter/services.dart'
     show HapticFeedback, SystemUiOverlayStyle;
 import 'package:mysafar_sdk/src/core/enum/currency.dart';
-import 'package:mysafar_sdk/src/core/router/sdk_embed_back_handler.dart';
 import 'package:mysafar_sdk/src/service/profile/profile_cache.dart';
 import 'package:mysafar_sdk/src/core/tools/app_cache_manager.dart';
 import 'package:mysafar_sdk/src/core/tools/currency_provider.dart';
@@ -203,12 +202,12 @@ class _MainPageState extends State<MainPage> {
                       Colors.transparent, const Color(0xFF3E5788), t)!,
                 ),
               ),
-              // Embed: Main da 2× orqaga → host (AnjirPay/MigSend).
+              // Embed: UI ← bir bosishda hostga qaytadi (toast yo'q).
               leading: MySafarSdk.isEmbedded
                   ? Padding(
                       padding: const EdgeInsets.only(left: 12),
                       child: _circleIconButton(
-                          null, SdkEmbedBackHandler.handleBack,
+                          null, MySafarSdk.exitEmbed,
                           iconData: Icons.arrow_back_rounded, isDark: isDark),
                     )
                   : null,
@@ -419,24 +418,34 @@ class _MainPageState extends State<MainPage> {
     final Color bg =
         isDark ? Colors.white.withOpacity(0.22) : ProjectTheme.brandColor;
 
-    final Widget button = InkWell(
-        borderRadius: BorderRadius.circular(22),
-        onTap: onTap,
-        child: Container(
-            margin: const EdgeInsets.only(left: 4),
+    // Material(circle) + InkWell — splash doira ichida clip bo'ladi,
+    // AppBar Material ustida katta overlay chiqmaydi.
+    final Widget button = Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Material(
+        color: bg,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: Padding(
             padding: const EdgeInsets.all(9),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: bg,
-            ),
             child: SizedBox(
-                width: 20,
-                height: 20,
-                child: asset != null
-                    ? SvgPicture.asset(asset,
-                        colorFilter:
-                            ColorFilter.mode(Colors.white, BlendMode.srcIn))
-                    : Icon(iconData, size: 20, color: Colors.white))));
+              width: 20,
+              height: 20,
+              child: asset != null
+                  ? SvgPicture.asset(
+                      asset,
+                      colorFilter: const ColorFilter.mode(
+                          Colors.white, BlendMode.srcIn),
+                    )
+                  : Icon(iconData, size: 20, color: Colors.white),
+            ),
+          ),
+        ),
+      ),
+    );
 
     if (showcaseKey == null) return button;
 
