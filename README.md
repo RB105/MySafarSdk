@@ -62,6 +62,23 @@ MySafarConfig(
 Embed ichidagi bosh ekranda host'ga qaytish tugmasi chiqadi; Android back ham
 avval SDK stack'ini yechib, oxirida host ekraniga qaytadi.
 
+### Android 16 (targetSdk 36) back tugmasi
+
+Android 16 da tizim back'ini faqat `OnBackInvokedDispatcher`ga ro'yxatdan
+o'tgan callback ushlaydi — eski `Activity.onBackPressed()` / `KEYCODE_BACK`
+fallback'i olib tashlangan. Callback ro'yxatdan o'tmagan bo'lsa tizim back'ni
+Flutter'ga umuman uzatmay activity'ni yopadi (foydalanuvchi uchun: "ilova
+chiqib ketdi"). Embed ochiq ekan SDK `setFrameworkHandlesBack(true)` da'vosini
+o'zi ushlab turadi, lekin host tomonda quyidagilar shart:
+
+- `MainActivity` `io.flutter.embedding.android.FlutterActivity` dan meros
+  olsin. `FlutterFragmentActivity` (yoki `FlutterFragment`) callback'ni o'zi
+  ro'yxatdan o'tkazmaydi — u AndroidX `OnBackPressedDispatcher`iga tayanadi,
+  shuning uchun `androidx.activity:activity` **1.8+** bo'lishi kerak.
+- Manifestda `android:enableOnBackInvokedCallback="false"` bo'lmasin.
+- `MainActivity` da `onBackPressed()` override qilinmasin — Android 16 da u
+  umuman chaqirilmaydi.
+
 Deep-link (masalan `https://mysafar.uz/payment?billing_id=...`) hostda
 tinglanadi va SDK'ga uzatiladi: `MySafarSdk.handleLink(uri)`.
 
