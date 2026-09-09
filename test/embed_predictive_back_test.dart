@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mysafar_sdk/mysafar_sdk.dart';
+import 'package:mysafar_sdk/src/core/router/android_system_back.dart';
 import 'package:mysafar_sdk/src/core/router/navigation_service.dart';
 import 'package:mysafar_sdk/src/core/router/sdk_embed_back_handler.dart';
 import 'package:mysafar_sdk/src/view/navbar/bottom_nav_bar.dart';
@@ -192,18 +193,70 @@ void main() {
     expect(handlesBack, everyElement(isTrue),
         reason: 'the SDK must never hand back control while the embed is open');
 
-    // Host (yoki activity qayta yaratilishi) da'voni bosib ketgan holat —
-    // heartbeat uni tiklashi shart, aks holda Android 16 da back ilovani yopadi.
+    // Ichki stack root'ga qaytganda nested MaterialApp `canHandlePop: false`
+    // yozmoqchi bo'ladi — SDK uni `true` ga aylantirishi shart, aks holda
+    // Android 16 da OnBackInvokedCallback ro'yxatdan chiqadi.
     handlesBack.clear();
-    await tester.pump(_MySafarEmbedHeartbeat.value);
-    expect(handlesBack, contains(true),
-        reason: 'heartbeat must re-arm the Android OnBackInvokedCallback');
+    final innerContext = NavigationService.navigatorKey.currentContext;
+    expect(innerContext, isNotNull);
+    const NavigationNotification(canHandlePop: false).dispatch(innerContext!);
+    await tester.pump();
+
+    expect(handlesBack, isNotEmpty);
+    expect(handlesBack, everyElement(isTrue));
 
     await tester.pumpAndSettle();
   });
-}
 
-/// `androidBackClaimHeartbeat` private state ichida — testda o'sha qiymat.
-class _MySafarEmbedHeartbeat {
-  static const Duration value = Duration(seconds: 1);
+  testWidgets('embed asks its Android module to own the system back',
+      (tester) async {
+    final calls = <String>[];
+    const channel = MethodChannel('mysafar_sdk/android_back');
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      (call) async {
+        calls.add(call.method);
+        return true;
+      },
+    );
+    // Productionda framework'ga `channelBuffers.push` orqali kiritiladi;
+    // testda TestDefaultBinaryMessenger channelBuffers'ni chetlab o'tadi.
+    AndroidSystemBack.dispatchToFramework = (name, message) {
+      tester.binding.defaultBinaryMessenger
+          .handlePlatformMessage(name, message, (_) {});
+    };
+    addTearDown(() {
+      AndroidSystemBack.dispatchToFramework =
+          AndroidSystemBack.pushToChannelBuffers;
+      tester.binding.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+    });
+
+    await openEmbed(tester);
+    await tester.pump();
+    expect(calls, contains('enable'),
+        reason: 'the SDK must register its own OnBackInvokedCallback, since '
+            'Flutter only registers one inside a FlutterActivity host');
+
+    // Native back event framework kanaliga qayta kiritiladi va odatdagi
+    // SDK back oqimini ishga tushiradi.
+    await pushInnerRoute(tester);
+    await AndroidSystemBack.debugDispatchNativeBackEvent(
+      const MethodCall('startBackGesture', <String, Object?>{
+        'touchOffset': null,
+        'progress': 0.0,
+        'swipeEdge': 0,
+      }),
+    );
+    await AndroidSystemBack.debugDispatchNativeBackEvent(
+      const MethodCall('commitBackGesture'),
+    );
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Inner SDK Page'), findsNothing,
+        reason: 'a native back event must pop the inner SDK route');
+    expect(MySafarSdk.isEmbedded, isTrue);
+    await tester.pumpAndSettle();
+  });
 }

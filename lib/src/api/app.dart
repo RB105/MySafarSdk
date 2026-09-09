@@ -1,5 +1,3 @@
-import 'dart:async' show Timer;
-
 import 'package:flutter/foundation.dart'
     show
         FlutterExceptionHandler,
@@ -15,6 +13,7 @@ import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart'
     show SdkLocalization;
 import 'package:mysafar_sdk/src/core/localization/tg_fallback_localizations.dart';
+import 'package:mysafar_sdk/src/core/router/android_system_back.dart';
 import 'package:mysafar_sdk/src/core/router/navigation_service.dart';
 import 'package:mysafar_sdk/src/core/router/router.dart' show RouterGenerator;
 import 'package:mysafar_sdk/src/core/router/sdk_embed_back_handler.dart';
@@ -103,19 +102,14 @@ class _MySafarEmbedState extends State<MySafarEmbed> with WidgetsBindingObserver
   // uchun bu "ilova chiqib ketdi" bo'lib ko'rinadi. Android 15 va pastida esa
   // eski fallback ishlaganligi uchun ayni kod muammosiz ishlaydi.
   //
-  // Da'voni bir marta yozish yetarli emas: uni istalgan payt HOST
-  // `WidgetsApp` o'z navigator holati bilan qayta yozib yuborishi mumkin
-  // (host route stack'i o'zgarsa, host o'z `onNavigationNotification`iga ega
-  // bo'lsa yoki activity qayta yaratilib `onCreate` saqlangan `false` ni
-  // tiklasa). SDK host koduni boshqara olmaydi — shuning uchun embed ochiq
-  // ekan da'voni takroran tiklab turamiz.
+  // MUHIM cheklov: bu da'vo faqat host `FlutterActivity` bo'lganda ish beradi
+  // — Flutter callback'ni faqat o'sha yerda ro'yxatdan o'tkazadi. Host boshqa
+  // Activity ishlatsa hech narsa ro'yxatdan o'tmaydi va Dart tomondan buni
+  // tuzatib bo'lmaydi; o'sha holat uchun SDK'ning o'z Android moduli bor
+  // ([AndroidSystemBack]). Quyidagi da'vo — modul ulanmagan build'lar uchun
+  // fallback; u host tomonidan qayta yozilishi mumkin bo'lgani uchun
+  // navigatsiya va resume hodisalarida qaytadan yoziladi.
   static bool _claimAndroidBack = false;
-
-  /// Da'voni qayta tiklash oralig'i. Har tiklash — bitta arzon method-channel
-  /// xabari; engine allaqachon ro'yxatdan o'tgan bo'lsa hech nima qilmaydi.
-  static const Duration androidBackClaimHeartbeat = Duration(seconds: 1);
-
-  Timer? _backClaimTimer;
 
   static bool get _androidBackClaimNeeded =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
@@ -142,6 +136,10 @@ class _MySafarEmbedState extends State<MySafarEmbed> with WidgetsBindingObserver
   void _startAndroidBackClaim() {
     _claimAndroidBack = true;
     _reassertAndroidBackClaim();
+    // SDK'ning o'z Android callback'i — host Activity `FlutterActivity`
+    // bo'lmasa yagona ishlaydigan yo'l. Ulanmasa (eski host build'i) yuqoridagi
+    // da'vo fallback bo'lib qoladi.
+    AndroidSystemBack.enable();
     if (!_androidBackClaimNeeded) return;
     // Host'ning o'z NavigationNotification'i post-frame'da keladi va bizning
     // initState'dagi da'vomizni bosib ketishi mumkin — keyingi frame'da
@@ -149,17 +147,11 @@ class _MySafarEmbedState extends State<MySafarEmbed> with WidgetsBindingObserver
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _reassertAndroidBackClaim(),
     );
-    _backClaimTimer?.cancel();
-    _backClaimTimer = Timer.periodic(
-      androidBackClaimHeartbeat,
-      (_) => _reassertAndroidBackClaim(),
-    );
   }
 
   void _stopAndroidBackClaim() {
     _claimAndroidBack = false;
-    _backClaimTimer?.cancel();
-    _backClaimTimer = null;
+    AndroidSystemBack.disable();
   }
 
   // Til + (ixtiyoriy) jim ro'yxatdan o'tish — UI ochilishidan oldin.
