@@ -1,6 +1,11 @@
 # mysafar_sdk_example
 
-A new Flutter project.
+SDK namuna ilovasi — to'liq app va embed rejimlari.
+
+> Asosiy integratsiya hujjati: repo ildizidagi [README.md](../README.md).
+> Android 16+ hostlar uchun **majburiy:**
+> `android:enableOnBackInvokedCallback="false"`
+> (`android/app/src/main/AndroidManifest.xml` da qo'yilgan).
 
 ## Ishga tushirish (embed rejimi)
 
@@ -18,18 +23,5 @@ flutter run -t lib/main_embed.dart --dart-define-from-file=env.json
 To'liq app rejimi uchun:
 
 ```bash
-flutter run --dart-define=PARTNER_TOKEN=xxx
+flutter run --dart-define-from-file=env.json
 ```
-
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
