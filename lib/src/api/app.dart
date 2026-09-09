@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart'
     show FlutterExceptionHandler, kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemNavigator;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart'
@@ -110,6 +111,9 @@ class _MySafarEmbedState extends State<MySafarEmbed> with WidgetsBindingObserver
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Android 16 predictive back: nested MaterialApp root'da
+    // frameworkHandlesBack=false yozmasin, tizim appni yopmasin.
+    SystemNavigator.setFrameworkHandlesBack(true);
     // Embed ochilganda faqat portrait — host landscape bo'lsa ham.
     MySafarSdk.lockPortrait();
     // Home ekranidagi "orqaga" tugmasi shu orqali host route'ini yopadi.
@@ -217,6 +221,10 @@ class _MySafarEmbedState extends State<MySafarEmbed> with WidgetsBindingObserver
   }
 }
 
+/// Embed nested [MaterialApp] [NavigationNotification] ni yutadi, lekin
+/// engine'ga `frameworkHandlesBack=false` yozmaydi (Android 16 back-to-home).
+bool _embedOnNavigationNotification(NavigationNotification _) => true;
+
 /// SDK'ning yagona MaterialApp fabrikasi — theme, router va lokalizatsiya
 /// to'liq SDK'niki. easy_localization YO'Q: `SdkLocalization` global holatga
 /// tegmaydi, shuning uchun host app'ning tarjimalari buzilmaydi.
@@ -229,6 +237,13 @@ Widget _sdkMaterialApp(BuildContext context, {required String initialRoute}) {
   return MaterialApp(
     navigatorKey: NavigationService.navigatorKey,
     navigatorObservers: observers,
+    // Nested MaterialApp default'i inner stack bo'sh bo'lsa
+    // setFrameworkHandlesBack(false) yozadi. Android 16 (API 36) da bu
+    // predictive back-to-home'ni yoqadi — PopScope/didPopRoute chaqirilmaydi.
+    // Host PopScope(canPop:false) eventni o'zi ushlaydi.
+    onNavigationNotification: MySafarSdk.isEmbedded
+        ? _embedOnNavigationNotification
+        : null,
     locale: SdkLocalization.locale,
     localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
       ...tgFallbackDelegates,

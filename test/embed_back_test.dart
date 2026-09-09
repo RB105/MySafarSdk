@@ -142,4 +142,43 @@ void main() {
     await tester.pumpAndSettle();
     expect(MySafarSdk.isEmbedded, isFalse);
   });
+
+  testWidgets(
+      'nested MaterialApp at root does not set frameworkHandlesBack false',
+      (tester) async {
+    final handlesBack = <bool>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'SystemNavigator.setFrameworkHandlesBack') {
+          handlesBack.add(call.arguments as bool);
+        }
+        return null;
+      },
+    );
+    addTearDown(() {
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      );
+    });
+
+    await openEmbed(tester);
+    handlesBack.clear();
+
+    final innerContext = NavigationService.navigatorKey.currentContext;
+    expect(innerContext, isNotNull);
+    const NavigationNotification(canHandlePop: false).dispatch(innerContext!);
+    await tester.pump();
+
+    expect(
+      handlesBack,
+      isEmpty,
+      reason: 'nested MaterialApp must swallow the notification, not tell '
+          'Android that Flutter cannot handle back (API 36 back-to-home)',
+    );
+    expect(MySafarSdk.isEmbedded, isTrue);
+    expect(find.byType(MySafarEmbed), findsOneWidget);
+    await tester.pumpAndSettle();
+  });
 }
