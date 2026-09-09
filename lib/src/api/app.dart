@@ -84,6 +84,16 @@ class MySafarEmbed extends StatefulWidget {
 }
 
 class _MySafarEmbedState extends State<MySafarEmbed> with WidgetsBindingObserver {
+  /// Nested [MaterialApp] root'da `canHandlePop=false` yozadi; host ham
+  /// ba'zan overwrite qiladi. Embed ochiq ekan Android callback o'chmasin.
+  static bool _claimAndroidBack = false;
+
+  static void _setAndroidBackClaim(bool claim) {
+    _claimAndroidBack = claim;
+    if (claim) {
+      SystemNavigator.setFrameworkHandlesBack(true);
+    }
+  }
   // Til + (ixtiyoriy) jim ro'yxatdan o'tish — UI ochilishidan oldin.
   // Ro'yxat 10s dan oshsa kutmaymiz — mehmon rejimida ochamiz.
   late final Future<void> _ready = _prepare();
@@ -111,9 +121,10 @@ class _MySafarEmbedState extends State<MySafarEmbed> with WidgetsBindingObserver
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Android 16 predictive back: nested MaterialApp root'da
-    // frameworkHandlesBack=false yozmasin, tizim appni yopmasin.
-    SystemNavigator.setFrameworkHandlesBack(true);
+    // 3-button back Android 16 da OnBackInvokedCallback orqali keladi.
+    // Callback o'chiq bo'lsa tizim appni yopadi (EdgeSwipeBack esa Flutter
+    // gesture — shuning uchun chetdan surish ishlardi, tugma ishlamasdi).
+    _setAndroidBackClaim(true);
     // Embed ochilganda faqat portrait — host landscape bo'lsa ham.
     MySafarSdk.lockPortrait();
     // Home ekranidagi "orqaga" tugmasi shu orqali host route'ini yopadi.
@@ -136,6 +147,7 @@ class _MySafarEmbedState extends State<MySafarEmbed> with WidgetsBindingObserver
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _setAndroidBackClaim(false);
     if (kDebugMode && _prevOnError != null) {
       FlutterError.onError = _prevOnError;
     }
@@ -193,7 +205,10 @@ class _MySafarEmbedState extends State<MySafarEmbed> with WidgetsBindingObserver
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
+        if (didPop) {
+          _setAndroidBackClaim(false);
+          return;
+        }
         _handleEmbedSystemBack();
       },
       child: FutureBuilder<void>(
@@ -221,9 +236,15 @@ class _MySafarEmbedState extends State<MySafarEmbed> with WidgetsBindingObserver
   }
 }
 
-/// Embed nested [MaterialApp] [NavigationNotification] ni yutadi, lekin
-/// engine'ga `frameworkHandlesBack=false` yozmaydi (Android 16 back-to-home).
-bool _embedOnNavigationNotification(NavigationNotification _) => true;
+/// Ichki stack bo'sh bo'lsa ham Android'ga "Flutter ushlaydi" deb qayta yozadi.
+/// Yutish yetarli emas — host/engine keyin `false` yozib 3-button back'ni
+/// back-to-home qilib yuboradi.
+bool _embedOnNavigationNotification(NavigationNotification _) {
+  if (_MySafarEmbedState._claimAndroidBack) {
+    SystemNavigator.setFrameworkHandlesBack(true);
+  }
+  return true;
+}
 
 /// SDK'ning yagona MaterialApp fabrikasi — theme, router va lokalizatsiya
 /// to'liq SDK'niki. easy_localization YO'Q: `SdkLocalization` global holatga
@@ -238,9 +259,8 @@ Widget _sdkMaterialApp(BuildContext context, {required String initialRoute}) {
     navigatorKey: NavigationService.navigatorKey,
     navigatorObservers: observers,
     // Nested MaterialApp default'i inner stack bo'sh bo'lsa
-    // setFrameworkHandlesBack(false) yozadi. Android 16 (API 36) da bu
-    // predictive back-to-home'ni yoqadi — PopScope/didPopRoute chaqirilmaydi.
-    // Host PopScope(canPop:false) eventni o'zi ushlaydi.
+    // setFrameworkHandlesBack(false) yozadi. Android 16 3-button back
+    // shu callback o'chiq bo'lsa appni yopadi. Embed ochiq ekan true yozamiz.
     onNavigationNotification: MySafarSdk.isEmbedded
         ? _embedOnNavigationNotification
         : null,

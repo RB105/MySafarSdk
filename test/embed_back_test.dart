@@ -144,7 +144,7 @@ void main() {
   });
 
   testWidgets(
-      'nested MaterialApp at root does not set frameworkHandlesBack false',
+      'nested MaterialApp at root keeps frameworkHandlesBack true',
       (tester) async {
     final handlesBack = <bool>[];
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -173,10 +173,11 @@ void main() {
 
     expect(
       handlesBack,
-      isEmpty,
-      reason: 'nested MaterialApp must swallow the notification, not tell '
-          'Android that Flutter cannot handle back (API 36 back-to-home)',
+      isNotEmpty,
+      reason: 'nested MaterialApp at SDK root must re-assert '
+          'frameworkHandlesBack=true so the 3-button back stays registered',
     );
+    expect(handlesBack, everyElement(isTrue));
     expect(MySafarSdk.isEmbedded, isTrue);
     expect(find.byType(MySafarEmbed), findsOneWidget);
     await tester.pumpAndSettle();
