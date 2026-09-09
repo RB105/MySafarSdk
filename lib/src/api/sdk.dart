@@ -243,6 +243,19 @@ class MySafarSdk {
 
   // ── Embed rejimi ─────────────────────────────────────────────────────────
 
+  /// Android/iOS tizim back oqimini konsolga chiqaradi (`MySafarBack:` tegi).
+  /// Host'da back tugmasi kutilgandek ishlamasa shuni yoqib, qurilmada
+  /// bosib ko'ring: hech qanday log chiqmasa — event Flutter'ga umuman
+  /// yetib kelmayapti (Android tomonidagi `OnBackInvokedCallback` muammosi);
+  /// log chiqsa — muammo SDK navigatsiyasida.
+  static bool debugBackLogging = false;
+
+  /// [debugBackLogging] yoqilgan bo'lsa bitta qatorni chiqaradi.
+  static void logBack(String message) {
+    if (!debugBackLogging) return;
+    debugPrint('MySafarBack: $message');
+  }
+
   static VoidCallback? _embedExit;
 
   /// Hozir `MySafarEmbed` ichida ishlayapmizmi (host'ga qaytish tugmasi shu

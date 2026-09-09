@@ -43,6 +43,7 @@ class SdkEmbedBackHandler extends StatelessWidget {
   /// `true` qaytarsa event qayta ishlandi.
   static bool handleSystemBack() {
     final nav = NavigationService.navigatorKey.currentState;
+    MySafarSdk.logBack('handleSystemBack(canPop: ${nav?.canPop()})');
     if (nav != null && nav.canPop()) {
       _internalPopDepth++;
       try {
@@ -63,6 +64,11 @@ class SdkEmbedBackHandler extends StatelessWidget {
 
   /// Root (stack bo'sh): non-home tab → Main; Main → 2× back → host.
   static void handleRootBack() {
+    MySafarSdk.logBack(
+      'handleRootBack(embedded: ${MySafarSdk.isEmbedded}, '
+      'locked: $_rootBackLocked, '
+      'tab: ${BottomNavBarPage.currentTabIndex.value})',
+    );
     if (!MySafarSdk.isEmbedded) return;
     if (_rootBackLocked) return;
 

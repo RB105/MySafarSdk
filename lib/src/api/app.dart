@@ -8,7 +8,8 @@ import 'package:flutter/foundation.dart'
         kDebugMode,
         kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show SystemNavigator;
+import 'package:flutter/services.dart'
+    show PredictiveBackEvent, SystemNavigator;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart'
@@ -127,6 +128,17 @@ class _MySafarEmbedState extends State<MySafarEmbed> with WidgetsBindingObserver
     SystemNavigator.setFrameworkHandlesBack(true);
   }
 
+  /// Diagnostika: tizim back'i Flutter'ga yetib keladimi. Bu observer hech
+  /// qachon gesture'ni o'zi ushlamaydi — shuning uchun doim `false`.
+  @override
+  bool handleStartBackGesture(PredictiveBackEvent backEvent) {
+    MySafarSdk.logBack(
+      'handleStartBackGesture(button: ${backEvent.isButtonEvent}, '
+      'progress: ${backEvent.progress})',
+    );
+    return false;
+  }
+
   void _startAndroidBackClaim() {
     _claimAndroidBack = true;
     _reassertAndroidBackClaim();
@@ -226,6 +238,7 @@ class _MySafarEmbedState extends State<MySafarEmbed> with WidgetsBindingObserver
 
   /// Android/iOS tizim back — PopScope va [didPopRoute] uchun umumiy handler.
   void _handleEmbedSystemBack() {
+    MySafarSdk.logBack('PopScope.onPopInvoked(didPop: false)');
     if (SdkEmbedBackHandler.isHandlingInternalPop) return;
     SdkEmbedBackHandler.handleBack();
   }
@@ -234,6 +247,7 @@ class _MySafarEmbedState extends State<MySafarEmbed> with WidgetsBindingObserver
   /// Main da double-back exit. `true` qaytarsak platforma default pop ishlamaydi.
   @override
   Future<bool> didPopRoute() async {
+    MySafarSdk.logBack('didPopRoute');
     if (SdkEmbedBackHandler.isHandlingInternalPop) return false;
     if (SdkEmbedBackHandler.handleSystemBack()) return true;
     if (!MySafarSdk.isEmbedded) return false;

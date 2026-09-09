@@ -51,6 +51,10 @@ Future<void> main() async {
     ),
   );
 
+  // Back diagnostikasi: tizim back'i Flutter'ga yetib keladimi.
+  // Loglar `MySafarBack:` tegi bilan `flutter logs` da ko'rinadi.
+  MySafarSdk.debugBackLogging = true;
+
   runApp(const HostApp());
 }
 

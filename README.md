@@ -79,6 +79,20 @@ o'zi ushlab turadi, lekin host tomonda quyidagilar shart:
 - `MainActivity` da `onBackPressed()` override qilinmasin — Android 16 da u
   umuman chaqirilmaydi.
 
+Back tugmasi hamon ishlamasa, diagnostikani yoqing:
+
+```dart
+MySafarSdk.debugBackLogging = true;   // runApp dan oldin
+```
+
+Qurilmada back bosing va `flutter logs` ni ko'ring:
+
+- `MySafarBack: ...` qatorlari **chiqsa** — event Flutter'ga yetib kelyapti,
+  muammo navigatsiyada.
+- Hech nima **chiqmasa** — event Flutter'ga umuman kelmayapti: Android
+  tomonda `OnBackInvokedCallback` ro'yxatdan o'tmagan (yuqoridagi host
+  talablarini tekshiring).
+
 Deep-link (masalan `https://mysafar.uz/payment?billing_id=...`) hostda
 tinglanadi va SDK'ga uzatiladi: `MySafarSdk.handleLink(uri)`.
 
