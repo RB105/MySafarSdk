@@ -55,6 +55,8 @@ MySafarConfig(
   ...
   appName: 'Unired Travel',   // UI'dagi "MySafar" brendi o'rniga
   enableServicesTab: false,   // faqat avia oqimi kerak bo'lsa
+  enableMultiSearch: true,    // default: murakkab marshrut tabi ko'rinadi
+  // enableMultiSearch: false, // faqat oddiy qidiruv (multi tab yashirin)
   // enableShowcaseTour / enableVersionGate default o'chiq
 )
 ```

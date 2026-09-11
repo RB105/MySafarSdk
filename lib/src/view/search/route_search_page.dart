@@ -4,6 +4,7 @@ import 'package:flutter/services.dart'
     show HapticFeedback, SystemUiOverlayStyle;
 import 'package:flutter_bloc/flutter_bloc.dart'
     show BlocProvider, BlocBuilder, ReadContext;
+import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/core/config/response_config.dart'
     show NetworkSuccessResponse;
 import 'package:mysafar_sdk/src/core/enum/currency.dart'
@@ -124,6 +125,7 @@ class _RouteSearchViewState extends State<_RouteSearchView>
   }
 
   void _onTabChanged() {
+    if (!MySafarSdk.config.enableMultiSearch) return;
     if (_tabController.indexIsChanging) return;
     final bool multi = _tabController.index == 1;
     if (_cubit.state.multiMode == multi) return;
@@ -275,7 +277,7 @@ class _RouteSearchViewState extends State<_RouteSearchView>
 
   void _search() {
     final state = _cubit.state;
-    if (state.multiMode) {
+    if (MySafarSdk.config.enableMultiSearch && state.multiMode) {
       _searchMulti();
       return;
     }
@@ -340,13 +342,17 @@ class _RouteSearchViewState extends State<_RouteSearchView>
   Widget _hero(BuildContext context, RouteSearchState state) {
     final double topInset = MediaQuery.of(context).padding.top;
     const double appBarH = 36;
+    final bool enableMulti = MySafarSdk.config.enableMultiSearch;
+    final bool multiMode = enableMulti && state.multiMode;
     return Padding(
       padding: EdgeInsets.fromLTRB(16, topInset + appBarH, 16, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _RouteModeTabBar(controller: _tabController),
-          const SizedBox(height: 10),
+          if (enableMulti) ...[
+            _RouteModeTabBar(controller: _tabController),
+            const SizedBox(height: 10),
+          ],
           AnimatedSize(
             duration: const Duration(milliseconds: 320),
             curve: Curves.easeOutCubic,
@@ -364,10 +370,10 @@ class _RouteSearchViewState extends State<_RouteSearchView>
               ),
               transitionBuilder: (child, animation) {
                 final bool isMultiChild = child.key == const ValueKey('multi');
-                final bool isIncoming = isMultiChild == state.multiMode;
+                final bool isIncoming = isMultiChild == multiMode;
                 final double beginDx = isIncoming
-                    ? (state.multiMode ? 0.12 : -0.12)
-                    : (state.multiMode ? -0.12 : 0.12);
+                    ? (multiMode ? 0.12 : -0.12)
+                    : (multiMode ? -0.12 : 0.12);
                 return FadeTransition(
                   opacity: animation,
                   child: SlideTransition(
@@ -379,7 +385,7 @@ class _RouteSearchViewState extends State<_RouteSearchView>
                   ),
                 );
               },
-              child: state.multiMode
+              child: multiMode
                   ? KeyedSubtree(
                       key: const ValueKey('multi'),
                       child: _MultiRouteCard(
@@ -496,7 +502,8 @@ class _RouteSearchViewState extends State<_RouteSearchView>
                   duration: const Duration(milliseconds: 320),
                   curve: Curves.easeOutCubic,
                   alignment: Alignment.topCenter,
-                  child: state.multiMode
+                  child: (MySafarSdk.config.enableMultiSearch &&
+                          state.multiMode)
                       ? const SizedBox(width: double.infinity)
                       : Column(
                           crossAxisAlignment: CrossAxisAlignment.start,

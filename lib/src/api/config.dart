@@ -19,6 +19,7 @@ class MySafarConfig {
           false, // true edi false qilindi Xizmatlar bolimini berkitish uchun
       this.enableShowcaseTour = false,
       this.enableFullProfile = false,
+      this.enableMultiSearch = true,
       this.startLocale,
       this.saveLocale = true,
       this.themeMode,
@@ -70,6 +71,11 @@ class MySafarConfig {
   /// "Ma'lumotlarim" va "Qo'llab-quvvatlash" ko'rinadi; `true` bo'lsa
   /// arizalarim, cheklar, sozlamalar va hisobni o'chirish/chiqish ham chiqadi.
   final bool enableFullProfile;
+
+  /// Bilet qidiruvdagi "murakkab marshrut" (multiway) tabi. Default yoqilgan —
+  /// oddiy / multi tablar ko'rinadi. Partner `false` qilsa faqat oddiy
+  /// qidiruv qoladi, multi tab yashirinadi.
+  final bool enableMultiSearch;
 
   /// Boshlang'ich til. `null` bo'lsa saqlangan til yoki `uz` ishlatiladi.
   final Locale? startLocale;

@@ -98,14 +98,14 @@ mixin RequestConfig<T> {
 
   /// this method filters by status code and returns specific response
   NetworkResponse _getResponse(Response response) {
-    switch (response.statusCode) {
-      // success
-      case 200:
-      case 201:
-      case 202:
-      case 204:
-        return NetworkSuccessResponse(data: response.data);
+    final int code = response.statusCode ?? 0;
 
+    // BARCHA 2xx — muvaffaqiyat (shu jumladan 207 Multi-Status).
+    if (code >= 200 && code < 300) {
+      return NetworkSuccessResponse(data: response.data);
+    }
+
+    switch (code) {
       case 400:
         return _errorResponse(response, ErrorType.badResponse_400);
       case 401:
@@ -128,7 +128,10 @@ mixin RequestConfig<T> {
       case 504:
         return _errorResponse(response, ErrorType.gatewayTimeout_504);
       default:
-        return _errorResponse(response, ErrorType.dio_error);
+        return _errorResponse(
+          response,
+          code >= 500 ? ErrorType.serverError_5xx : ErrorType.dio_error,
+        );
     }
   }
 
@@ -179,6 +182,7 @@ mixin RequestConfig<T> {
           ? response.data
           : "${response.statusMessage}",
       errorType: errorType,
+      statusCode: response.statusCode,
     );
   }
 
@@ -194,7 +198,11 @@ mixin RequestConfig<T> {
       errorType: errorType.name,
       error: e.message ?? message,
     ));
-    return NetworkErrorResponse(error: message, errorType: errorType);
+    return NetworkErrorResponse(
+      error: message,
+      errorType: errorType,
+      statusCode: e.response?.statusCode,
+    );
   }
 
   /*
