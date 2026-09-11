@@ -43,15 +43,8 @@ class _PriceChartCard extends StatelessWidget {
     return items.take(_barCount).toList();
   }
 
-  /// "2.2M" / "551K" — pufakcha uchun ixcham narx.
-  static String _compact(double v) {
-    if (v >= 1000000) {
-      final m = v / 1000000;
-      return "${m.toStringAsFixed(m >= 10 ? 0 : 1)}M";
-    }
-    if (v >= 1000) return "${(v / 1000).round()}K";
-    return v.round().toString();
-  }
+  /// "2.62M" / "551K" — pufakcha uchun ixcham narx (MySafar bilan bir xil).
+  static String _compact(double v) => ElementFormatter.compactPrice(v);
 
   @override
   Widget build(BuildContext context) {
@@ -398,6 +391,21 @@ class _ChartDay {
   _ChartDay(this.date, this.value);
 }
 
+/// Sheet natijasi — sana(lar) + filtrlar; ota sahifa qidiruvni ochadi.
+class _PriceChartPick {
+  final DateTime start;
+  final DateTime? end;
+  final bool direct;
+  final bool baggage;
+
+  const _PriceChartPick({
+    required this.start,
+    this.end,
+    required this.direct,
+    required this.baggage,
+  });
+}
+
 /// Narxlar jadvali: bugundan boshlab 365 kun. Narxlar mavjud oylik-narx
 /// API'sidan (≈30 kun) olinadi — qolgan kunlar "Noma'lum". Narx pufagi
 /// gorizontal MARKAZDA qotib turadi: grafik scroll bo'lganda markazga
@@ -407,25 +415,39 @@ class _PriceChartSheet extends StatefulWidget {
   final AirPortsModel to;
   final DateTime? initialDate;
   final DateTime? initialEndDate;
+  final bool direct;
+  final bool baggage;
+  final int adt;
+  final int chd;
+  final int inf;
+  final String klass;
 
   const _PriceChartSheet({
     required this.from,
     required this.to,
     this.initialDate,
     this.initialEndDate,
+    this.direct = false,
+    this.baggage = false,
+    this.adt = 1,
+    this.chd = 0,
+    this.inf = 0,
+    this.klass = 'a',
   });
 
   @override
   State<_PriceChartSheet> createState() => _PriceChartSheetState();
 }
 
-/// Narxlar jadvali sheet'i. Tepadagi tanlagich:
-///  • "Bir tomonga" — bitta grafik, bitta sana (avvalgi holat);
-///  • "Borish-kelish" — IKKITA grafik (qaytish grafigi teskari yo'nalish
-///    narxlari bilan), kalendar singari ikki sana tanlanadi.
-/// Natija: DateTime (bir tomonga) yoki PickerDateRange (borish-kelish).
+/// Narxlar jadvali sheet'i (MySafar mobil bilan bir xil):
+///  • "Bir tomonga" / "Borish-kelish" tanlagich;
+///  • to'g'ri reys / bagaj filtrlari;
+///  • ustun surilganda vibratsiya;
+///  • "Bilet topish" — sana + filtrlar bilan qidiruv.
 class _PriceChartSheetState extends State<_PriceChartSheet> {
   late bool _round = widget.initialEndDate != null;
+  late bool _direct = widget.direct;
+  late bool _baggage = widget.baggage;
 
   TicketDatePriceModel? _depPrices;
   bool _depLoading = true;
@@ -449,6 +471,12 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
       final response = await AviaService().getPriceByMonth(
         widget.from.cityIataCode ?? '',
         widget.to.cityIataCode ?? '',
+        adt: widget.adt,
+        chd: widget.chd,
+        inf: widget.inf,
+        klass: widget.klass,
+        direct: _direct,
+        baggage: _baggage,
       );
       if (!mounted) return;
       setState(() {
@@ -471,6 +499,12 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
       final response = await AviaService().getPriceByMonth(
         widget.to.cityIataCode ?? '',
         widget.from.cityIataCode ?? '',
+        adt: widget.adt,
+        chd: widget.chd,
+        inf: widget.inf,
+        klass: widget.klass,
+        direct: _direct,
+        baggage: _baggage,
       );
       if (!mounted) return;
       setState(() {
@@ -484,6 +518,18 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
     }
   }
 
+  void _reloadPrices() {
+    setState(() {
+      _depLoading = true;
+      _depPrices = null;
+      _retRequested = false;
+      _retPrices = null;
+      if (_round) _retLoading = true;
+    });
+    _loadDep();
+    if (_round) _loadRet();
+  }
+
   void _setRound(bool round) {
     if (_round == round) return;
     HapticFeedback.lightImpact();
@@ -491,16 +537,54 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
     if (round) _loadRet();
   }
 
+  void _setDirect(bool value) {
+    if (_direct == value) return;
+    HapticFeedback.selectionClick();
+    setState(() => _direct = value);
+    _reloadPrices();
+  }
+
+  void _setBaggage(bool value) {
+    if (_baggage == value) return;
+    HapticFeedback.selectionClick();
+    setState(() => _baggage = value);
+    _reloadPrices();
+  }
+
   String _dateLabel(DateTime d) =>
       "${d.day} ${ElementFormatter.formatMonth(d.month).toLowerCase()}";
 
-  /// Tanlash tugmasi bosildi: rejimga qarab natija qaytariladi.
+  String get _routeTitle {
+    final from = (widget.from.cityName ?? '').trim();
+    final to = (widget.to.cityName ?? '').trim();
+    if (from.isEmpty || to.isEmpty) {
+      return "${widget.from.cityIataCode ?? ''} → ${widget.to.cityIataCode ?? ''}";
+    }
+    return "$from → $to";
+  }
+
+  String _legCaption({required bool outbound}) {
+    final from = outbound
+        ? (widget.from.cityIataCode ?? '')
+        : (widget.to.cityIataCode ?? '');
+    final to = outbound
+        ? (widget.to.cityIataCode ?? '')
+        : (widget.from.cityIataCode ?? '');
+    final label = outbound ? "when".tr() : "return".tr();
+    return "${label.toUpperCase()} $from → $to";
+  }
+
+  /// "Bilet topish" — sana(lar) + filtrlar ota sahifaga qaytariladi.
   void _select() {
     HapticFeedback.mediumImpact();
     final dep = _dep;
     if (dep == null) return;
     if (!_round) {
-      Navigator.of(context).pop(dep.date);
+      Navigator.of(context).pop(_PriceChartPick(
+        start: dep.date,
+        direct: _direct,
+        baggage: _baggage,
+      ));
       return;
     }
     final ret = _ret;
@@ -508,7 +592,12 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
     // Qaytish jo'nashdan oldin bo'lsa — tartibini to'g'irlaymiz.
     final DateTime start = dep.date.isBefore(ret.date) ? dep.date : ret.date;
     final DateTime end = dep.date.isBefore(ret.date) ? ret.date : dep.date;
-    Navigator.of(context).pop(PickerDateRange(start, end));
+    Navigator.of(context).pop(_PriceChartPick(
+      start: start,
+      end: end,
+      direct: _direct,
+      baggage: _baggage,
+    ));
   }
 
   @override
@@ -516,17 +605,22 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
     final currency = Provider.of<CurrencyProvider>(context).currency;
     final dep = _dep;
     final ret = _ret;
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Tugma yozuvi va (bo'lsa) umumiy narx.
-    String buttonDate = dep != null ? _dateLabel(dep.date) : '';
-    double? totalPrice = dep?.value;
-    if (_round) {
-      if (dep != null && ret != null) {
-        buttonDate = "${_dateLabel(dep.date)} – ${_dateLabel(ret.date)}";
-      }
-      totalPrice = (dep?.value != null && ret?.value != null)
-          ? dep!.value! + ret!.value!
-          : null;
+    // Tugma ostidagi sana + narx qatori (MySafar: "18 sen · 4 782 065 UZS").
+    String? buttonMeta;
+    if (dep != null) {
+      final datePart = _round && ret != null
+          ? "${_dateLabel(dep.date)} – ${_dateLabel(ret.date)}"
+          : _dateLabel(dep.date);
+      final double? total = _round
+          ? ((dep.value != null && ret?.value != null)
+              ? dep.value! + ret!.value!
+              : null)
+          : dep.value;
+      buttonMeta = total != null
+          ? "$datePart · ${ElementFormatter.formatNumberWithSpaces(total)} ${currency.label}"
+          : datePart;
     }
 
     return Container(
@@ -534,9 +628,7 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
         maxHeight: MediaQuery.of(context).size.height * 0.92,
       ),
       decoration: BoxDecoration(
-        color: Theme.of(context).brightness == Brightness.dark
-            ? ProjectTheme.cardColorDark
-            : ProjectTheme.cardColorLight,
+        color: isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: const EdgeInsets.only(top: 10),
@@ -553,21 +645,49 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  "price_chart_title".tr(),
-                  style: context.textTheme.displayLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 20,
+              padding: const EdgeInsets.fromLTRB(16, 0, 8, 0),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "price_chart_title".tr(),
+                          style: context.textTheme.displayLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 20,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _routeTitle,
+                          style: context.textTheme.headlineSmall?.copyWith(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                  IconButton(
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      Navigator.of(context).maybePop();
+                    },
+                    visualDensity: VisualDensity.compact,
+                    icon: Icon(
+                      Icons.close_rounded,
+                      color: context.textTheme.headlineSmall?.color,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             // Borish / Borish-kelish tanlagichi.
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -581,7 +701,11 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
               child: SingleChildScrollView(
                 child: Column(
                   children: [
-                    if (_round) _chartCaption(context, "depDate".tr()),
+                    _chartCaption(
+                      context,
+                      _legCaption(outbound: true),
+                      color: ProjectTheme.brandColor,
+                    ),
                     _PriceChartView(
                       key: const ValueKey('dep-chart'),
                       prices: _depPrices,
@@ -591,7 +715,11 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
                       onCentered: (day) => setState(() => _dep = day),
                     ),
                     if (_round) ...[
-                      _chartCaption(context, "arrDate".tr()),
+                      _chartCaption(
+                        context,
+                        _legCaption(outbound: false),
+                        color: const Color(0xFF9B8CFF),
+                      ),
                       _PriceChartView(
                         key: const ValueKey('ret-chart'),
                         prices: _retPrices,
@@ -605,32 +733,70 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
                 ),
               ),
             ),
-            // Tanlash tugmasi.
+            // To'g'ri reys / Bagaj — MySafar sheet ichidagi kalitlar.
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+              child: Column(
+                children: [
+                  _SheetFilterRow(
+                    label: "home_direct_flight".tr(),
+                    value: _direct,
+                    onChanged: _setDirect,
+                  ),
+                  Divider(
+                    height: 1,
+                    color: isDark
+                        ? Colors.white.withAlpha(20)
+                        : const Color(0xFFE7EDF6),
+                  ),
+                  _SheetFilterRow(
+                    label: "home_with_baggage".tr(),
+                    value: _baggage,
+                    onChanged: _setBaggage,
+                  ),
+                ],
+              ),
+            ),
+            // "Bilet topish" — oltin tugma.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
               child: SizedBox(
                 width: double.infinity,
-                height: 54,
+                height: 56,
                 child: ElevatedButton(
-                  style: ProjectTheme.blueButtonStyle,
-                  onPressed: buttonDate.isEmpty ? null : _select,
+                  style: ProjectTheme.orangeButtonStyle.copyWith(
+                    backgroundColor:
+                        WidgetStateProperty.resolveWith((states) {
+                      if (states.contains(WidgetState.disabled)) {
+                        return _Web.gold.withAlpha(90);
+                      }
+                      return _Web.gold;
+                    }),
+                    shape: WidgetStateProperty.all(
+                      RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                  ),
+                  onPressed: buttonMeta == null ? null : _select,
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        "select_date_button"
-                            .tr(namedArgs: {"date": buttonDate}),
+                        "home_find_ticket".tr(),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: context.textTheme.bodyMedium?.copyWith(
+                        style: const TextStyle(
                           color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
                         ),
                       ),
-                      if (totalPrice != null)
+                      if (buttonMeta != null)
                         Text(
-                          _priceWithSuffix(totalPrice, currency),
+                          buttonMeta,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: Colors.white70,
                             fontSize: 12,
@@ -648,17 +814,70 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
     );
   }
 
-  Widget _chartCaption(BuildContext context, String text) {
+  Widget _chartCaption(BuildContext context, String text, {Color? color}) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       child: Align(
         alignment: Alignment.centerLeft,
-        child: Text(
-          text,
-          style: context.textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-            fontSize: 14,
-          ),
+        child: Row(
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: color ?? ProjectTheme.brandColor,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                text,
+                style: context.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12.5,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Sheet ichidagi filtr qatori — chapda matn, o'ngda switch.
+class _SheetFilterRow extends StatelessWidget {
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _SheetFilterRow({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => onChanged(!value),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: context.textTheme.bodyMedium?.copyWith(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            _WebSwitch(value: value),
+          ],
         ),
       ),
     );
@@ -769,6 +988,10 @@ class _PriceChartViewState extends State<_PriceChartView> {
   /// chizilgach bajaramiz, aks holda grafik 0-kunda qolib ketardi.
   bool _pendingJump = false;
 
+  /// `jumpTo` paytida scroll listener ishlaydi — ochilishda vibratsiya
+  /// bermaslik uchun.
+  bool _suppressHaptic = false;
+
   @override
   void initState() {
     super.initState();
@@ -794,7 +1017,9 @@ class _PriceChartViewState extends State<_PriceChartView> {
       if (!mounted || !_pendingJump) return;
       if (_scroll.hasClients) {
         _pendingJump = false;
+        _suppressHaptic = true;
         _scroll.jumpTo(_centered * _itemExtent);
+        _suppressHaptic = false;
       }
     });
   }
@@ -829,6 +1054,8 @@ class _PriceChartViewState extends State<_PriceChartView> {
     if (idx != _centered) {
       setState(() => _centered = idx);
       widget.onCentered(_dayAt(idx));
+      // MySafar: har yangi ustunga o'tganda vibratsiya.
+      if (!_suppressHaptic) HapticFeedback.selectionClick();
     }
   }
 
@@ -1012,12 +1239,17 @@ class _PriceChartViewState extends State<_PriceChartView> {
                           top: 46 +
                               (chartHeight - centeredBarH)
                                   .clamp(0, chartHeight) -
-                              40,
+                              54,
                           child: Center(
                             child: _PriceBubble(
                               text: centeredDay.value != null
                                   ? _priceWithSuffix(centeredDay.value!, currency)
                                   : "price_unknown".tr(),
+                              subtitle: ElementFormatter.formatWithWeekDay(
+                                "${centeredDay.date.day.toString().padLeft(2, '0')}."
+                                "${centeredDay.date.month.toString().padLeft(2, '0')}."
+                                "${centeredDay.date.year}",
+                              ),
                               color: centeredDay.value != null
                                   ? colorOf(centeredDay)
                                   : Colors.grey.withAlpha(200),
@@ -1110,13 +1342,19 @@ class _ChartShimmer extends StatelessWidget {
   }
 }
 
-/// Markazdagi narx pufagi — rangi markazda to'xtagan ustun rangiga mos
-/// (arzon — yashil, qimmat — ko'k, noma'lum — kulrang).
+/// Markazdagi narx pufagi — rangi markazda to'xtagan ustun rangida
+/// (arzon — yashil, qimmat — ko'k, noma'lum — kulrang). MySafar'dagi
+/// kabi: tepada narx, pastda sana.
 class _PriceBubble extends StatelessWidget {
   final String text;
+  final String? subtitle;
   final Color color;
 
-  const _PriceBubble({required this.text, required this.color});
+  const _PriceBubble({
+    required this.text,
+    required this.color,
+    this.subtitle,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1128,15 +1366,31 @@ class _PriceBubble extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
           decoration: BoxDecoration(
             color: bg,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(14),
           ),
-          child: Text(
-            text,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 13.5,
-              fontWeight: FontWeight.w800,
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                text,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              if (subtitle != null) ...[
+                const SizedBox(height: 1),
+                Text(
+                  subtitle!,
+                  style: TextStyle(
+                    color: Colors.white.withAlpha(210),
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
         // Pastga qaragan uchburchak (pufak "dumi").

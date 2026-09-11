@@ -139,12 +139,48 @@ class _MainSearchFormState extends State<MainSearchForm> {
   /// Maydon bosilganda: qidiruv allaqachon to'liq bo'lsa — faqat shu maydonni
   /// tahrirlaymiz (oqim/avto-qidiruv yo'q); aks holda yo'riqli oqimni shu
   /// qadamdan boshlab yuritamiz.
+  ///
+  /// Bosh sahifa (`homeStyle`): faqat Qayerdan/Qayerga — sana/yo'lovchi
+  /// RouteSearchPage da. Ikkalasi tanlansa shu sahifaga o'tamiz.
   void _onFieldTap(int step) {
     HapticFeedback.selectionClick();
+    if (widget.homeStyle) {
+      _homeFieldTap(step);
+      return;
+    }
     if (isFilled) {
       _promptStep(step);
     } else {
       _runGuidedFlow(step);
+    }
+  }
+
+  Future<void> _homeFieldTap(int step) async {
+    // Ikkalasi oldindan to'liq bo'lsa — faqat tahrir; sana/yo'lovchi
+    // auto-oqimi qayta ochilmaydi.
+    final hadBoth = fromDir != null && toDir != null;
+    final picked = await _promptStep(step);
+    if (!mounted || !picked) return;
+
+    // Qayerdan → keyin avtomatik Qayerga.
+    if (step == _stepFrom && toDir == null) {
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (!mounted) return;
+      final toPicked = await _promptStep(_stepTo);
+      if (!mounted || !toPicked) return;
+    }
+
+    if (fromDir != null && toDir != null) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => RouteSearchPage(
+            from: fromDir!,
+            to: toDir!,
+            // Birinchi marta yo'nalish to'lganda: sana → yo'lovchi.
+            autoPromptDatePassengers: !hadBoth,
+          ),
+        ),
+      );
     }
   }
 
@@ -206,12 +242,16 @@ class _MainSearchFormState extends State<MainSearchForm> {
         final r = await ProjectDialogs.showCitySearchPicker(context, 1);
         if (!mounted || r == null) return false;
         setState(() => toDir = r);
-        // Qayerdan → qayerga tanlandi — alohida yo'nalish qidiruv oynasiga
-        // o'tamiz (sana/yo'lovchi/filtr va narxlar jadvali o'sha yerda).
-        if (fromDir != null) {
+        // Non-home: Qayerdan → qayerga tanlandi — RouteSearchPage ga o'tamiz.
+        // homeStyle da navigatsiya `_homeFieldTap` ichida (From ham yangilanganda).
+        if (!widget.homeStyle && fromDir != null) {
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => RouteSearchPage(from: fromDir!, to: r),
+              builder: (_) => RouteSearchPage(
+                from: fromDir!,
+                to: r,
+                autoPromptDatePassengers: true,
+              ),
             ),
           );
           return false; // eski qadam zanjiri (sana/yo'lovchi) ochilmaydi
@@ -344,11 +384,19 @@ class _MainSearchFormState extends State<MainSearchForm> {
   }
 
   // ───────────────────────────────────────────────────────────────────────
-  // Bosh sahifa (Figma) — orange uslubli qidiruv kartasi
+  // Bosh sahifa (MySafar video) — faqat Qayerdan / Qayerga + circular swap.
+  // Sana, yo'lovchi, toggle va "Bilet izlash" RouteSearchPage da.
   // ───────────────────────────────────────────────────────────────────────
 
   Widget _homeCard(BuildContext context) {
-    // Frosted (shishasimon) karta — orqa fon rasmi ustida suzadi.
+    final bool isDark = context.isDarkMode;
+    final Color glass = isDark
+        ? Colors.black.withOpacity(0.28)
+        : Colors.white.withOpacity(0.94);
+    final Color border = isDark
+        ? Colors.white.withOpacity(0.22)
+        : Colors.white.withOpacity(0.55);
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
       child: BackdropFilter(
@@ -356,138 +404,80 @@ class _MainSearchFormState extends State<MainSearchForm> {
         child: Container(
           width: double.infinity,
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.20),
+            color: glass,
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white.withOpacity(0.22), width: 1),
-          ),
-          padding: const EdgeInsets.all(14.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _fromToBlock(context),
-              const SizedBox(height: 4),
-              IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(
-                      child: _miniCell(
-                        context,
-                        icon: Icons.calendar_today_rounded,
-                        value: pickerDateRange?.startDate == null
-                            ? null
-                            : _getDateTitle(),
-                        hint: "home_departure".tr(),
-                        onTap: () => _onFieldTap(_stepDate),
-                          radius: BorderRadius.only(bottomLeft: Radius.circular(12))
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Builder(builder: (context) {
-                        final (paxTitle, paxKlass) = _passengerParts();
-                        return _miniCell(
-                          context,
-                          icon: Icons.people_alt_outlined,
-                          value: paxTitle,
-                          subtitle: paxKlass,
-                          hint: "",
-                          onTap: () => _onFieldTap(_stepPassengers),
-                            radius: BorderRadius.only(bottomRight: Radius.circular(12))
-                        );
-                      }),
+            border: Border.all(color: border, width: 1),
+            boxShadow: isDark
+                ? null
+                : [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.12),
+                      blurRadius: 18,
+                      offset: const Offset(0, 6),
                     ),
                   ],
-                ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: _homeToggle(
-                      context,
-                      label: "home_direct_flight".tr(),
-                      value: directOnly,
-                      onChanged: (v) => setState(() => directOnly = v),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _homeToggle(
-                      context,
-                      label: "home_with_baggage".tr(),
-                      value: withBaggage,
-                      onChanged: (v) => setState(() => withBaggage = v),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: ElevatedButton(
-                  style: ProjectTheme.orangeButtonStyle,
-                  onPressed: _search,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.search_rounded,
-                          color: Colors.white, size: 20),
-                      const SizedBox(width: 8),
-                      Text("home_search_ticket".tr()),
-                    ],
-                  ),
-                ),
-              ),
-            ],
           ),
+          child: _homeFromToBlock(context),
         ),
       ),
     );
   }
 
-  /// Qayerdan / Qayerga — ikkita ALOHIDA oq karta, orasida ochiq bo'shliq;
-  /// o'ngda orange kvadrat swap tugmasi ikkovining kesishmasida turadi (Figma).
-  Widget _fromToBlock(BuildContext context) {
+  /// Bitta karta ichida From / To + circular orange swap (MySafar home).
+  Widget _homeFromToBlock(BuildContext context) {
+    final bool isDark = context.isDarkMode;
+    final Color divider = isDark
+        ? Colors.white.withOpacity(0.18)
+        : const Color(0xFFE6EAF0);
+    final Color fieldBg = isDark ? Colors.white : Colors.transparent;
+
     return Stack(
       alignment: Alignment.centerRight,
       children: [
         Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _bigField(context,
-                value: fromDir?.cityName,
-                placeholder: "from".tr(),
-                onTap: () => _onFieldTap(_stepFrom),
-                radius: BorderRadius.vertical(top: Radius.circular(12))
+            _homeRouteRow(
+              context,
+              value: fromDir?.cityName,
+              placeholder: "from".tr(),
+              onTap: () => _onFieldTap(_stepFrom),
+              background: fieldBg,
+              topRadius: true,
             ),
-            const SizedBox(height: 4),
-            _bigField(
+            Divider(height: 1, thickness: 1, color: divider),
+            _homeRouteRow(
               context,
               value: toDir?.cityName,
               placeholder: "to".tr(),
               onTap: () => _onFieldTap(_stepTo),
+              background: fieldBg,
+              topRadius: false,
             ),
           ],
         ),
         Padding(
-          padding: const EdgeInsets.only(right: 12),
-          child: _orangeSwapButton(context),
+          padding: const EdgeInsets.only(right: 14),
+          child: _orangeSwapButton(context, circular: true),
         ),
       ],
     );
   }
 
-  /// From/To maydoni — alohida oq karta, bitta qator matn (Figma).
-  Widget _bigField(BuildContext context,
-      {required String? value,
-      required String placeholder,
-      required VoidCallback onTap,
-      BorderRadius? radius}) {
+  Widget _homeRouteRow(
+    BuildContext context, {
+    required String? value,
+    required String placeholder,
+    required VoidCallback onTap,
+    required Color background,
+    required bool topRadius,
+  }) {
     final hasValue = value != null && value.isNotEmpty;
+    final radius = topRadius
+        ? const BorderRadius.vertical(top: Radius.circular(23))
+        : const BorderRadius.vertical(bottom: Radius.circular(23));
     return Material(
-      color: Colors.white,
+      color: background,
       borderRadius: radius,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -495,13 +485,11 @@ class _MainSearchFormState extends State<MainSearchForm> {
         child: SizedBox(
           width: double.infinity,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 66, 16),
+            padding: const EdgeInsets.fromLTRB(18, 18, 66, 18),
             child: Text(
               hasValue ? value : placeholder,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              // Karta har doim oq — ranglar temaga bog'lanmaydi (dark rejimda
-              // theme rangi oq bo'lib, oq kartada ko'rinmay qolardi).
               style: hasValue
                   ? context.textTheme.displayLarge
                       ?.copyWith(color: ProjectTheme.textColorLight)
@@ -514,137 +502,15 @@ class _MainSearchFormState extends State<MainSearchForm> {
     );
   }
 
-  /// Sana / yo'lovchilar kartachasi — oq, chapda matn (ixtiyoriy ikkinchi
-  /// qator bilan), o'ngda kulrang ikonka (Figma).
-  Widget _miniCell(BuildContext context,
-      {required IconData icon,
-      required String? value,
-      required String hint,
-      String? subtitle,
-      required VoidCallback onTap,
-      BorderRadius? radius}) {
-    final hasValue = value != null && value.isNotEmpty;
-    final hasSubtitle = hasValue && subtitle != null && subtitle.isNotEmpty;
-    return Material(
-      color: Colors.white,
-      borderRadius: radius,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 58),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        hasValue ? value : hint,
-                        maxLines: hasSubtitle ? 1 : 2,
-                        overflow: TextOverflow.ellipsis,
-                        // Oq kartada temadan mustaqil ranglar (dark rejim uchun).
-                        style: hasValue
-                            ? context.textTheme.displayMedium?.copyWith(
-                                fontSize: 15,
-                                color: ProjectTheme.textColorLight)
-                            : context.textTheme.headlineMedium?.copyWith(
-                                color: ProjectTheme.secondaryTextLight),
-                      ),
-                      if (hasSubtitle) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: context.textTheme.headlineSmall?.copyWith(
-                              color: ProjectTheme.secondaryTextLight),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Icon(icon, size: 20, color: ProjectTheme.secondaryTextLight),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// "To'g'ri reys" / "Bagaj bilan" — yarim shaffof PILL (kapsula) ichida:
-  /// chapda switch, o'ngda oq yozuv (Figma).
-  Widget _homeToggle(
-    BuildContext context, {
-    required String label,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return Material(
-      color: Colors.white.withOpacity(0.18),
-      borderRadius: BorderRadius.circular(24),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          onChanged(!value);
-        },
-        child: SizedBox(
-          height: 48,
-          child: Row(
-            children: [
-              const SizedBox(width: 4),
-              Transform.scale(
-                scale: 0.8,
-                child: Switch(
-                  value: value,
-                  onChanged: (v) {
-                    HapticFeedback.selectionClick();
-                    onChanged(v);
-                  },
-                  activeTrackColor: ProjectTheme.switchGreen,
-                  inactiveThumbColor: Colors.white,
-                  inactiveTrackColor: Colors.white.withOpacity(0.45),
-                  trackOutlineColor:
-                      WidgetStateProperty.all(Colors.transparent),
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-              ),
-              const SizedBox(width: 2),
-              Flexible(
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 10),
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Orange KVADRAT (yumaloq burchakli) swap tugmasi — Figma bo'yicha.
-  Widget _orangeSwapButton(BuildContext context) {
+  /// Orange swap — home'da circular (MySafar video), boshqa joyda rounded square.
+  Widget _orangeSwapButton(BuildContext context, {bool circular = false}) {
+    final radius = circular ? 23.0 : 14.0;
     return Container(
       width: 46,
       height: 46,
       decoration: BoxDecoration(
         color: ProjectTheme.accentOrange,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(radius),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.18),
@@ -655,7 +521,7 @@ class _MainSearchFormState extends State<MainSearchForm> {
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(radius),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: _swap,
@@ -966,13 +832,6 @@ class _MainSearchFormState extends State<MainSearchForm> {
   /// "1 yo'lovchi, Ekonom" → ("1 yo'lovchi", "Ekonom") — bosh sahifa
   /// kartachasida ikki qatorda ko'rsatish uchun (oxirgi vergul bo'yicha;
   /// vergul bo'lmasa ikkinchi qator yo'q).
-  (String, String?) _passengerParts() {
-    final full = _getPassengerInfo();
-    final idx = full.lastIndexOf(', ');
-    if (idx <= 0) return (full, null);
-    return (full.substring(0, idx), full.substring(idx + 2));
-  }
-
   List<RecommendationReqBodySegment> _getSegments() {
     if (pickerDateRange?.endDate != null) {
       return [

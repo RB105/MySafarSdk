@@ -56,8 +56,8 @@ class _Web {
   ];
 }
 
-/// Doiraviy "orqaga" tugmasi. Webda bu joyda logo va menyu turadi — ilovada
-/// esa sahifa push bilan ochilgani uchun qaytish tugmasi kerak.
+/// Doiraviy "orqaga" tugmasi.
+/// Light (ko'k hero): oq doira. Dark: dark doira + oq ikonka (MySafar).
 class _HeroBackButton extends StatelessWidget {
   final VoidCallback onTap;
 
@@ -67,9 +67,10 @@ class _HeroBackButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Material(
-      color: isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight,
+      color: isDark ? ProjectTheme.cardColorDark : Colors.white,
       shape: const CircleBorder(),
       clipBehavior: Clip.antiAlias,
+      elevation: 0,
       child: InkWell(
         onTap: onTap,
         child: SizedBox(
@@ -129,16 +130,15 @@ class _WebSearchCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight,
+        color: isDark ? ProjectTheme.cardColorDark : Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isDark ? ProjectTheme.borderDark : const Color(0xFFE7EDF6),
-        ),
-        boxShadow: _Web.cardShadow,
+        border: isDark
+            ? Border.all(color: ProjectTheme.borderDark)
+            : null,
+        boxShadow: isDark ? null : _Web.cardShadow,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -311,7 +311,7 @@ class _WebSwapButton extends StatelessWidget {
         color: _Web.gold,
         shape: BoxShape.circle,
         border: Border.all(
-          color: isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight,
+          color: isDark ? ProjectTheme.cardColorDark : Colors.white,
           width: 3,
         ),
         boxShadow: const [
@@ -353,11 +353,8 @@ class _WebTogglePill extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Material(
-      color: isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight,
+      color: isDark ? ProjectTheme.cardColorDark : Colors.white,
       clipBehavior: Clip.antiAlias,
-      // Fon och bo'lgani uchun oq "pill" ajralib turishi kerak.
-      // Diqqat: `shape` bilan `borderRadius` ni birga berib bo'lmaydi
-      // (Material assert qiladi) — radius shape ichida beriladi.
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(999),
         side: BorderSide(

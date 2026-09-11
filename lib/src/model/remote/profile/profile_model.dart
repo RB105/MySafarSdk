@@ -144,7 +144,9 @@ class ProfileModel {
 
   String getAuthenticator() {
     if (phoneNumber?.isNotEmpty ?? false) {
-      return "+$phoneNumber";
+      final phone = phoneNumber!.trim();
+      // Edit profile or API may already include '+'; avoid "++998..."
+      return phone.startsWith('+') ? phone : '+$phone';
     } else {
       return email ?? "";
     }

@@ -7,6 +7,7 @@ import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/extension/date_time_ext.dart';
 import 'package:mysafar_sdk/src/core/styles/grarient_box_border.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
+import 'package:mysafar_sdk/src/core/tools/formatters.dart' show ElementFormatter;
 import 'package:mysafar_sdk/src/cubit/main/datePicker/date_picker_cubit.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/airports_model.dart'
@@ -49,7 +50,9 @@ class _DateCalendarWidgetState extends State<DateCalendarWidget> {
     for (final element in datePrices.uzsPrices ?? []) {
       final date = element.date;
       if (date != null && element.sum != "0") {
-        map[DateTime(date.year, date.month, date.day)] = element.sum ?? "";
+        // API xom summa beradi — katakchada ixcham ko'rinadi ("2.88M").
+        map[DateTime(date.year, date.month, date.day)] =
+            ElementFormatter.compactPrice(element.sum);
       }
     }
     _priceByDate = map;

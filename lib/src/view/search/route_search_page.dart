@@ -50,10 +50,13 @@ part 'route_search_best_offers.dart';
 /// ko'rinishi bilan bir xil:
 ///  • tepada oq qidiruv kartasi (from/to + almashtirish, sana,
 ///    yo'lovchilar), filtr kalitlari va oltin qidirish tugmasi;
-///  • "Narxlar jadvali" — yaqin kunlar ustun-grafigi; bosilganda
+///  • "Narxlar jadvali" — yaqin kunlar ustun-grafigi; kartani bosganda
 ///    365 kunlik to'liq jadval bottom sheet'da ochiladi;
 ///  • "Eng yaxshi takliflar" — eng arzon kunga topilgan aniq reyslar
 ///    (gorizontal kartalar; bosilganda o'sha sana bo'yicha natijalar).
+///
+/// Bosh sahifadan kelganda ([autoPromptDatePassengers]): avval kalendar,
+/// keyin yo'lovchilar ochiladi — qidiruv faqat "Bilet izlash" da.
 class RouteSearchPage extends StatelessWidget {
   final AirPortsModel from;
   final AirPortsModel to;
@@ -62,12 +65,17 @@ class RouteSearchPage extends StatelessWidget {
   final DateTime? initialDate;
   final DateTime? initialEndDate;
 
+  /// Bosh sahifadan yo'nalish tanlangach: sana → yo'lovchi ketma-ket ochiladi.
+  /// "Bilet izlash" bosilmaguncha qidiruv boshlanmaydi.
+  final bool autoPromptDatePassengers;
+
   const RouteSearchPage({
     super.key,
     required this.from,
     required this.to,
     this.initialDate,
     this.initialEndDate,
+    this.autoPromptDatePassengers = false,
   });
 
   @override
@@ -87,7 +95,9 @@ class RouteSearchPage extends StatelessWidget {
         }
         return cubit;
       },
-      child: const _RouteSearchView(),
+      child: _RouteSearchView(
+        autoPromptDatePassengers: autoPromptDatePassengers,
+      ),
     );
   }
 }
@@ -96,7 +106,9 @@ class RouteSearchPage extends StatelessWidget {
 /// Bu widget faqat holatni chizadi va foydalanuvchi tanlovlarini (dialog
 /// natijalarini) cubit'ga uzatadi; o'zida saqlanadigan holat yo'q.
 class _RouteSearchView extends StatefulWidget {
-  const _RouteSearchView();
+  const _RouteSearchView({this.autoPromptDatePassengers = false});
+
+  final bool autoPromptDatePassengers;
 
   @override
   State<_RouteSearchView> createState() => _RouteSearchViewState();
@@ -122,6 +134,16 @@ class _RouteSearchViewState extends State<_RouteSearchView>
     _scrollController.addListener(_onScroll);
     _tabController = TabController(length: 2, vsync: this)
       ..addListener(_onTabChanged);
+    // Bosh sahifadan kelganda: sana → yo'lovchi (price chart emas).
+    if (widget.autoPromptDatePassengers) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (MySafarSdk.config.enableMultiSearch && _cubit.state.multiMode) {
+          return;
+        }
+        _runDatePassengerFlow();
+      });
+    }
   }
 
   void _onTabChanged() {
@@ -165,10 +187,18 @@ class _RouteSearchViewState extends State<_RouteSearchView>
     _cubit.swap();
   }
 
-  Future<void> _pickDate() async {
+  /// Sana → yo'lovchi yo'riqli oqim. Qidiruv faqat "Bilet izlash" da.
+  Future<void> _runDatePassengerFlow() async {
+    final datePicked = await _pickDate();
+    if (!mounted || !datePicked) return;
+    await Future.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
+    await _pickPassengers();
+  }
+
+  /// Sana tanlash (kalendar). Muvaffaqiyatli tanlansa `true`.
+  Future<bool> _pickDate() async {
     final s = _cubit.state;
-    // type 1 — borish-QAYTISH rejimi: bitta sana ham, ikkitasi ham
-    // tanlanishi mumkin (bosh sahifa formasi bilan bir xil).
     final r = await ProjectDialogs.showCalendartPicker(
       context,
       1,
@@ -176,8 +206,13 @@ class _RouteSearchViewState extends State<_RouteSearchView>
       s.from,
       s.to,
     );
-    if (!mounted || r == null || r.startDate == null) return;
-    _cubit.setDates(r.startDate!, r.endDate);
+    if (!mounted || r == null || r.startDate == null) return false;
+    if (r.endDate != null) {
+      _cubit.setDates(r.startDate!, r.endDate);
+    } else {
+      _cubit.pickDay(r.startDate!);
+    }
+    return true;
   }
 
   Future<void> _pickPassengers() async {
@@ -229,14 +264,13 @@ class _RouteSearchViewState extends State<_RouteSearchView>
 
   void _removeLeg(int index) => _cubit.removeLeg(index);
 
-  /// Narxlar jadvali bottom sheet'ini ochadi. "Bir tomonga" rejimida bitta
-  /// sana (DateTime), "Borish-kelish"da esa ikkala sana (PickerDateRange)
-  /// qaytadi — kalendar bilan bir xil semantika.
+  /// Narxlar jadvali bottom sheet'ini ochadi. MySafar'dagi kabi: sana(lar)
+  /// tanlanadi, filtrlar qo'llanadi va "Bilet topish" qidiruvni boshlaydi.
   Future<void> _openPriceChart() async {
     HapticFeedback.lightImpact();
     AnalyticsService().trackButtonTap('route_price_chart');
     final s = _cubit.state;
-    final picked = await showSdkModalBottomSheet<Object>(
+    final picked = await showSdkModalBottomSheet<_PriceChartPick>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -245,16 +279,22 @@ class _RouteSearchViewState extends State<_RouteSearchView>
         to: s.to,
         initialDate: s.date,
         initialEndDate: s.endDate,
+        direct: s.direct,
+        baggage: s.baggage,
+        adt: s.adt,
+        chd: s.chd,
+        inf: s.inf,
+        klass: s.klass,
       ),
     );
     if (!mounted || picked == null) return;
-    if (picked is PickerDateRange) {
-      final start = picked.startDate;
-      if (start != null) _cubit.setDates(start, picked.endDate);
-    } else if (picked is DateTime) {
-      // Bir tomonlama tanlandi — qaytish tozalanadi.
-      _cubit.pickDay(picked);
+    _cubit.setFilters(direct: picked.direct, baggage: picked.baggage);
+    if (picked.end != null) {
+      _cubit.setDates(picked.start, picked.end);
+    } else {
+      _cubit.pickDay(picked.start);
     }
+    _search();
   }
 
   /// Taklif kartasi bosilganda o'sha chipta batafsil sahifasini ochadi.
@@ -336,201 +376,220 @@ class _RouteSearchViewState extends State<_RouteSearchView>
   String _paxFieldText(RouteSearchState s) =>
       "passengers_count".tr(namedArgs: {"count": "${s.passengerCount}"});
 
-  /// Qidiruv bloki: oq karta (qayerdan/qayerga/sana/yo'lovchilar), filtr
-  /// kalitlari va oltin qidirish tugmasi. Web bilan bir xil, faqat orqa fon
-  /// ko'k gradient emas — sahifa fonida turadi.
+  /// Light: ko'k hero (MySafar). Dark: qora fon + dark karta (MySafar dark).
   Widget _hero(BuildContext context, RouteSearchState state) {
     final double topInset = MediaQuery.of(context).padding.top;
     const double appBarH = 36;
     final bool enableMulti = MySafarSdk.config.enableMultiSearch;
     final bool multiMode = enableMulti && state.multiMode;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(16, topInset + appBarH, 16, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (enableMulti) ...[
-            _RouteModeTabBar(controller: _tabController),
-            const SizedBox(height: 10),
-          ],
-          AnimatedSize(
-            duration: const Duration(milliseconds: 320),
-            curve: Curves.easeOutCubic,
-            alignment: Alignment.topCenter,
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 280),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              layoutBuilder: (currentChild, previousChildren) => Stack(
-                alignment: Alignment.topCenter,
-                children: [
-                  ...previousChildren,
-                  if (currentChild != null) currentChild,
-                ],
-              ),
-              transitionBuilder: (child, animation) {
-                final bool isMultiChild = child.key == const ValueKey('multi');
-                final bool isIncoming = isMultiChild == multiMode;
-                final double beginDx = isIncoming
-                    ? (multiMode ? 0.12 : -0.12)
-                    : (multiMode ? -0.12 : 0.12);
-                return FadeTransition(
-                  opacity: animation,
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: Offset(beginDx, 0),
-                      end: Offset.zero,
-                    ).animate(animation),
-                    child: child,
-                  ),
-                );
-              },
-              child: multiMode
-                  ? KeyedSubtree(
-                      key: const ValueKey('multi'),
-                      child: _MultiRouteCard(
-                        legs: state.legs,
-                        paxText: _paxFieldText(state),
-                        canAdd: state.canAddLeg,
-                        canRemove: state.canRemoveLeg,
-                        onFromTap: (i) => _pickLegCity(i, 0),
-                        onToTap: (i) => _pickLegCity(i, 1),
-                        onDateTap: _pickLegDate,
-                        onRemove: _removeLeg,
-                        onAdd: _addLeg,
-                        onPaxTap: _pickPassengers,
-                      ),
-                    )
-                  : KeyedSubtree(
-                      key: const ValueKey('simple'),
-                      child: _WebSearchCard(
-                        from: state.from,
-                        to: state.to,
-                        dateText: _dateFieldText(state),
-                        dateIsPlaceholder: state.date == null,
-                        paxText: _paxFieldText(state),
-                        onFromTap: () => _pickCity(0),
-                        onToTap: () => _pickCity(1),
-                        onSwap: _swap,
-                        onDateTap: _pickDate,
-                        onPaxTap: _pickPassengers,
-                      ),
-                    ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Row(
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final Widget body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (enableMulti) ...[
+          _RouteModeTabBar(controller: _tabController),
+          const SizedBox(height: 10),
+        ],
+        AnimatedSize(
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 280),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            layoutBuilder: (currentChild, previousChildren) => Stack(
+              alignment: Alignment.topCenter,
               children: [
-                Expanded(
-                  child: _WebTogglePill(
-                    label: "home_direct_flight".tr(),
-                    value: state.direct,
-                    onChanged: (v) => _cubit.setFilters(
-                      direct: v,
-                      baggage: state.baggage,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _WebTogglePill(
-                    label: "home_with_baggage".tr(),
-                    value: state.baggage,
-                    onChanged: (v) => _cubit.setFilters(
-                      direct: state.direct,
-                      baggage: v,
-                    ),
-                  ),
-                ),
+                ...previousChildren,
+                if (currentChild != null) currentChild,
               ],
             ),
+            transitionBuilder: (child, animation) {
+              final bool isMultiChild = child.key == const ValueKey('multi');
+              final bool isIncoming = isMultiChild == multiMode;
+              final double beginDx = isIncoming
+                  ? (multiMode ? 0.12 : -0.12)
+                  : (multiMode ? -0.12 : 0.12);
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: Offset(beginDx, 0),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              );
+            },
+            child: multiMode
+                ? KeyedSubtree(
+                    key: const ValueKey('multi'),
+                    child: _MultiRouteCard(
+                      legs: state.legs,
+                      paxText: _paxFieldText(state),
+                      canAdd: state.canAddLeg,
+                      canRemove: state.canRemoveLeg,
+                      onFromTap: (i) => _pickLegCity(i, 0),
+                      onToTap: (i) => _pickLegCity(i, 1),
+                      onDateTap: _pickLegDate,
+                      onRemove: _removeLeg,
+                      onAdd: _addLeg,
+                      onPaxTap: _pickPassengers,
+                    ),
+                  )
+                : KeyedSubtree(
+                    key: const ValueKey('simple'),
+                    child: _WebSearchCard(
+                      from: state.from,
+                      to: state.to,
+                      dateText: _dateFieldText(state),
+                      dateIsPlaceholder: state.date == null,
+                      paxText: _paxFieldText(state),
+                      onFromTap: () => _pickCity(0),
+                      onToTap: () => _pickCity(1),
+                      onSwap: _swap,
+                      onDateTap: _pickDate,
+                      onPaxTap: _pickPassengers,
+                    ),
+                  ),
           ),
-          const SizedBox(height: 8),
-          _WebSearchButton(onTap: _search),
-        ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _WebTogglePill(
+                label: "home_direct_flight".tr(),
+                value: state.direct,
+                onChanged: (v) => _cubit.setFilters(
+                  direct: v,
+                  baggage: state.baggage,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _WebTogglePill(
+                label: "home_with_baggage".tr(),
+                value: state.baggage,
+                onChanged: (v) => _cubit.setFilters(
+                  direct: state.direct,
+                  baggage: v,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _WebSearchButton(onTap: _search),
+      ],
+    );
+
+    if (isDark) {
+      // MySafar dark: ko'k shell yo'q — qora sahifa ustida dark karta.
+      return Padding(
+        padding: EdgeInsets.fromLTRB(16, topInset + appBarH, 16, 8),
+        child: body,
+      );
+    }
+
+    // MySafar light: ko'k hero, pastki burchaklari yumaloq.
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: ProjectTheme.brandColor,
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
       ),
+      padding: EdgeInsets.fromLTRB(16, topInset + appBarH, 16, 16),
+      child: body,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    return Scaffold(
-      backgroundColor: isDark ? ProjectTheme.backgroundDark : _Web.pageBg,
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        toolbarHeight: 36,
-        systemOverlayStyle: isDark
-            ? SystemUiOverlayStyle.light
-            : SystemUiOverlayStyle.dark,
-        titleSpacing: 0,
-        leadingWidth: 52,
-        leading: Padding(
-          padding: const EdgeInsets.only(left: 12),
-          child: _HeroBackButton(onTap: () => Navigator.of(context).maybePop()),
-        ),
-        // Scroll bo'lganda sahifa foniga to'ladi — kontent status bar ostidan
-        // ko'rinib qolmaydi.
-        flexibleSpace: ValueListenableBuilder<double>(
-          valueListenable: _headerColorT,
-          builder: (_, t, __) => ColoredBox(
-            color: Color.lerp(
-              Colors.transparent,
-              isDark ? ProjectTheme.backgroundDark : _Web.pageBg,
-              t,
-            )!,
+    final Color pageBg =
+        isDark ? ProjectTheme.backgroundDark : _Web.pageBg;
+    final Color appBarFill =
+        isDark ? ProjectTheme.backgroundDark : ProjectTheme.brandColor;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness:
+            isDark ? Brightness.light : Brightness.light,
+        statusBarBrightness: Brightness.dark,
+      ),
+      child: Scaffold(
+        backgroundColor: pageBg,
+        extendBodyBehindAppBar: true,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          toolbarHeight: 36,
+          systemOverlayStyle: SystemUiOverlayStyle.light,
+          titleSpacing: 0,
+          leadingWidth: 52,
+          leading: Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child:
+                _HeroBackButton(onTap: () => Navigator.of(context).maybePop()),
+          ),
+          flexibleSpace: ValueListenableBuilder<double>(
+            valueListenable: _headerColorT,
+            builder: (_, t, __) => ColoredBox(
+              color: Color.lerp(Colors.transparent, appBarFill, t)!,
+            ),
           ),
         ),
-      ),
-      body: BlocBuilder<RouteSearchCubit, RouteSearchState>(
-        builder: (context, state) {
-          // Device home indicator / nav bar ostida kontent qolmasin.
-          final double bottomInset = MediaQuery.paddingOf(context).bottom;
-          return SingleChildScrollView(
-            controller: _scrollController,
-            padding: EdgeInsets.only(bottom: bottomInset + 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _hero(context, state),
-                AnimatedSize(
-                  duration: const Duration(milliseconds: 320),
-                  curve: Curves.easeOutCubic,
-                  alignment: Alignment.topCenter,
-                  child: (MySafarSdk.config.enableMultiSearch &&
-                          state.multiMode)
-                      ? const SizedBox(width: double.infinity)
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                              child: _PriceChartCard(
-                                prices: state.monthPrices,
-                                loading: state.monthLoading,
-                                onTap: _openPriceChart,
+        body: BlocBuilder<RouteSearchCubit, RouteSearchState>(
+          builder: (context, state) {
+            final double bottomInset = MediaQuery.paddingOf(context).bottom;
+            return SingleChildScrollView(
+              controller: _scrollController,
+              padding: EdgeInsets.only(bottom: bottomInset + 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _hero(context, state),
+                  const SizedBox(height: 16),
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 320),
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.topCenter,
+                    child: (MySafarSdk.config.enableMultiSearch &&
+                            state.multiMode)
+                        ? const SizedBox(width: double.infinity)
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                                child: _PriceChartCard(
+                                  prices: state.monthPrices,
+                                  loading: state.monthLoading,
+                                  onTap: _openPriceChart,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 16),
-                            _BestOffersSection(
-                              offers: state.offers,
-                              loading: state.offersLoading,
-                              date: state.offersDate,
-                              onTap: _openOffer,
-                            ),
-                            const SizedBox(height: 8),
-                          ],
-                        ),
-                ),
-              ],
-            ),
-          );
-        },
+                              const SizedBox(height: 16),
+                              _BestOffersSection(
+                                offers: state.offers,
+                                loading: state.offersLoading,
+                                date: state.offersDate,
+                                onTap: _openOffer,
+                              ),
+                              const SizedBox(height: 8),
+                            ],
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -540,21 +599,7 @@ class _RouteSearchViewState extends State<_RouteSearchView>
 // blokida birgalikda ishlatiladi.
 
 /// API'dan kelgan ixcham narx satrini ("551 571", "2.3M") songa o'giradi.
-double? _parseCompactPrice(String s) {
-  String t = s.replaceAll(' ', '').replaceAll(' ', '').toUpperCase();
-  double mult = 1;
-  if (t.endsWith('M')) {
-    mult = 1000000;
-    t = t.substring(0, t.length - 1).replaceAll(',', '.');
-  } else if (t.endsWith('K')) {
-    mult = 1000;
-    t = t.substring(0, t.length - 1).replaceAll(',', '.');
-  } else {
-    t = t.replaceAll(',', '');
-  }
-  final v = double.tryParse(t);
-  return v == null || v <= 0 ? null : v * mult;
-}
+double? _parseCompactPrice(String s) => ElementFormatter.parsePrice(s);
 
 /// Joriy valyutaga mos kun-narx ro'yxati.
 List<DatePrice> _pricesForCurrency(
