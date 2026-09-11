@@ -17,7 +17,17 @@ final class NetworkSuccessResponse<T> extends NetworkResponse {
 final class NetworkErrorResponse<T> extends NetworkResponse {
   final T error;
   final ErrorType? errorType;
-  const NetworkErrorResponse({required this.error, this.errorType});
+
+  /// Server qaytargan HTTP status kodi (bo'lsa). Analitikaga (`booking_failed`,
+  /// `payment_failed`) xatoning sababi bilan birga yuboriladi — aks holda
+  /// hisobotda faqat "Nomalum xatolik" ko'rinadi va sabab yo'qoladi.
+  final int? statusCode;
+
+  const NetworkErrorResponse({
+    required this.error,
+    this.errorType,
+    this.statusCode,
+  });
 
   String getError() {
     // Server va tarmoq darajasidagi xatoliklar (server o'chgan, ulanish yo'q,
@@ -37,8 +47,8 @@ final class NetworkErrorResponse<T> extends NetworkResponse {
     final locale = dataLang();
 
     if (err is Map) {
-      final extracted = _extractErrorMessage(err, locale);
-      if (extracted != null && extracted.isNotEmpty) return extracted;
+      final usable = _usableMessage(_extractErrorMessage(err, locale));
+      if (usable != null) return usable;
     }
 
     // Xabar matn ko'rinishida ham kelishi mumkin: servis qatlami body'dan
@@ -47,11 +57,71 @@ final class NetworkErrorResponse<T> extends NetworkResponse {
     // foydalanuvchi tilidagi xabarni ajratib olamiz — aks holda server
     // aytgan aniq sabab o'rniga umumiy "static" matn chiqib qoladi.
     if (err is String) {
-      final extracted = _messageFromText(err, locale);
-      if (extracted != null && extracted.isNotEmpty) return extracted;
+      final usable = _usableMessage(_messageFromText(err, locale));
+      if (usable != null) return usable;
     }
 
     return _localizedMessage();
+  }
+
+  /// Ajratib olingan xabarni foydalanuvchiga ko'rsatsa bo'ladimi?
+  ///
+  /// Uch bosqich:
+  ///  1. Tanish server/provayder xabari bo'lsa — ilova tilidagi tarjimasi;
+  ///  2. Texnik/ichki xabar bo'lsa (`Given token not valid…` kabi) — `null`,
+  ///     ya'ni tayyor tarjima matni (`error_401`) ishlatiladi;
+  ///  3. Aks holda serverning o'z xabari o'zgarishsiz ko'rsatiladi.
+  String? _usableMessage(String? extracted) {
+    final text = extracted?.trim() ?? '';
+    if (text.isEmpty) return null;
+
+    final translated = _translateServerMessage(text);
+    if (translated != null) return translated;
+
+    if (_isTechnicalMessage(text)) return null;
+    return text;
+  }
+
+  /// Backend/provayder faqat ingliz tilida qaytaradigan xabarlarni ilova
+  /// tiliga o'giradi.
+  ///
+  /// Ro'yxat AppMetrica'dagi haqiqiy `api_error` / `booking_failed` /
+  /// `payment_failed` xabarlaridan yig'ilgan — foydalanuvchi ilgari
+  /// "Mandatory booking details missing-Passport Number" kabi matnlarni
+  /// ko'rar edi. Kalitlar KICHIK harfda va xabar BOSHLANISHI bo'yicha
+  /// solishtiriladi (server oxiriga tafsilot qo'shishi mumkin).
+  static const Map<String, String> _serverMessageKeys = {
+    'mandatory booking details missing-passport number':
+        'srv_passport_number_required',
+    'a passenger accompanying a child or infant':
+        'srv_adult_required_for_child',
+    'invalid passenger nationality': 'srv_invalid_nationality',
+    'invalid passport expiry date': 'srv_invalid_passport_expiry',
+    'invalid passport number': 'srv_invalid_passport_number',
+    'the surname is incorrect': 'srv_invalid_surname',
+    'the document type is incorrect': 'srv_invalid_document_type',
+    'invalid telephone number': 'srv_invalid_phone',
+    'client_email: enter a valid email address': 'srv_invalid_email',
+    'enter a valid email address': 'srv_invalid_email',
+    'no availability on requested date': 'srv_no_availability',
+    'no itinerary found': 'srv_itinerary_not_found',
+    'fail to receive a response from the supplier': 'srv_supplier_no_response',
+    'invalid ticket status: paid': 'srv_ticket_already_paid',
+    'invalid ticket status: awaitpayment': 'srv_ticket_awaiting_payment',
+    'ticket already ticketed': 'srv_ticket_already_ticketed',
+    'transaction not found': 'srv_transaction_not_found',
+    'user does not exist': 'srv_user_not_found',
+    'user with this document number already exists':
+        'srv_document_already_exists',
+    'unknown error. you should copy pid': 'srv_contact_support_pid',
+  };
+
+  String? _translateServerMessage(String text) {
+    final normalized = text.toLowerCase().trim();
+    for (final entry in _serverMessageKeys.entries) {
+      if (normalized.startsWith(entry.key)) return entry.value.tr();
+    }
+    return null;
   }
 
   /// Matn ko'rinishidagi xatodan foydalanuvchiga ko'rsatiladigan xabarni
@@ -75,8 +145,7 @@ final class NetworkErrorResponse<T> extends NetworkResponse {
       } catch (_) {
         // JSON emas — quyida Dart Map matni sifatida tekshiriladi.
       }
-      // 2. `{uz: ..., ru: ..., en: ...}` — Map.toString() ko'rinishi
-      //    (kalitlar tirnoqsiz, shu sababli JSON sifatida o'qilmaydi).
+
       final inline = _parseInlineLocaleMap(text);
       if (inline != null) {
         final picked = _pickLocale(inline, locale);
@@ -88,9 +157,7 @@ final class NetworkErrorResponse<T> extends NetworkResponse {
     return text;
   }
 
-  /// `{uz: ..., ru: ..., en: ...}` matnini til→xabar Map'iga o'giradi.
-  /// Qiymat ichidagi vergul xabarni bo'lib yubormaydi — ajratish faqat
-  /// keyingi til kaliti uchraganda bo'ladi.
+
   Map<String, String>? _parseInlineLocaleMap(String text) {
     if (!text.startsWith('{') || !text.endsWith('}')) return null;
     final inner = text.substring(1, text.length - 1);
@@ -110,8 +177,7 @@ final class NetworkErrorResponse<T> extends NetworkResponse {
   static final RegExp _inlineLocaleKey =
       RegExp(r'(?:^|,)\s*(uz|ru|en)\s*:\s*');
 
-  /// Ichki (foydalanuvchiga ma'nosiz) matnlar: HTTP status matni va kod
-  /// ichidagi zaxira qiymatlar. Bularning o'rniga tarjima matni chiqadi.
+
   static const Set<String> _technicalMessages = {
     'cancelled',
     'null',
@@ -125,9 +191,13 @@ final class NetworkErrorResponse<T> extends NetworkResponse {
     'receive timeout',
     'send timeout',
     'failed to parse tariffs',
+    'failed to parse flight info',
     'unexpected airports response',
     'unexpected centrum response',
-    // HTTP status matnlari (`response.statusMessage`).
+    'unexpected destination list response',
+    'unexpected destination detail response',
+    'empty city',
+    'destination not found',
     'bad request',
     'unauthorized',
     'payment required',
@@ -146,9 +216,7 @@ final class NetworkErrorResponse<T> extends NetworkResponse {
     'gateway timeout',
   };
 
-  /// Dart istisnolari matnga aylanib kelganda ham foydalanuvchiga
-  /// ko'rsatilmasligi kerak ("Exception: ...", "type 'Null' is not a
-  /// subtype ...", stack trace va h.k.).
+
   static const List<String> _exceptionMarkers = [
     'exception',
     'stack trace',
@@ -156,22 +224,56 @@ final class NetworkErrorResponse<T> extends NetworkResponse {
     'null check operator',
     'nosuchmethod',
     '#0 ',
+    // Auth/token bilan bog'liq ichki xabarlar — backend ularni `detail`
+    // maydonida ingliz tilida qaytaradi va ilgari to'g'ridan-to'g'ri
+    // foydalanuvchiga ko'rsatilardi ("Given token not valid for any token
+    // type"). Bunday holatda `error_401` matni ancha tushunarli.
+    'given token not valid',
+    'token_not_valid',
+    'token is expired',
+    'authorization header must contain',
+    'bad_authorization_header',
+    'no active account',
+    'credentials were not provided',
+    // Backend Django/DRF (Python) — kutilmagan holatlarda tayyor
+    // "tushunarli" xabar o'rniga xom traceback/exception matni kelib
+    // qolishi mumkin. Bunday matn foydalanuvchiga umuman ma'nosiz —
+    // shu markerlar ko'rinsa ham tarjima matni ko'rsatiladi.
+    'traceback (most recent call last)',
+    'typeerror:',
+    'valueerror:',
+    'keyerror:',
+    'attributeerror:',
+    'indexerror:',
+    'file "',
+    'django.core.exceptions',
+    'django.db',
+    'rest_framework.exceptions',
+    'doesnotexist',
+    'multivaluedictkeyerror',
+    'integrityerror',
+    'object at 0x',
   ];
 
   bool _isTechnicalMessage(String text) {
     final lower = text.toLowerCase();
     if (_technicalMessages.contains(lower)) return true;
-    // Juda uzun matn — deyarli har doim texnik chiqindi (HTML, trace).
+
     if (text.length > 400) return true;
     for (final marker in _exceptionMarkers) {
       if (lower.contains(marker)) return true;
     }
+
+    // Bo'shliqsiz, pastki chiziqli yagona so'z (masalan
+    // "duplicate_booking_request") — bu odam yozgan gap emas, ichki kod
+    // nomi. Bunday "so'z" ma'nosiz ko'rinadi, tayyor tarjima matni
+    // ko'rsatiladi. Haqiqiy server xabarlari doim bo'shliqli gap bo'ladi.
+    if (!lower.contains(' ') && lower.contains('_') && lower.length > 3) {
+      return true;
+    }
     return false;
   }
 
-  /// Server o'chishi, ulanish yo'qligi yoki 5xx kabi infratuzilma xatolarimi?
-  /// Bularda backend body foydasiz bo'lgani uchun to'g'ridan-to'g'ri tayyor
-  /// tarjima matni ko'rsatiladi.
   bool get _isServerOrNetworkError {
     switch (errorType) {
       case ErrorType.connectTimeout:
@@ -182,6 +284,7 @@ final class NetworkErrorResponse<T> extends NetworkResponse {
       case ErrorType.badGateway_502:
       case ErrorType.serviceUnavailable_503:
       case ErrorType.gatewayTimeout_504:
+      case ErrorType.serverError_5xx:
       case ErrorType.dio_error:
         return true;
       default:
@@ -213,37 +316,47 @@ final class NetworkErrorResponse<T> extends NetworkResponse {
       case ErrorType.notFound_404:
         return "error_404".tr();
 
-      //
+      // BARCHA 5xx — foydalanuvchi uchun bitta tushunarli matn: muammo
+      // serverda va o'zi hal bo'ladi, qayta urinish kerak. 500/502/503/504
+      // orasidagi farq oddiy foydalanuvchiga hech narsa bermaydi (Cloudflare
+      // "The origin web server returned an invalid or incomplete response"
+      // kabi matnlar esa umuman tushunarsiz). Aniq sabab `trackApiError`
+      // orqali analitikaga yoziladi — u ekranda emas, hisobotda kerak.
       case ErrorType.internalServer_500:
-        return "error_500".tr();
       case ErrorType.badGateway_502:
-        return "error_502".tr();
       case ErrorType.serviceUnavailable_503:
-        return "error_503".tr();
       case ErrorType.gatewayTimeout_504:
-        return "error_504".tr();
+      case ErrorType.serverError_5xx:
+        return "error_server_retry".tr();
 
       //
       case ErrorType.dio_error:
         return "error_dio".tr();
 
-      //
+      // Server 200/207 qaytardi-yu, natija bo'sh — bu texnik xato emas,
+      // shuning uchun "Nomalum xatolik" o'rniga aniq xabar ko'rsatiladi.
+      case ErrorType.emptyResponse:
+        return "tickets_not_found".tr();
+
+      // Backend `tr_id`siz javob qaytardi — buyurtma serverda yaratilgan
+      // bo'lishi mumkin, foydalanuvchini "Noma'lum xatolik" bilan
+      // qo'rqitmasdan, "Buyurtmalarim"ni tekshirishga yo'naltiramiz.
+      case ErrorType.bookingMissingTrId:
+        return "booking_missing_tr_id_notice".tr();
+
+      // Aniqlanmagan (kutilmagan) xato — "hozircha chiqmadi" kabi tushunarsiz
+      // umumiy matn o'rniga, bor bo'lgan HTTP status kodi ko'rsatiladi
+      // (topilmasa — umumiy matn) — foydalanuvchi va support uchun aniqroq.
       default:
-        return "error_other".tr();
+        return statusCode == null
+            ? "error_other".tr()
+            : "error_other_code".tr(namedArgs: {"code": "$statusCode"});
     }
   }
 
-  /// Web (extractErrorMessage) bilan bir xil: backend xato xabarini turli
-  /// mumkin bo'lgan joylardan qidiradi. `err` bu odatda `response.data` (body).
-  ///
-  /// Til-spetsifik (`{uz, ru, en}`) yo'llar avval tekshiriladi — shunda
-  /// bir xil nomli umumiy yo'l (masalan `message` obyekt bo'lsa) til xabarini
-  /// "yamlab" yubormaydi.
   String? _extractErrorMessage(Map err, String locale) {
-    // 1. Til bo'yicha lokalizatsiyalangan xabarlar ({uz, ru, en} Map'i).
     const localizedRoots = <List<String>>[
-      // Yangi backend formati: {"code": "...", "detail": {uz, ru, en}}
-      // (masalan bilet vozvrati endpointlari).
+
       ['detail'],
       ['data', 'detail'],
       ['error', 'detail'],
@@ -262,7 +375,7 @@ final class NetworkErrorResponse<T> extends NetworkResponse {
       ['data'],
       ['error', 'data'],
       ['error'],
-      <String>[], // root'ning o'zi {uz, ru, en} bo'lishi mumkin
+      <String>[],
     ];
     for (final path in localizedRoots) {
       final node = _dig(err, path);
@@ -272,7 +385,7 @@ final class NetworkErrorResponse<T> extends NetworkResponse {
       }
     }
 
-    // 2. Oddiy matnli xabarlar (String yoki String'lar ro'yxati).
+
     const stringPaths = <List<String>>[
       ['message'],
       ['messages'],
@@ -309,8 +422,7 @@ final class NetworkErrorResponse<T> extends NetworkResponse {
       if (value != null) return value;
     }
 
-    // 3. Maydon-validatsiya xatolari: {field: ["msg1", "msg2"]} —
-    //    yuqoridagi qat'iy yo'llar qamramaydi, shu sbabli to'g'ridan-to'g'ri olamiz.
+
     final fieldMessages = <String>[];
     err.forEach((key, value) {
       if (value is List) {
@@ -326,8 +438,7 @@ final class NetworkErrorResponse<T> extends NetworkResponse {
     return null;
   }
 
-  /// `path` bo'yicha ichma-ich kalitlarga kirib, oxirgi qiymatni qaytaradi
-  /// (Map bo'lmasa yoki kalit yo'q bo'lsa — `null`).
+
   dynamic _dig(dynamic root, List<String> path) {
     dynamic current = root;
     for (final key in path) {
@@ -340,8 +451,7 @@ final class NetworkErrorResponse<T> extends NetworkResponse {
     return current;
   }
 
-  /// `path` bo'yicha yurib, oxirida String yoki String'lar ro'yxatining
-  /// birinchi bo'sh bo'lmagan elementini qaytaradi.
+
   String? _digString(dynamic root, List<String> path) {
     final current = _dig(root, path);
     if (current is String) {
@@ -356,8 +466,7 @@ final class NetworkErrorResponse<T> extends NetworkResponse {
     return null;
   }
 
-  /// `{uz, ru, en}` ko'rinishidagi Map'dan joriy til xabarini tanlaydi,
-  /// til topilmasa boshqa tillarga (uz → ru → en) fallback qiladi.
+
   String? _pickLocale(Map map, String locale) {
     final value = map[locale] ?? map['uz'] ?? map['ru'] ?? map['en'];
     if (value is String && value.trim().isNotEmpty) return value.trim();
@@ -395,11 +504,22 @@ enum ErrorType {
 
   gatewayTimeout_504,
 
+  /// Yuqoridagilardan boshqa har qanday 5xx (505, 507, Cloudflare 520–527...).
+  /// Ilgari bunday kodlar `dio_error` ga tushib, foydalanuvchi "Internetga
+  /// ulanishda muammo" xabarini ko'rar edi — aslida muammo serverda.
+  serverError_5xx,
+
   // dio error
   dio_error,
 
   // emtpy response
   emptyResponse,
+
+  /// Backend nuqsoni: `booking-create` `success: true` bilan javob berdi,
+  /// lekin ilova kutgan `tr_id` o'rniga xom `data.book.order` konvertida
+  /// qaytardi — buyurtma serverda yaratilgan bo'lishi mumkin, lekin ilova
+  /// to'lovni OTP orqali tasdiqlash uchun davom eta olmaydi.
+  bookingMissingTrId,
 
   /// unknown error
   other

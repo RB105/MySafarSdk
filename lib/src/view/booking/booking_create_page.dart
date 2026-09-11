@@ -152,7 +152,7 @@ class _BookingCreatePageState extends State<BookingCreatePage> {
           ResponseState.errorState(
             state.error,
             context,
-            tid: widget.trId,
+            copyableId: widget.trId,
           );
         }
       }, builder: (context, state) {

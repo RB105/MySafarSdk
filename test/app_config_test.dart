@@ -102,4 +102,23 @@ void main() {
       expect(tgOnly.hasPartnerSupport, isTrue);
     });
   });
+
+  group('MySafarConfig.enableMultiSearch', () {
+    test('default true — multi qidiruv ko\'rinadi', () {
+      const config = MySafarConfig(
+        baseUrl: 'https://api.example.com',
+        skoteBaseUrl: 'https://cms.example.com/api',
+      );
+      expect(config.enableMultiSearch, isTrue);
+    });
+
+    test('false qilinsa multi yashirinadi', () {
+      const config = MySafarConfig(
+        baseUrl: 'https://api.example.com',
+        skoteBaseUrl: 'https://cms.example.com/api',
+        enableMultiSearch: false,
+      );
+      expect(config.enableMultiSearch, isFalse);
+    });
+  });
 }
