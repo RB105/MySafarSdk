@@ -30,7 +30,7 @@ class EndPoints {
   static const String centrum_air_recommendatins = '/centrum/find-ticket';
   static const String main_pop_cities = '/main/popcites';
   static const String main_search_history = '/main/search-history'; // hearder
-  static const String ticket_price_by_month = '/avia/one-month-ticket-price';
+  static const String ticket_price_by_month = '/avia/monthly-price-calendar';
   static const String avia_get_tariff = '/avia/get-flight-tariffs';
 
   /// Bron qilishdan OLDIN reysni qayta tekshirish — narx/joy o'zgargan yoki

@@ -314,9 +314,8 @@ class _MainPageState extends State<MainPage> {
                       homeStyle: true, nearbyAirport: _nearbyAirport),
                 ),
               ),
-              // Karta ostida bir oz rasm ko'rinadi, so'ng kontent
-              // yumaloq burchak bilan boshlanadi (Figma kabi).
-              const SizedBox(height: 56),
+              // Compact From/To kartadan keyin hero ostida biroz rasm.
+              const SizedBox(height: 36),
             ],
           ),
         ],

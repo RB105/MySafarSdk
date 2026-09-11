@@ -12,40 +12,36 @@ class _RouteModeTabBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brand = ProjectTheme.brandColor;
-    final isDark = context.themeProvider.isDark;
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    // Light (ko'k hero): yarim-shaffof + oq pill. Dark: dark trek + oq pill.
     return Container(
       height: 52,
       decoration: BoxDecoration(
-        color: isDark ? Colors.white.withAlpha(14) : _Web.pillBg,
+        color: isDark ? Colors.white.withAlpha(14) : Colors.white.withAlpha(28),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark ? Colors.white.withAlpha(40) : const Color(0xFFE7EDF6),
+          color: isDark ? Colors.white.withAlpha(40) : Colors.white.withAlpha(55),
         ),
       ),
       child: TabBar(
         controller: controller,
         isScrollable: false,
         labelColor: brand,
-        unselectedLabelColor:
-            isDark ? Colors.white70 : ProjectTheme.secondaryTextLight,
+        unselectedLabelColor: Colors.white,
         labelPadding: EdgeInsets.zero,
         dividerColor: Colors.transparent,
-        overlayColor: WidgetStatePropertyAll(
-          brand.withAlpha(isDark ? 30 : 18),
-        ),
+        overlayColor: WidgetStatePropertyAll(brand.withAlpha(30)),
         splashBorderRadius: BorderRadius.circular(12),
         indicator: BoxDecoration(
-          color: isDark ? Colors.white.withAlpha(230) : Colors.white,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          boxShadow: isDark
-              ? null
-              : [
-                  BoxShadow(
-                    color: Colors.black.withAlpha(20),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(28),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         indicatorSize: TabBarIndicatorSize.tab,
         padding: const EdgeInsets.all(4),
@@ -109,16 +105,14 @@ class _MultiRouteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isDark = context.themeProvider.isDark;
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: isDark ? ProjectTheme.cardColorDark : Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isDark ? ProjectTheme.borderDark : const Color(0xFFE7EDF6),
-        ),
-        boxShadow: _Web.cardShadow,
+        border: isDark ? Border.all(color: ProjectTheme.borderDark) : null,
+        boxShadow: isDark ? null : _Web.cardShadow,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -279,7 +273,7 @@ class _AddLegButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isDark = context.themeProvider.isDark;
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Opacity(
       opacity: enabled ? 1 : 0.45,
       child: Material(

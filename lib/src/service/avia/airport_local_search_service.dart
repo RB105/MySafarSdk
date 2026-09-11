@@ -26,10 +26,6 @@ class AirportLocalSearchService {
   static const _rankAssetPath =
       'packages/mysafar_sdk/assets/data/airportsSearch.json';
 
-  /// Backend katalogi — `/avia/airports-mobile` bilgan IATA kodlar.
-  static const _catalogueAssetPath =
-      'packages/mysafar_sdk/assets/data/airports_api_codes.json';
-
   SendPort? _workerSend;
   ReceivePort? _responsePort;
   Future<void>? _loadFuture;
@@ -47,12 +43,6 @@ class AirportLocalSearchService {
   Future<void> _initWorker() async {
     final raw = await rootBundle.loadString(_assetPath);
     final ranksRaw = await rootBundle.loadString(_rankAssetPath);
-    String catalogueRaw = '{}';
-    try {
-      catalogueRaw = await rootBundle.loadString(_catalogueAssetPath);
-    } catch (e) {
-      debugPrint('AirportLocalSearchService catalogue asset missing: $e');
-    }
     final responsePort = ReceivePort();
     _responsePort = responsePort;
 
@@ -71,8 +61,7 @@ class AirportLocalSearchService {
         if (kDebugMode) {
           debugPrint(
             'AirportLocalSearchService: loaded ${message['count']} airports, '
-            '${message['rankCount']} ranks, '
-            '${message['catalogueCount']} catalogue (worker)',
+            '${message['rankCount']} ranks (worker)',
           );
         }
         if (!ready.isCompleted) ready.complete();
@@ -111,7 +100,6 @@ class AirportLocalSearchService {
       'type': 'load',
       'json': raw,
       'ranksJson': ranksRaw,
-      'catalogueJson': catalogueRaw,
     });
     await ready.future;
   }
@@ -197,8 +185,6 @@ void _airportSearchWorkerMain(SendPort mainSend) {
   List<_IndexedAirport>? airports;
   Map<String, _IndexedAirport>? byIata;
   Map<String, int>? ranks;
-  Map<String, String> apiCatalogue = const {};
-  Map<String, List<String>> apiCity = const {};
 
   inbox.listen((message) {
     if (message is! Map) return;
@@ -207,19 +193,14 @@ void _airportSearchWorkerMain(SendPort mainSend) {
       if (type == 'load') {
         final jsonStr = message['json'] as String;
         final ranksJsonStr = message['ranksJson'] as String? ?? '[]';
-        final catalogueJsonStr = message['catalogueJson'] as String? ?? '{}';
         ranks = _parseRanks(ranksJsonStr);
         final parsed = _parseAndIndex(jsonStr);
         airports = parsed.$1;
         byIata = parsed.$2;
-        final catalogue = _parseCatalogue(catalogueJsonStr);
-        apiCatalogue = catalogue.$1;
-        apiCity = catalogue.$2;
         mainSend.send(<String, dynamic>{
           'type': 'ready',
           'count': airports!.length,
           'rankCount': ranks!.length,
-          'catalogueCount': apiCatalogue.length,
         });
       } else if (type == 'search') {
         final id = message['id'] as int;
@@ -236,9 +217,6 @@ void _airportSearchWorkerMain(SendPort mainSend) {
         final results = _searchIndexed(
           airports: list,
           byIata: map,
-          ranks: ranks ?? const {},
-          apiCatalogue: apiCatalogue,
-          apiCity: apiCity,
           query: message['query'] as String? ?? '',
           lang: message['lang'] as String? ?? 'en',
           limit: message['limit'] as int? ?? 40,
@@ -265,8 +243,6 @@ void _airportSearchWorkerMain(SendPort mainSend) {
           airports: list,
           byIata: map,
           ranks: rankMap,
-          apiCatalogue: apiCatalogue,
-          apiCity: apiCity,
           lat: (message['lat'] as num?)?.toDouble() ?? 0,
           lon: (message['lon'] as num?)?.toDouble() ?? 0,
           lang: message['lang'] as String? ?? 'en',
@@ -294,9 +270,6 @@ void _airportSearchWorkerMain(SendPort mainSend) {
         final results = _searchByCountryIndexed(
           airports: list,
           byIata: map,
-          ranks: ranks ?? const {},
-          apiCatalogue: apiCatalogue,
-          apiCity: apiCity,
           country: message['country'] as String? ?? '',
           lang: message['lang'] as String? ?? 'en',
           limit: message['limit'] as int? ?? 40,
@@ -354,64 +327,6 @@ Map<String, int> _parseRanks(String jsonStr) {
     }
   } catch (_) {}
   return map;
-}
-
-/// Backend `/avia/airports-mobile` katalogi: IATA → shahar IATA.
-(Map<String, String>, Map<String, List<String>>) _parseCatalogue(String jsonStr) {
-  try {
-    final decoded = jsonDecode(jsonStr);
-    if (decoded is! Map) return (const {}, const {});
-    final catalogue = decoded.map(
-      (k, v) => MapEntry(k.toString().toUpperCase(), v.toString().toUpperCase()),
-    );
-    final byCity = <String, List<String>>{};
-    catalogue.forEach((code, city) {
-      (byCity[city] ??= <String>[]).add(code);
-    });
-    return (Map<String, String>.from(catalogue), byCity);
-  } catch (_) {
-    return (const {}, const {});
-  }
-}
-
-/// Shahar guruhidagi QO'SHIMCHA aeroport ko'rsatiladimi?
-bool _isBookableChild({
-  required _IndexedAirport a,
-  required String groupCityIata,
-  required Map<String, String> apiCatalogue,
-  required Map<String, List<String>> apiCity,
-  required Map<String, _IndexedAirport> byIata,
-  required Map<String, int> ranks,
-}) {
-  if (a.isCityCode) return true;
-  // Katalog yuklanmagan bo'lsa hech narsani yashirmaymiz.
-  if (apiCatalogue.isEmpty) return true;
-  if (!_cityIsMajor(
-    groupCityIata,
-    apiCity: apiCity,
-    byIata: byIata,
-    ranks: ranks,
-  )) {
-    return true;
-  }
-  final group = apiCatalogue[a.iata.toUpperCase()];
-  if (group == null) return false;
-  return group == groupCityIata.toUpperCase();
-}
-
-bool _cityIsMajor(
-  String cityIata, {
-  required Map<String, List<String>> apiCity,
-  required Map<String, _IndexedAirport> byIata,
-  required Map<String, int> ranks,
-}) {
-  final code = cityIata.toUpperCase();
-  if (code.isEmpty) return false;
-  if ((apiCity[code]?.length ?? 0) > 1) return true;
-  final city = byIata[code];
-  if (city != null && city.isCityCode) return true;
-  if (ranks.isEmpty) return false;
-  return (ranks[code] ?? 0) >= 2;
 }
 
 /// Yo'lovchi reysi bo'lmaydigan obyektlar (koordinata qidiruvida chetlanadi).
@@ -489,9 +404,6 @@ const Map<String, String> _cityMergeTo = {
 List<AirPortsModel> _searchIndexed({
   required List<_IndexedAirport> airports,
   required Map<String, _IndexedAirport> byIata,
-  required Map<String, int> ranks,
-  required Map<String, String> apiCatalogue,
-  required Map<String, List<String>> apiCity,
   required String query,
   required String lang,
   required int limit,
@@ -512,9 +424,6 @@ List<AirPortsModel> _searchIndexed({
   return _groupScoredResults(
     scored,
     byIata: byIata,
-    ranks: ranks,
-    apiCatalogue: apiCatalogue,
-    apiCity: apiCity,
     lang: lang,
     limit: limit,
     maxCandidates: 400,
@@ -526,8 +435,6 @@ List<AirPortsModel> _searchByCoordinatesIndexed({
   required List<_IndexedAirport> airports,
   required Map<String, _IndexedAirport> byIata,
   required Map<String, int> ranks,
-  required Map<String, String> apiCatalogue,
-  required Map<String, List<String>> apiCity,
   required double lat,
   required double lon,
   required String lang,
@@ -557,9 +464,6 @@ List<AirPortsModel> _searchByCoordinatesIndexed({
   return _groupScoredResults(
     candidates,
     byIata: byIata,
-    ranks: ranks,
-    apiCatalogue: apiCatalogue,
-    apiCity: apiCity,
     lang: lang,
     limit: limit,
     maxCandidates: 200,
@@ -570,9 +474,6 @@ List<AirPortsModel> _searchByCoordinatesIndexed({
 List<AirPortsModel> _searchByCountryIndexed({
   required List<_IndexedAirport> airports,
   required Map<String, _IndexedAirport> byIata,
-  required Map<String, int> ranks,
-  required Map<String, String> apiCatalogue,
-  required Map<String, List<String>> apiCity,
   required String country,
   required String lang,
   required int limit,
@@ -593,9 +494,6 @@ List<AirPortsModel> _searchByCountryIndexed({
   return _groupScoredResults(
     scored,
     byIata: byIata,
-    ranks: ranks,
-    apiCatalogue: apiCatalogue,
-    apiCity: apiCity,
     lang: lang,
     limit: limit,
     maxCandidates: 1200,
@@ -646,9 +544,6 @@ double _toRad(double deg) => deg * math.pi / 180.0;
 List<AirPortsModel> _groupScoredResults(
   List<_ScoredAirport> scored, {
   required Map<String, _IndexedAirport> byIata,
-  required Map<String, int> ranks,
-  required Map<String, String> apiCatalogue,
-  required Map<String, List<String>> apiCity,
   required String lang,
   required int limit,
   required int maxCandidates,
@@ -706,16 +601,6 @@ List<AirPortsModel> _groupScoredResults(
       for (final code in a.metroAirports) {
         final child = byIata[code];
         if (child == null || child.isCityCode) continue;
-        if (!_isBookableChild(
-          a: child,
-          groupCityIata: group.cityIata,
-          apiCatalogue: apiCatalogue,
-          apiCity: apiCity,
-          byIata: byIata,
-          ranks: ranks,
-        )) {
-          continue;
-        }
         group.airports.add(
           Airports(
             airportName: child.airportName(lang),
@@ -732,22 +617,6 @@ List<AirPortsModel> _groupScoredResults(
         );
       }
     } else {
-      // Guruhning birinchi (eng yuqori ballli) aeroporti — shaharning o'zi,
-      // u doim ko'rsatiladi. Keyingilari faqat backend katalogida bo'lsa.
-      final isCityItself =
-          a.iata.toUpperCase() == group.cityIata.toUpperCase();
-      if (!isCityItself &&
-          !_isBookableChild(
-            a: a,
-            groupCityIata: group.cityIata,
-            apiCatalogue: apiCatalogue,
-            apiCity: apiCity,
-            byIata: byIata,
-            ranks: ranks,
-          )) {
-        continue;
-      }
-
       group.airports.add(
         Airports(
           airportName: a.airportName(lang),
@@ -762,16 +631,6 @@ List<AirPortsModel> _groupScoredResults(
           for (final code in metro.metroAirports) {
             final child = byIata[code];
             if (child == null) continue;
-            if (!_isBookableChild(
-              a: child,
-              groupCityIata: group.cityIata,
-              apiCatalogue: apiCatalogue,
-              apiCity: apiCity,
-              byIata: byIata,
-              ranks: ranks,
-            )) {
-              continue;
-            }
             group.airports.add(
               Airports(
                 airportName: child.airportName(lang),
@@ -784,28 +643,6 @@ List<AirPortsModel> _groupScoredResults(
     }
 
     if (groups.length >= limit && i > maxScanBreakAt) break;
-  }
-
-  // Backend katalogidagi shahar aeroportlarini guruhga to'ldirish.
-  if (apiCity.isNotEmpty) {
-    for (final g in groups.values) {
-      final city = g.cityIata.toUpperCase();
-      for (final code in apiCity[city] ?? const <String>[]) {
-        if (code == city) continue;
-        final child = byIata[code];
-        if (child == null || child.isCityCode) continue;
-        final already = g.airports.any(
-          (e) => (e.airportIataCode ?? '').toUpperCase() == code,
-        );
-        if (already) continue;
-        g.airports.add(
-          Airports(
-            airportName: child.airportName(lang),
-            airportIataCode: child.iata,
-          ),
-        );
-      }
-    }
   }
 
   final ordered = groups.values.toList()

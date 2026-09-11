@@ -26,9 +26,6 @@ Future<void> main() async {
       ),
       partnerToken: String.fromEnvironment('PARTNER_TOKEN'),
 
-      // MUHIM — terminal `b` bilan sinash uchun themeMode YOZMASLIK kerak!
-      // themeMode: ThemeMode.dark  ← bu qator bo'lsa `b` ishlamaydi.
-      // Production (Unired): themeMode: ThemeMode.dark yoki .light
       // brandColor berilmasa default #0057BE qoladi.
       // brandColor: Colors.green,
       // support: MySafarSupportConfig(
@@ -97,6 +94,12 @@ class HostHomePage extends StatelessWidget {
                   email: _userEmail.isEmpty ? null : _userEmail,
                   // Host joriy tili — SDK shu tilda ochiladi.
                   locale: Localizations.localeOf(context),
+                  // Host joriy temasi — har ochilishda beriladi:
+                  //themeMode:  ThemeMode.dark // → faqat qorong'u
+                 themeMode:  ThemeMode.light // → faqat yorug'
+                  // null            → sistema temasi (terminal `b` ishlaydi)
+                  // Production (Unired): ThemeMode.dark yoki .light
+                  // themeMode: ThemeMode.dark,
                 ),
               ),
             );

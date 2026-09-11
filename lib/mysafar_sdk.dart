@@ -5,7 +5,10 @@
 /// await MySafarSdk.init(config: MySafarConfig(baseUrl: ..., skoteBaseUrl: ...));
 /// runApp(const MySafarApp());            // to'liq app rejimi
 /// // yoki host ichida:
-/// // Navigator.push(... => MySafarEmbed(locale: Locale(hostLang)));
+/// // Navigator.push(... => MySafarEmbed(
+/// //   locale: Locale(hostLang),
+/// //   themeMode: ThemeMode.dark, // yoki .light; null = sistema
+/// // ));
 /// ```
 library;
 

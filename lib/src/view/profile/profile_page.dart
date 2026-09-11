@@ -631,13 +631,18 @@ class _ProfilePageState extends State<ProfilePage> {
                 top: Platform.isAndroid,
                 bottom: Platform.isAndroid,
                 child: RefreshIndicator(
+                  color: ProjectTheme.brandColor,
+                  backgroundColor: context.color.primaryContainer,
+                  displacement: 40,
+                  strokeWidth: 2.5,
                   onRefresh: () async {
                     // Qo'lda yangilash — profilni serverdan majburan qayta oladi.
                     await _profileCubit.getProfileData(forceRefresh: true);
                   },
+                  // Clamping — bounce bo'shliq (AppBar ostidagi qora void) yo'qoladi.
                   child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(
-                        parent: BouncingScrollPhysics()),
+                        parent: ClampingScrollPhysics()),
                     padding: context.k16Padding,
                     child: Column(
                       mainAxisSize: MainAxisSize.min,

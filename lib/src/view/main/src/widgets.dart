@@ -554,15 +554,15 @@ class HomeSupportBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Konteyner ekran chetlariga yopishadi (yon padding/yumaloq burchak yo'q).
+    // MySafar video: yonlardan biroz ichkarida, yumaloq karta.
     return Container(
-      margin: const EdgeInsets.only(top: 20),
+      margin: const EdgeInsets.fromLTRB(16, 20, 16, 0),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: isDark
             ? ProjectTheme.cardColorDark
             : ProjectTheme.cardColorLight,
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: context.shadowDown,
       ),
       child: Material(

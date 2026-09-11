@@ -187,6 +187,8 @@ class _FigmaTicketCardState extends State<_FigmaTicketCard> {
                     const SizedBox(height: 12),
                     _LowcostPill(flightElement: f),
                   ],
+                  const SizedBox(height: 12),
+                  _TicketAmenityPills(flight: f),
                 ],
               ),
             ),
@@ -493,6 +495,89 @@ class _EconomBadge extends StatelessWidget {
       child: Text(
         "klass_e".tr().trim(),
         style: _TixTheme.style(12, FontWeight.w700, _kTixGreen),
+      ),
+    );
+  }
+}
+
+/// MySafar video: karta pastidagi joy / qo'l yuki / bagaj pill'lari.
+class _TicketAmenityPills extends StatelessWidget {
+  final FlightElement flight;
+
+  const _TicketAmenityPills({required this.flight});
+
+  @override
+  Widget build(BuildContext context) {
+    final seats = flight.getSeatCount();
+    final withHand = flight.withCBaggage();
+    final handText = flight.getCBaggage();
+    final isBag = flight.isBaggage ?? false;
+    final bagLabel = flight.getBaggage();
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        if (seats > 0)
+          _AmenityPill(
+            iconAsset: Assets.ticketsSeatIcon,
+            label: "$seats",
+            positive: true,
+          ),
+        _AmenityPill(
+          iconAsset: withHand
+              ? Assets.ticketsLuggageIcon
+              : Assets.ticketsLuggageNegativeIcon,
+          label: handText,
+          positive: withHand,
+        ),
+        _AmenityPill(
+          iconAsset: isBag
+              ? Assets.ticketsBaggagePositiveIcon
+              : Assets.ticketsBaggageNegativeIcon,
+          label: bagLabel,
+          positive: isBag,
+        ),
+      ],
+    );
+  }
+}
+
+class _AmenityPill extends StatelessWidget {
+  final String iconAsset;
+  final String label;
+  final bool positive;
+
+  const _AmenityPill({
+    required this.iconAsset,
+    required this.label,
+    required this.positive,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final Color accent = positive ? _kTixGreen : _TixTheme.rose;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: accent.withAlpha(22),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SvgPicture.asset(
+            iconAsset,
+            width: 14,
+            height: 14,
+            colorFilter: ColorFilter.mode(accent, BlendMode.srcIn),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: _TixTheme.style(12, FontWeight.w600, accent),
+          ),
+        ],
       ),
     );
   }

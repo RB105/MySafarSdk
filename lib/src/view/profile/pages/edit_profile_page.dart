@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:mysafar_sdk/src/core/tools/phone_format.dart';
 import 'package:mysafar_sdk/src/cubit/profile/update_profile/update_profile_cubit.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/custom_input_field_widget.dart';
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
@@ -36,8 +37,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
         TextEditingController(text: widget.profileModel.middlename ?? "");
     emailController =
         TextEditingController(text: widget.profileModel.email ?? "");
-    phoneController =
-        TextEditingController(text: widget.profileModel.phoneNumber ?? "");
+    phoneController = TextEditingController(
+      text: formatInternationalPhone(widget.profileModel.phoneNumber ?? ""),
+    );
   }
 
   @override
@@ -160,7 +162,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
                       context.szBoxHeight16,
 
-                      // Telefon (faqat ko'rsatish uchun)
+                      // Telefon — UI: +998 99 109 88 07; API: 998991098807
                       CustomInputField(
                         controller: phoneController,
                         label: "phone".tr(),
@@ -168,6 +170,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
                         textInputAction: TextInputAction.done,
                         showError: false,
                         keyboardType: TextInputType.phone,
+                        inputFormatters: const [
+                          InternationalPhoneInputFormatter(),
+                        ],
+                        onChanged: (value) => setState(() {}),
                       ),
 
                       context.szBoxHeight32,
@@ -213,7 +219,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
       lastname: lastNameController.text.trim(),
       middlename: middleNameController.text.trim(),
       email: emailController.text.trim(),
-      phoneNumber: phoneController.text.trim(),
+      // API: faqat raqamlar, masalan 998991098807
+      phoneNumber: normalizePhoneDigits(phoneController.text),
     );
 
     BlocProvider.of<UpdateProfileCubit>(context).updateProfile(updatedProfile);

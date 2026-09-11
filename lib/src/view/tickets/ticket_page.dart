@@ -677,10 +677,8 @@ class _RecHeroTitle extends StatelessWidget {
 }
 
 /// Appbar ostidagi web-uslub filter chiplari qatori (mysafar.uz mobil):
-/// [⇅ Saralash] [✈ Almashishlar] [🧳 Bagaj] [🛡 Tarif] [🕐 Vaqt] [✈ Avia].
-/// Har bir chip o'z filtrining JORIY qiymatini ko'rsatadi; bosilganda
-/// web'dagi kabi to'liq "Filtr" sheet'i o'sha bo'lim ochiq holda ochiladi.
-/// Qiymat standartdan farq qilsa chip ko'k tusda.
+/// MySafar video chiplari: [⇅ Eng arzoni] [✈ Hammasi] [🧳 Aralash].
+/// Bosilganda mos filtr bo'limi ochiladi; to'liq filtr — appbar filter icon.
 class _RecViewFilterBar extends StatelessWidget implements PreferredSizeWidget {
   final _ViewFilterValues values;
   final void Function(_ViewFilterSection section) onOpen;
@@ -704,46 +702,23 @@ class _RecViewFilterBar extends StatelessWidget implements PreferredSizeWidget {
         children: [
           _RecFilterChip(
             icon: Icons.swap_vert_rounded,
-            label: v.sortLabel(),
-            active: v.sort != 0,
+            label: "price_order".tr(),
+            active: v.sort == 0,
             onTap: () => onOpen(_ViewFilterSection.sort),
           ),
           const SizedBox(width: 8),
           _RecFilterChip(
-            icon: Icons.flight_takeoff_rounded,
-            label: v.transferLabel(),
-            active: v.directOnly,
+            icon: Icons.flight_rounded,
+            label: "all".tr(),
+            active: !v.directOnly && !v.hasAnyFilter,
             onTap: () => onOpen(_ViewFilterSection.transfer),
           ),
           const SizedBox(width: 8),
           _RecFilterChip(
             icon: Icons.luggage_rounded,
-            label: v.baggageLabel(),
-            active: v.baggageOnly,
+            label: "filter_mixed".tr(),
+            active: !v.baggageOnly,
             onTap: () => onOpen(_ViewFilterSection.baggage),
-          ),
-          const SizedBox(width: 8),
-          // Web'dagi kabi: tarif/vaqt/aviakompaniya chiplari qiymat emas,
-          // BO'LIM NOMINI ko'rsatadi (qiymat ro'yxat emas, murakkab).
-          _RecFilterChip(
-            icon: Icons.verified_user_outlined,
-            label: "filter_tariff_title".tr(),
-            active: v.refundable || v.exchangeable,
-            onTap: () => onOpen(_ViewFilterSection.tariff),
-          ),
-          const SizedBox(width: 8),
-          _RecFilterChip(
-            icon: Icons.schedule_rounded,
-            label: "filter_time_title".tr(),
-            active: v.hasTimeFilter,
-            onTap: () => onOpen(_ViewFilterSection.time),
-          ),
-          const SizedBox(width: 8),
-          _RecFilterChip(
-            icon: Icons.airplane_ticket_outlined,
-            label: "airlines_tab".tr(),
-            active: v.excludedAirlines.isNotEmpty,
-            onTap: () => onOpen(_ViewFilterSection.airlines),
           ),
         ],
       ),

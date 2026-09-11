@@ -84,8 +84,8 @@ class MySafarConfig {
   /// o'z izolyatsiyalangan storage'ida saqlanadi — host'ga ta'sir qilmaydi.
   final bool saveLocale;
 
-  /// Boshlang'ich tema (oq / qora fon). Host app o'z light/dark rejimini
-  /// beradi — masalan Unired dark bo'lsa `ThemeMode.dark`.
+  /// Boshlang'ich tema (`MySafarApp` uchun). Embed uchun afzal
+  /// [MySafarEmbed.themeMode] — har ochilishda host joriy rejimini beradi.
   /// `null` bo'lsa `ThemeMode.system` (platform brightness). Foydalanuvchi
   /// Sozlamalardan o'zi tanlagan bo'lsa, o'sha tanlov saqlanadi.
   final ThemeMode? themeMode;

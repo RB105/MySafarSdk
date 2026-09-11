@@ -139,6 +139,11 @@ class AviaService with RequestConfig {
     return response;
   }
 
+  /// Oylik narxlar kalendari (`/avia/monthly-price-calendar`).
+  ///
+  /// [direct] va [baggage] — filtr kalitlari: **o'chiq bo'lsa mos maydon
+  /// so'rovga umuman qo'shilmaydi**, yoqilganda `is_direct_only: 1` /
+  /// `baggage: "1"` yuboriladi (web / MySafar bilan bir xil).
   Future<NetworkResponse> getPriceByMonth(
     String from,
     String to, {
@@ -192,7 +197,27 @@ class AviaService with RequestConfig {
     );
 
     if (response is NetworkSuccessResponse) {
-      final model = TicketDatePriceModel.fromJson(response.data);
+      final raw = response.data;
+      final Map<String, dynamic> json;
+      if (raw is Map<String, dynamic>) {
+        // Ba'zi javoblar `{success, data: {prices…}}` bo'lishi mumkin.
+        final nested = raw['data'];
+        if (raw.containsKey('prices') || raw.containsKey('uzs')) {
+          json = raw;
+        } else if (nested is Map) {
+          json = Map<String, dynamic>.from(nested);
+        } else {
+          json = raw;
+        }
+      } else if (raw is Map) {
+        json = Map<String, dynamic>.from(raw);
+      } else {
+        return const NetworkErrorResponse(
+          error: 'Unexpected monthly price response',
+          errorType: ErrorType.other,
+        );
+      }
+      final model = TicketDatePriceModel.fromJson(json);
       _monthPriceCache[cacheKey] = model;
       return NetworkSuccessResponse(data: model);
     }

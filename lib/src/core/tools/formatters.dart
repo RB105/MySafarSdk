@@ -289,6 +289,53 @@ class ElementFormatter {
     return formattedInteger + decimalPart;
   }
 
+  /// Narx satrini ("2 881 830", "2881830", 2881830, "2.3M") ixcham ko'rinishga
+  /// o'giradi: millionlar 0.00 aniqlikda "M" bilan ("2.88M"), minglar "K"
+  /// bilan ("551K"), qolganlari oddiy son ("244").
+  ///
+  /// 30 kunlik narx kalendari API'si (`/avia/monthly-price-calendar`) endi
+  /// tayyor formatlangan satr emas, xom summa qaytaradi — kalendar, sana
+  /// lentasi va narx grafigi shu funksiya orqali bir xil ko'rsatadi.
+  static String compactPrice(dynamic raw, {int fractionDigits = 2}) {
+    final value = parsePrice(raw);
+    if (value == null) return raw?.toString().trim() ?? '';
+    if (value >= 1000000) {
+      return "${(value / 1000000).toStringAsFixed(fractionDigits)}M";
+    }
+    if (value >= 1000) return "${(value / 1000).round()}K";
+    return value.round().toString();
+  }
+
+  /// Narx satrini songa o'giradi. Bo'shliqlar (oddiy, ingichka, NBSP) va
+  /// vergul ajratkichlari tashlanadi; "M"/"K" qo'shimchalari hisobga olinadi.
+  /// Aniqlab bo'lmasa yoki musbat bo'lmasa — `null`.
+  static double? parsePrice(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is num) return raw <= 0 ? null : raw.toDouble();
+    String t = raw
+        .toString()
+        .replaceAll(' ', '')
+        .replaceAll(' ', '')
+        .replaceAll(' ', '')
+        .replaceAll(' ', '')
+        .toUpperCase();
+    if (t.isEmpty) return null;
+    double mult = 1;
+    if (t.endsWith('M')) {
+      mult = 1000000;
+      t = t.substring(0, t.length - 1).replaceAll(',', '.');
+    } else if (t.endsWith('K')) {
+      mult = 1000;
+      t = t.substring(0, t.length - 1).replaceAll(',', '.');
+    } else {
+      // Bu yerda vergul faqat minglar ajratkichi bo'ladi.
+      t = t.replaceAll(',', '');
+    }
+    final v = double.tryParse(t);
+    if (v == null || v <= 0) return null;
+    return v * mult;
+  }
+
   static String getPassengerAgeSummary(List<Passenger>? passengers) {
     if (passengers == null || passengers.isEmpty) return "";
 

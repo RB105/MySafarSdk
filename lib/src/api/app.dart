@@ -65,6 +65,7 @@ class MySafarEmbed extends StatefulWidget {
     this.phoneNumber,
     this.email,
     this.locale,
+    this.themeMode,
   });
 
   final String? initialRoute;
@@ -85,6 +86,13 @@ class MySafarEmbed extends StatefulWidget {
   /// berish kerak. `null` bo'lsa `MySafarConfig.startLocale` / saqlangan /
   /// default `uz` qoladi. Qo'llab-quvvatlanadi: en, ru, uz, kk, tg, tr.
   final Locale? locale;
+
+  /// Host appning joriy temasi. Berilsa SDK shu rejimda ochiladi:
+  /// - [ThemeMode.dark] — faqat qorong'u fon
+  /// - [ThemeMode.light] — faqat yorug' fon
+  /// - `null` — [MySafarConfig.themeMode], yo'q bo'lsa sistema temasi
+  /// Saqlanmaydi — keyingi ochilishda yana host temani berish kerak.
+  final ThemeMode? themeMode;
 
   @override
   State<MySafarEmbed> createState() => _MySafarEmbedState();
@@ -289,15 +297,25 @@ class _MySafarEmbedState extends State<MySafarEmbed> with WidgetsBindingObserver
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             // Jim ro'yxatdan o'tish ketmoqda — host theme'iga bog'lanmagan
-            // neytral yuklanish ekrani.
-            return const ColoredBox(
-              color: Color(0xFFF5F6FA),
+            // neytral yuklanish ekrani (embed themeMode berilgan bo'lsa
+            // shu rejimga mos).
+            final dark = widget.themeMode == ThemeMode.dark ||
+                (widget.themeMode == null &&
+                    MediaQuery.platformBrightnessOf(context) ==
+                        Brightness.dark);
+            return ColoredBox(
+              color: dark ? const Color(0xFF121212) : const Color(0xFFF5F6FA),
               child: Center(
-                child: CircularProgressIndicator(color: Color(0xFF3E5788)),
+                child: CircularProgressIndicator(
+                  color: dark
+                      ? const Color(0xFF8BA3D4)
+                      : const Color(0xFF3E5788),
+                ),
               ),
             );
           }
           return _MySafarShell(
+            themeMode: widget.themeMode,
             builder: (context) => _sdkMaterialApp(
               context,
               initialRoute: widget.initialRoute ?? BottomNavBarPage.routeName,
@@ -374,9 +392,13 @@ Widget _sdkMaterialApp(BuildContext context, {required String initialRoute}) {
 /// [builder] provider'lar OSTIDAGI context bilan chaqiriladi; til o'zgarsa
 /// butun SDK subtree qayta quriladi.
 class _MySafarShell extends StatelessWidget {
-  const _MySafarShell({required this.builder});
+  const _MySafarShell({required this.builder, this.themeMode});
 
   final WidgetBuilder builder;
+
+  /// Embed host temasi. Berilsa config'dan ustun. `null` bo'lsa
+  /// [MySafarConfig.themeMode] / sistema.
+  final ThemeMode? themeMode;
 
   @override
   Widget build(BuildContext context) {
@@ -385,8 +407,9 @@ class _MySafarShell extends StatelessWidget {
       builder: (context, _, __) => MultiProvider(
         providers: [
           ChangeNotifierProvider<ThemeNotifier>(
-            create: (_) =>
-                ThemeNotifier(initialMode: MySafarSdk.config.themeMode),
+            create: (_) => ThemeNotifier(
+              initialMode: themeMode ?? MySafarSdk.config.themeMode,
+            ),
           ),
           ChangeNotifierProvider<CurrencyProvider>(
               create: (_) => CurrencyProvider()),

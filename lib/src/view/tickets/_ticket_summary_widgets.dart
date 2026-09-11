@@ -122,33 +122,14 @@ class _DatePriceStripState extends State<_DatePriceStrip> {
     }
   }
 
-  /// API'dan kelgan tayyor satrni ("3.3M", "12 400" kabi) taqqoslash uchun
-  /// songa o'giradi; o'girib bo'lmasa `null` (narx baribir ko'rsatiladi,
-  /// faqat "eng arzon" belgilashda qatnashmaydi).
-  static double? _parseCompact(String s) {
-    String t = s.replaceAll(' ', '').replaceAll(' ', '').toUpperCase();
-    double mult = 1;
-    if (t.endsWith('M')) {
-      mult = 1000000;
-      t = t.substring(0, t.length - 1).replaceAll(',', '.');
-    } else if (t.endsWith('K')) {
-      mult = 1000;
-      t = t.substring(0, t.length - 1).replaceAll(',', '.');
-    } else {
-      t = t.replaceAll(',', '');
-    }
-    final v = double.tryParse(t);
-    return v == null || v <= 0 ? null : v * mult;
-  }
-
   @override
   Widget build(BuildContext context) {
     final dates = _dates();
     final currency = Provider.of<CurrencyProvider>(context).currency;
 
     // Sana → narx jadvali va ko'rinayotgan oynadagi eng arzon qiymat
-    // (u yashil rangda ajratiladi — web'dagi kabi). API narxni tayyor
-    // formatlangan satr ko'rinishida beradi (kalendar widgeti bilan bir xil).
+    // (u yashil rangda ajratiladi — web'dagi kabi). API xom summa
+    // qaytaradi — ixcham "2.88M" ko'rinishiga o'giramiz.
     final Map<int, String> priceTextByDay = {};
     final Map<int, double> priceValueByDay = {};
     for (final p in _pricesFor(currency)) {
@@ -156,8 +137,8 @@ class _DatePriceStripState extends State<_DatePriceStrip> {
       final s = (p.sum ?? '').trim();
       if (d == null || s.isEmpty || s == "0") continue;
       final key = d.year * 10000 + d.month * 100 + d.day;
-      priceTextByDay[key] = s;
-      final v = _parseCompact(s);
+      priceTextByDay[key] = ElementFormatter.compactPrice(s);
+      final v = ElementFormatter.parsePrice(s);
       if (v != null) priceValueByDay[key] = v;
     }
     double? minVisible;
