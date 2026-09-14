@@ -16,11 +16,15 @@ class PassengerLoaded extends PassengerState {
   final String phone;
   final bool showErrors;
 
+  /// "Saqlangan yo'lovchilarga qo'shish" yoqilgan yo'lovchilar indekslari.
+  final Set<int> saveToProfile;
+
   const PassengerLoaded({
     required this.passengers,
     this.email = '',
     this.phone = '',
     this.showErrors = false,
+    this.saveToProfile = const {},
   });
 
   PassengerLoaded copyWith({
@@ -28,12 +32,14 @@ class PassengerLoaded extends PassengerState {
     String? email,
     String? phone,
     bool? showErrors,
+    Set<int>? saveToProfile,
   }) {
     return PassengerLoaded(
       passengers: passengers ?? this.passengers,
       email: email ?? this.email,
       phone: phone ?? this.phone,
       showErrors: showErrors ?? this.showErrors,
+      saveToProfile: saveToProfile ?? this.saveToProfile,
     );
   }
 
@@ -71,11 +77,15 @@ class PassengerSaving extends PassengerState {
 
 class PassengerSaved extends PassengerState {
   final List<Map<String, dynamic>> passengersJson;
+
+  /// Bron muvaffaqiyatli bo'lgach profilga saqlanadigan yo'lovchilar.
+  final List<Map<String, dynamic>> passengersToSaveJson;
   final String trId;
   final FlightPrice? price;
 
   const PassengerSaved({
     required this.passengersJson,
+    this.passengersToSaveJson = const [],
     required this.trId,
     required this.price,
   });

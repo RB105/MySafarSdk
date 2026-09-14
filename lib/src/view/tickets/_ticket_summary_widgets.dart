@@ -1149,61 +1149,6 @@ class _FilteredEmptyView extends StatelessWidget {
   }
 }
 
-/// API / tarmoq xatosi: bo'sh filtr holatiga o'xshash markaziy UI +
-/// qayta so'rov yuboradigan "Qayta urinish" tugmasi.
-class _TicketErrorView extends StatelessWidget {
-  final String message;
-  final VoidCallback onRetry;
-
-  const _TicketErrorView({required this.message, required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    final t = _TixTheme.of(context);
-    return Column(
-      children: [
-        const SizedBox(height: 24),
-        SizedBox(
-          height: 48,
-          width: 48,
-          child: Image.asset(Assets.ticketsSearchEmptyIcon),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          message,
-          textAlign: TextAlign.center,
-          style: _TixTheme.style(14, FontWeight.w600, t.hi),
-        ),
-        const SizedBox(height: 14),
-        Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(22),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: () {
-              HapticFeedback.lightImpact();
-              AnalyticsService().trackButtonTap('ticket_error_retry');
-              onRetry();
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 11),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: ProjectTheme.brandColor, width: 1.2),
-              ),
-              child: Text(
-                "retry_search".tr(),
-                style: _TixTheme.style(
-                    13.5, FontWeight.w700, ProjectTheme.brandColor),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 // ────────────────────────────────────────────────────────────────────
 //  "AVIAKOMPANIYALAR BO'YICHA" JAMLAMA KARTASI
 // ────────────────────────────────────────────────────────────────────

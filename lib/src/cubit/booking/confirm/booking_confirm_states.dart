@@ -1,6 +1,8 @@
 import 'package:mysafar_sdk/src/core/config/response_config.dart';
 import 'package:mysafar_sdk/src/service/booking_service.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:mysafar_sdk/src/core/config/network_request_scope.dart'
+    show NetworkCancel;
 
 part 'booking_confirm_cubit.dart';
 

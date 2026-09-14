@@ -3,10 +3,12 @@ import 'package:mysafar_sdk/src/core/config/response_config.dart';
 import 'package:mysafar_sdk/src/model/remote/profile/cheque_model.dart'
     show ChequeModel;
 import 'package:mysafar_sdk/src/service/account_service.dart';
+import 'package:mysafar_sdk/src/core/config/network_request_scope.dart'
+    show NetworkCancel;
 
 part 'ofd_cheques_state.dart';
 
-class OfdChequesCubit extends Cubit<OfdChequesState> {
+class OfdChequesCubit extends Cubit<OfdChequesState> with NetworkCancel {
   OfdChequesCubit() : super(OfdChequesInitState()) {
     getCheques();
   }
@@ -16,7 +18,7 @@ class OfdChequesCubit extends Cubit<OfdChequesState> {
 
   Future<void> getCheques() async {
     emit(OfdChequesLoadingState());
-    final response = await _accountService.getOfdCheques();
+    final response = await withNetworkCancel(_accountService.getOfdCheques);
     if (isClosed) return;
     if (response is NetworkSuccessResponse) {
       emit(OfdChequesSuccesState(response.data));

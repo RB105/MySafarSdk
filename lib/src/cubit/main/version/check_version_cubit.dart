@@ -3,10 +3,12 @@ import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/core/config/response_config.dart';
 import 'package:mysafar_sdk/src/service/account_service.dart';
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart' show debugPrint;
+import 'package:mysafar_sdk/src/core/config/network_request_scope.dart'
+    show NetworkCancel;
 
 part 'check_version_state.dart';
 
-class CheckVersionCubit extends Cubit<CheckVersionState> {
+class CheckVersionCubit extends Cubit<CheckVersionState> with NetworkCancel {
   CheckVersionCubit() : super(CheckVersionInitState()) {
     checkVersion();
   }
@@ -18,7 +20,7 @@ class CheckVersionCubit extends Cubit<CheckVersionState> {
     // (aks holda embed hostda MySafar'ning majburiy yangilash dialogi chiqadi).
     if (!MySafarSdk.config.enableVersionGate) return;
 
-    final response = await _accountService.checkAppVersion();
+    final response = await withNetworkCancel(_accountService.checkAppVersion);
 
     if (isClosed) return;
     try {

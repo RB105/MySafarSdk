@@ -1,11 +1,13 @@
 import 'package:mysafar_sdk/src/model/remote/destination/destination_list_model.dart';
 import 'package:mysafar_sdk/src/service/fornex/fornex_repository.dart';
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
+import 'package:mysafar_sdk/src/core/config/network_request_scope.dart'
+    show NetworkCancel;
 
 part 'destination_list_state.dart';
 
 /// "Yo'nalishlar" tabi ro'yxati — `POST /v1/destination/list` dan sahifalab yuklaydi.
-class DestinationListCubit extends Cubit<DestinationListState> {
+class DestinationListCubit extends Cubit<DestinationListState> with NetworkCancel {
   DestinationListCubit({this.pageSize = 10})
       : super(DestinationListLoadingState()) {
     loadNext();
@@ -32,9 +34,11 @@ class DestinationListCubit extends Cubit<DestinationListState> {
       ));
     }
 
-    final response = await _repo.getDestinationList(
-      page: _page + 1,
-      pageSize: pageSize,
+    final response = await withNetworkCancel(
+      () => _repo.getDestinationList(
+        page: _page + 1,
+        pageSize: pageSize,
+      ),
     );
     _busy = false;
     if (isClosed) return;

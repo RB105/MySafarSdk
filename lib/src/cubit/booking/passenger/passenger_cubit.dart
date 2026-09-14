@@ -8,6 +8,7 @@ import 'package:mysafar_sdk/src/model/remote/profile/profile_model.dart';
 import 'package:mysafar_sdk/src/model/remote/profile/users_model.dart';
 import 'package:mysafar_sdk/src/service/passenger/passenger_storage_service.dart';
 import 'package:mysafar_sdk/src/service/profile/profile_cache.dart';
+import 'package:mysafar_sdk/src/core/tools/phone_format.dart' show kMinPhoneDigits;
 import 'passenger_state.dart';
 
 
@@ -167,40 +168,40 @@ class PassengerCubit extends Cubit<PassengerState> {
     final currentState = state;
     if (currentState is PassengerLoaded) {
       final passengers = List<PassengerModel>.from(currentState.passengers);
-
-      passengers[index] = passengers[index].copyWith(
-        firstname: sanitizeName(user.firstname),
-        lastname: sanitizeName(user.lastname),
-        middlename: sanitizeName(user.middlename),
-        birthdate: user.birthdate ?? '',
-        docexp: user.docexp ?? '',
-        docnum: user.docnum ?? '',
-        doctype: user.doctype?.isNotEmpty == true
-            ? user.doctype!
-            : passengers[index].doctype,
-        gender: user.gender ?? PassengerConstants.genderMale,
-        citizen: user.citizen ?? '',
-        phone: currentState.phone,
-        email: currentState.email,
-      );
-
+      passengers[index] = passengers[index].copyFromUser(user).copyWith(
+            phone: currentState.phone,
+            email: currentState.email,
+          );
       emit(currentState.copyWith(passengers: passengers));
     }
   }
 
   void updateCitizen(int index, String code) {
-    final docType = code == 'RU'
-        ? PassengerConstants.docTypePassport
-        : PassengerConstants.docTypeId;
-
     final currentState = state;
     if (currentState is PassengerLoaded) {
       final passengers = List<PassengerModel>.from(currentState.passengers);
-      passengers[index] = passengers[index].copyWith(
-        citizen: code,
-        doctype: docType,
-      );
+      passengers[index] = passengers[index].copyWithCitizen(code);
       emit(currentState.copyWith(passengers: passengers));
+    }
+  }
+
+  /// Alohida "Yo'lovchi ma'lumotlari" sahifasida to'ldirilgan yo'lovchini
+  /// slotga yozadi. Yosh turi, email va telefon bron sahifasiniki qoladi.
+  void setPassenger(int index, PassengerModel passenger,
+      {required bool saveToProfile}) {
+    final currentState = state;
+    if (currentState is PassengerLoaded) {
+      final passengers = List<PassengerModel>.from(currentState.passengers);
+      final existing = passengers[index];
+      passengers[index] = passenger.copyWith(
+        age: existing.age,
+        email: currentState.email,
+        phone: currentState.phone,
+      );
+      final saveSet = Set<int>.from(currentState.saveToProfile);
+      saveToProfile ? saveSet.add(index) : saveSet.remove(index);
+      emit(currentState.copyWith(
+          passengers: passengers, saveToProfile: saveSet));
     }
   }
 
@@ -213,7 +214,7 @@ class PassengerCubit extends Cubit<PassengerState> {
 
   /// Bo'sh maydon nomini tegishli tarjima yorlig'iga bog'lab, joriy tildagi
   /// "... kiritilmagan" xabarini qaytaradi (barcha tillarda ishlaydi).
-  String _requiredFieldMessage(String field) {
+  static String requiredFieldMessage(String field) {
     final labelKey = switch (field) {
       'email' => 'email',
       'phone' => 'phone',
@@ -238,7 +239,7 @@ class PassengerCubit extends Cubit<PassengerState> {
       // Email va telefon tekshirish
       if (currentState.email.isEmpty) {
         emit(PassengerValidationError(
-          message: _requiredFieldMessage('email'),
+          message: requiredFieldMessage('email'),
           fieldName: 'email',
         ));
         emit(currentState.copyWith(showErrors: true));
@@ -247,7 +248,17 @@ class PassengerCubit extends Cubit<PassengerState> {
 
       if (currentState.phone.isEmpty) {
         emit(PassengerValidationError(
-          message: _requiredFieldMessage('phone'),
+          message: requiredFieldMessage('phone'),
+          fieldName: 'phone',
+        ));
+        emit(currentState.copyWith(showErrors: true));
+        return;
+      }
+
+      // Telefon endi tahrirlanadi — chala kiritilgan raqam bilan bron qilinmaydi.
+      if (currentState.phone.length < kMinPhoneDigits) {
+        emit(PassengerValidationError(
+          message: 'enter_full_phone_number'.tr(),
           fieldName: 'phone',
         ));
         emit(currentState.copyWith(showErrors: true));
@@ -257,7 +268,7 @@ class PassengerCubit extends Cubit<PassengerState> {
       final emptyField = currentState.firstEmptyField;
       if (emptyField != null) {
         emit(PassengerValidationError(
-          message: _requiredFieldMessage(emptyField.$2),
+          message: requiredFieldMessage(emptyField.$2),
           passengerIndex: emptyField.$1,
           fieldName: emptyField.$2,
         ));
@@ -272,10 +283,19 @@ class PassengerCubit extends Cubit<PassengerState> {
         currentState.phone,
       );
 
+      // Profilga faqat "Saqlangan yo'lovchilarga qo'shish" yoqilganlar
+      // saqlanadi (bron muvaffaqiyatli bo'lgach BookingCreatePage'da).
+      final toSave = [
+        for (int i = 0; i < currentState.passengers.length; i++)
+          if (currentState.saveToProfile.contains(i))
+            currentState.passengers[i],
+      ];
+
       _lastLoadedState = currentState;
 
       emit(PassengerSaved(
         passengersJson: currentState.passengers.map((p) => p.toJson()).toList(),
+        passengersToSaveJson: toSave.map((p) => p.toJson()).toList(),
         trId: trId,
         price: price,
       ));

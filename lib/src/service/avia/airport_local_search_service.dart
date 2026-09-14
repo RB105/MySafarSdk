@@ -411,11 +411,22 @@ List<AirPortsModel> _searchIndexed({
   final q = _normalize(query);
   if (q.isEmpty) return const [];
 
+  final shortQuery = q.length <= 1;
   final scored = <_ScoredAirport>[];
+
+  // 1 harf: juda ko'p match bo'ladi — eng yuqori ballarni saqlab, qolganini kesamiz.
+  final maxCandidates = shortQuery ? 180 : 400;
+
   for (final a in airports) {
-    final score = _score(a, q, lang);
+    final score = _score(a, q, lang, shortQuery: shortQuery);
     if (score > 0) {
       scored.add(_ScoredAirport(a, score));
+    }
+    // Yetarli yuqori balli match yig'ilganda (mashhurlar oldinda) to'xtash.
+    if (shortQuery &&
+        scored.length >= maxCandidates &&
+        a.popularRank >= 9999) {
+      break;
     }
   }
 
@@ -426,8 +437,8 @@ List<AirPortsModel> _searchIndexed({
     byIata: byIata,
     lang: lang,
     limit: limit,
-    maxCandidates: 400,
-    maxScanBreakAt: 50,
+    maxCandidates: maxCandidates,
+    maxScanBreakAt: 30,
   );
 }
 
@@ -557,6 +568,11 @@ List<AirPortsModel> _groupScoredResults(
     if (a.airport.isCityCode != b.airport.isCityCode) {
       return a.airport.isCityCode ? -1 : 1;
     }
+    // Shaharning asosiy aeroporti (kodi shahar kodiga teng) oldinda:
+    // "Madrid" so'rovida MAD birinchi bo'lsin, ECV emas.
+    final aMain = a.airport.iata == _preferredCityIata(a.airport);
+    final bMain = b.airport.iata == _preferredCityIata(b.airport);
+    if (aMain != bMain) return aMain ? -1 : 1;
     return a.airport.cityName(lang).compareTo(b.airport.cityName(lang));
   });
 
@@ -720,20 +736,28 @@ int _popularRankCode(String code) {
   return i < 0 ? 9999 : i;
 }
 
+/// Mashhurlik bonusi — indeksdagi rank (IATA / shahar kodi) bo'yicha.
 int _popularBoost(_IndexedAirport a) {
-  final rank = _popularRank(a);
+  final rank = a.popularRank;
   if (rank >= 9999) return 0;
   return 5000 - rank * 40;
 }
 
-int _score(_IndexedAirport a, String q, String lang) {
+int _score(
+  _IndexedAirport a,
+  String q,
+  String lang, {
+  required bool shortQuery,
+}) {
   final boost = _popularBoost(a);
 
-  if (a.iataLower == q) return (a.isCityCode ? 11000 : 10000) + boost;
+  // Aniq kod mos kelishi HAR QANDAY boost'dan ustun: "MAD" so'rovida
+  // Madrid chiqishi kerak, mashhur MED (Madina) ning "madina" aliasi emas.
+  if (a.iataLower == q) return (a.isCityCode ? 21000 : 20000) + boost;
   if (a.cityCodeLower.isNotEmpty && a.cityCodeLower == q) {
-    return 10500 + boost;
+    return 19500 + boost;
   }
-  if (a.icaoLower.isNotEmpty && a.icaoLower == q) return 9500 + boost;
+  if (a.icaoLower.isNotEmpty && a.icaoLower == q) return 19000 + boost;
   if (q.isNotEmpty && a.iataLower.startsWith(q)) {
     return (a.isCityCode ? 9200 : 9000) + q.length * 10 + boost;
   }
@@ -753,70 +777,76 @@ int _score(_IndexedAirport a, String q, String lang) {
 
   int best = 0;
 
-  void consider(String field, int base) {
+  void consider(String field, int base, {bool allowContains = true}) {
     if (field.isEmpty) return;
     if (field == q) {
       best = best < base + 500 ? base + 500 : best;
     } else if (field.startsWith(q)) {
       best = best < base + 300 ? base + 300 : best;
-    } else if (field.contains(q)) {
+    } else if (allowContains && !shortQuery && field.contains(q)) {
+      // 1 harfda contains juda ko'p shovqin + sekin
       best = best < base + 100 ? base + 100 : best;
     }
   }
 
-  consider(city, 7000);
-  consider(a.cityEnNorm, 6950);
-  consider(a.cityRawNorm, 6900);
-  consider(airport, 6000);
-  consider(a.airportEnNorm, 5900);
-  consider(state, 5000);
-  consider(a.stateEnNorm, 4900);
-  consider(country, 4000);
-  consider(a.countryEnNorm, 4000);
-  consider(a.countryRuNorm, 4000);
-  consider(a.countryUzNorm, 4000);
-  consider(a.countryLower, 3500);
+  consider(city, 7000, allowContains: !shortQuery);
+  consider(a.cityEnNorm, 6950, allowContains: !shortQuery);
+  consider(a.cityRawNorm, 6900, allowContains: !shortQuery);
+  consider(airport, 6000, allowContains: !shortQuery);
+  consider(a.airportEnNorm, 5900, allowContains: !shortQuery);
+
+  // Davlat/viloyat: 1 harfda o'tkazib yuboramiz (T → Turkey/Tunisia/… shovqin)
+  if (!shortQuery) {
+    consider(state, 5000);
+    consider(a.stateEnNorm, 4900);
+    consider(country, 4000);
+    consider(a.countryEnNorm, 4000);
+    consider(a.countryRuNorm, 4000);
+    consider(a.countryUzNorm, 4000);
+    consider(a.countryLower, 3500);
+  }
 
   if (a.searchTokens.contains(q)) {
-    best = best < 7500 ? 7500 : best;
+    best = best < 7200 ? 7200 : best;
   } else {
     for (final t in a.searchTokens) {
       if (q.isNotEmpty && t.startsWith(q)) {
         if (q.length >= 2 || t.length >= 3 || boost > 0) {
-          best = best < 7200 ? 7200 : best;
+          best = best < 7000 ? 7000 : best;
           break;
         }
       }
-      if (q.length >= 3 && t.contains(q)) {
+      if (!shortQuery && q.length >= 3 && t.contains(q)) {
         best = best < 5500 ? 5500 : best;
         break;
       }
     }
   }
 
-  final parts = q.split(RegExp(r'\s+')).where((p) => p.length >= 2).toList();
-  if (parts.length > 1) {
-    final hay = StringBuffer()
-      ..write(city)
-      ..write(' ')
-      ..write(a.cityEnNorm)
-      ..write(' ')
-      ..write(airport)
-      ..write(' ')
-      ..write(state)
-      ..write(' ')
-      ..write(country)
-      ..write(' ')
-      ..write(a.countryEnNorm)
-      ..write(' ')
-      ..write(a.countryRuNorm)
-      ..write(' ')
-      ..write(a.countryUzNorm)
-      ..write(' ')
-      ..write(a.searchTokens.join(' '));
-    final hayStr = hay.toString();
-    if (parts.every((p) => hayStr.contains(p))) {
-      best = best < 6800 ? 6800 : best;
+  if (!shortQuery) {
+    final parts =
+        q.split(RegExp(r'\s+')).where((p) => p.length >= 2).toList();
+    if (parts.length > 1) {
+      final hay = StringBuffer()
+        ..write(city)
+        ..write(' ')
+        ..write(a.cityEnNorm)
+        ..write(' ')
+        ..write(airport)
+        ..write(' ')
+        ..write(a.stateEnNorm)
+        ..write(' ')
+        ..write(a.countryEnNorm)
+        ..write(' ')
+        ..write(a.countryRuNorm)
+        ..write(' ')
+        ..write(a.countryUzNorm)
+        ..write(' ')
+        ..write(a.searchTokens.join(' '));
+      final hayStr = hay.toString();
+      if (parts.every((p) => hayStr.contains(p))) {
+        best = best < 6800 ? 6800 : best;
+      }
     }
   }
 

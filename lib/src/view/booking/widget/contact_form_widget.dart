@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart' show ProjectTheme;
+import 'package:mysafar_sdk/src/core/tools/phone_format.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/custom_autocompleteInput_field.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/custom_input_field_widget.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/support_widget.dart'
@@ -16,10 +17,14 @@ class ContactFormWidget extends StatelessWidget {
   final GlobalKey emailKey;
   final GlobalKey phoneKey;
   final FocusNode emailFocusNode;
+  final FocusNode phoneFocusNode;
   final VoidCallback onNextField;
 
-  /// Host/profil telefoni (faqat raqamlar). Bo'sh bo'lsa validatsiya xato
-  /// ko'rsatiladi — UI'dagi formatlangan matndan mustaqil.
+  /// Telefon o'zgarganda — faqat raqamlar (`998901234567`).
+  final ValueChanged<String> onPhoneChanged;
+
+  /// Joriy telefon (faqat raqamlar). Validatsiya UI'dagi formatlangan
+  /// matndan mustaqil shu qiymat bo'yicha qilinadi.
   final String rawPhoneDigits;
 
   const ContactFormWidget({
@@ -32,7 +37,9 @@ class ContactFormWidget extends StatelessWidget {
     required this.emailKey,
     required this.phoneKey,
     required this.emailFocusNode,
+    required this.phoneFocusNode,
     required this.onNextField,
+    required this.onPhoneChanged,
     required this.rawPhoneDigits,
   });
 
@@ -76,23 +83,26 @@ class ContactFormWidget extends StatelessWidget {
             suggestions: emailSuggestions,
           ),
           const SizedBox(height: 16),
-          AbsorbPointer(
-            child: CustomInputField(
-              key: phoneKey,
-              showError: showErrors,
-              textInputAction: TextInputAction.next,
-              textCapitalization: TextCapitalization.none,
-              controller: phoneController,
-              label: "phone".tr(),
-              readOnly: true,
-              keyboardType: TextInputType.phone,
-              validator: (_) {
-                if (rawPhoneDigits.isEmpty) {
-                  return "enter_full_phone_number".tr();
-                }
-                return null;
-              },
-            ),
+          // Telefon — UI: +998 90 123 45 67; state: 998901234567.
+          CustomInputField(
+            key: phoneKey,
+            showError: showErrors,
+            textInputAction: TextInputAction.done,
+            textCapitalization: TextCapitalization.none,
+            controller: phoneController,
+            focusNode: phoneFocusNode,
+            label: "phone".tr(),
+            hintText: "+998 90 123 45 67",
+            keyboardType: TextInputType.phone,
+            inputFormatters: const [InternationalPhoneInputFormatter()],
+            onChanged: (value) => onPhoneChanged(normalizePhoneDigits(value)),
+            onFieldSubmitted: (_) => onNextField(),
+            validator: (_) {
+              if (rawPhoneDigits.length < kMinPhoneDigits) {
+                return "enter_full_phone_number".tr();
+              }
+              return null;
+            },
           ),
         ],
       ),

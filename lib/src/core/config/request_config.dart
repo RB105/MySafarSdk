@@ -2,6 +2,8 @@ import 'dart:async' show unawaited;
 
 import 'package:mysafar_sdk/src/core/config/dio_client.dart'
     show AuthMode, DioClient;
+import 'package:mysafar_sdk/src/core/config/network_request_scope.dart'
+    show NetworkRequestScope;
 import 'package:mysafar_sdk/src/core/config/response_config.dart'
     show
         ErrorType,
@@ -11,7 +13,7 @@ import 'package:mysafar_sdk/src/core/config/response_config.dart'
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart'
     show AnalyticsService;
 import 'package:dio/dio.dart'
-    show DioException, DioExceptionType, Options, Response;
+    show CancelToken, DioException, DioExceptionType, Options, Response;
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 
 mixin RequestConfig<T> {
@@ -26,6 +28,11 @@ mixin RequestConfig<T> {
     return AuthMode.none;
   }
 
+  /// Explicit token yoki [NetworkRequestScope] (cubit Zone) dagi token —
+  /// cubit yopilganda / yangi qidiruv boshlanganda so'rov bekor qilinadi.
+  CancelToken? _resolveCancelToken(CancelToken? explicit) =>
+      explicit ?? NetworkRequestScope.current;
+
   Future<NetworkResponse> _send(
     String method,
     String endPoint, {
@@ -33,12 +40,14 @@ mixin RequestConfig<T> {
     Map<String, dynamic>? query,
     required AuthMode authMode,
     String? contentType,
+    CancelToken? cancelToken,
   }) async {
     try {
       final response = await DioClient.main.request(
         endPoint,
         data: data,
         queryParameters: query,
+        cancelToken: _resolveCancelToken(cancelToken),
         options: Options(
           method: method,
           extra: {
@@ -62,38 +71,50 @@ mixin RequestConfig<T> {
     final Map<String, dynamic>? params,
     final bool? partnerToken,
     required String endPoint,
+    CancelToken? cancelToken,
   }) {
-
-    
-    return _send('POST', endPoint,
-        data: params,
-        authMode: _authMode(headers: headers, partnerToken: partnerToken));
+    return _send(
+      'POST',
+      endPoint,
+      data: params,
+      authMode: _authMode(headers: headers, partnerToken: partnerToken),
+      cancelToken: cancelToken,
+    );
   }
 
-  // get
+  /// GET — parametrlar **query** orqali (body emas).
   Future<NetworkResponse> getRequest({
     required final String endPoint,
     final bool? headers,
     final bool? partnerToken,
     final Map<String, dynamic>? params,
+    CancelToken? cancelToken,
   }) {
-    return _send('GET', endPoint,
-        data: params,
-        authMode: _authMode(headers: headers, partnerToken: partnerToken));
+    return _send(
+      'GET',
+      endPoint,
+      query: params,
+      authMode: _authMode(headers: headers, partnerToken: partnerToken),
+      cancelToken: cancelToken,
+    );
   }
 
-  // patch
   Future<NetworkResponse> patchRequest({
     final bool? headers,
     final String? contentType,
     final bool? partnerToken,
     required final String endPoint,
     final T? params,
+    CancelToken? cancelToken,
   }) {
-    return _send('PATCH', endPoint,
-        data: params,
-        contentType: contentType,
-        authMode: _authMode(headers: headers, partnerToken: partnerToken));
+    return _send(
+      'PATCH',
+      endPoint,
+      data: params,
+      contentType: contentType,
+      authMode: _authMode(headers: headers, partnerToken: partnerToken),
+      cancelToken: cancelToken,
+    );
   }
 
   /// this method filters by status code and returns specific response
@@ -130,13 +151,25 @@ mixin RequestConfig<T> {
       default:
         return _errorResponse(
           response,
-          code >= 500 ? ErrorType.serverError_5xx : ErrorType.dio_error,
+          // Ro'yxatda yo'q 4xx (405, 422, 429 ...) — internet muammosi EMAS:
+          // `dio_error` bo'lsa "Internetga ulanishda muammo" chiqib qolardi.
+          // `other` bilan avval serverning o'z xabari ko'rsatiladi.
+          code >= 500 ? ErrorType.serverError_5xx : ErrorType.other,
         );
     }
   }
 
   ///  filters dio exception by type
   NetworkResponse _catchError(DioException e) {
+    // Bekor qilingan so'rov (cubit yopildi / yangi qidiruv) — xato emas,
+    // analytics'ga yozilmaydi va UI'da xato sifatida ko'rsatilmaydi.
+    if (e.type == DioExceptionType.cancel) {
+      return const NetworkErrorResponse(
+        error: 'cancelled',
+        errorType: ErrorType.other,
+      );
+    }
+
     switch (e.type) {
       case DioExceptionType.connectionTimeout:
         return _dioErrorResponse(
@@ -212,12 +245,18 @@ mixin RequestConfig<T> {
     final Map<String, dynamic>? params,
     final Map<String, dynamic>? query,
     required String endPoint,
+    CancelToken? cancelToken,
   }) async {
     try {
+      // GET: params ham query ga birlashtiriladi (body emas).
+      final mergedQuery = <String, dynamic>{
+        if (query != null) ...query,
+        if (params != null) ...params,
+      };
       final response = await DioClient.skote.get(
         endPoint,
-        data: params,
-        queryParameters: query,
+        queryParameters: mergedQuery.isEmpty ? null : mergedQuery,
+        cancelToken: _resolveCancelToken(cancelToken),
       );
       return _getResponse(response);
     } on DioException catch (e) {
@@ -232,12 +271,14 @@ mixin RequestConfig<T> {
     final Map<String, dynamic>? query,
     Object? params,
     required String endPoint,
+    CancelToken? cancelToken,
   }) async {
     try {
       final response = await DioClient.skote.post(
         endPoint,
         data: params,
         queryParameters: query,
+        cancelToken: _resolveCancelToken(cancelToken),
         options: Options(
           extra: {if (contentType != null) 'contentType': contentType},
         ),

@@ -3,10 +3,12 @@ import 'package:mysafar_sdk/src/core/config/response_config.dart';
 
 import '../service/my_contract_model.dart';
 import '../service/my_contracts_service.dart';
+import 'package:mysafar_sdk/src/core/config/network_request_scope.dart'
+    show NetworkCancel;
 
 part 'my_contracts_state.dart';
 
-class MyContractsCubit extends Cubit<MyContractsState> {
+class MyContractsCubit extends Cubit<MyContractsState> with NetworkCancel {
   MyContractsCubit() : super(MyContractsInitState());
 
   final MyContractsService _service = MyContractsService();
@@ -28,7 +30,7 @@ class MyContractsCubit extends Cubit<MyContractsState> {
     }
 
     emit(MyContractsLoadingState());
-    final response = await _service.getMyContracts(pinfl: pinfl);
+    final response = await withNetworkCancel(() => _service.getMyContracts(pinfl: pinfl));
     if (isClosed) return;
 
     if (response is NetworkSuccessResponse<List<MyContractModel>>) {

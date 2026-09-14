@@ -2,17 +2,19 @@ import 'package:dio/dio.dart';
 import 'package:mysafar_sdk/src/model/local/recom_req_model.dart';
 import 'package:mysafar_sdk/src/service/fornex/fornex_repository.dart';
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
+import 'package:mysafar_sdk/src/core/config/network_request_scope.dart'
+    show NetworkCancel;
 
 part 'ai_search_state.dart';
 
-class AiSearchCubit extends Cubit<AiSearchState> {
+class AiSearchCubit extends Cubit<AiSearchState> with NetworkCancel {
   AiSearchCubit() : super(AiSearchInitState());
 
   final _fornexRepository = FornexRepository();
 
   Future<void> searchAiChat(String prompt) async {
     emit(AiSearchLoadingState());
-    final response = await _fornexRepository.searchAiChat(prompt: prompt);
+    final response = await withNetworkCancel(() => _fornexRepository.searchAiChat(prompt: prompt));
     if (isClosed) return;
     if (response is NetworkSuccessResponse) {
       emit(AiSearchSuccessState(response.data));
@@ -30,7 +32,7 @@ class AiSearchCubit extends Cubit<AiSearchState> {
 
   Future<void> searchAiVoice(FormData prompt) async {
     emit(AiSearchLoadingState());
-    final response = await _fornexRepository.searchAiChatVoice(prompt: prompt);
+    final response = await withNetworkCancel(() => _fornexRepository.searchAiChatVoice(prompt: prompt));
     if (isClosed) return;
     if (response is NetworkSuccessResponse) {
       emit(AiSearchSuccessState(response.data));

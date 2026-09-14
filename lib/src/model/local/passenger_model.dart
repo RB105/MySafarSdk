@@ -1,3 +1,5 @@
+import 'package:mysafar_sdk/src/model/remote/profile/users_model.dart';
+
 /// Yo'lovchi ma'lumotlari modeli
 /// Type-safe va immutable model
 class PassengerModel {
@@ -98,6 +100,44 @@ class PassengerModel {
       sendEmail: json['send_email'] ?? 1,
     );
   }
+
+  /// Fuqarolik tanlanganda hujjat turi ham shunga qarab belgilanadi
+  /// (RU — xorijiy pasport, qolganlari — ichki hujjat).
+  PassengerModel copyWithCitizen(String code) {
+    return copyWith(
+      citizen: code,
+      doctype: code == 'RU'
+          ? PassengerConstants.docTypePassport
+          : PassengerConstants.docTypeId,
+    );
+  }
+
+  /// Saqlangan yo'lovchi yoki skaner natijasini formaga qo'llaydi. Jins,
+  /// fuqarolik va hujjat turi bo'sh kelsa — joriy qiymati saqlanib qoladi.
+  PassengerModel copyFromUser(UsersModel user) {
+    String keep(String? value, String current) =>
+        (value != null && value.isNotEmpty) ? value : current;
+
+    return copyWith(
+      firstname: _sanitizeName(user.firstname),
+      lastname: _sanitizeName(user.lastname),
+      middlename: _sanitizeName(user.middlename),
+      birthdate: user.birthdate ?? '',
+      docexp: user.docexp ?? '',
+      docnum: (user.docnum ?? '').toUpperCase().replaceAll(' ', ''),
+      gender: keep(user.gender, gender),
+      citizen: keep(user.citizen, citizen),
+      doctype: keep(user.doctype, doctype),
+    );
+  }
+
+  /// Ism maydonlaridan raqam va bo'sh joylarni olib tashlaydi
+  /// (`PassengerCubit.sanitizeName` bilan bir xil qoida).
+  static String _sanitizeName(String? value) =>
+      (value ?? '').replaceAll(RegExp(r'[\d\s]'), '').toUpperCase();
+
+  /// Bron sahifasidagi slotda ko'rsatiladigan "FAMILIYA ISM".
+  String get displayName => '$lastname $firstname'.trim();
 
   /// Barcha majburiy maydonlar to'ldirilganmi
   bool get isValid {

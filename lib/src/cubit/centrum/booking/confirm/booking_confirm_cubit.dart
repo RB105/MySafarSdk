@@ -2,7 +2,7 @@
 
 part of 'booking_confirm_states.dart';
 
-class CentrumBookingConfirmCubit extends Cubit<CentrumBookingConfirmStates> {
+class CentrumBookingConfirmCubit extends Cubit<CentrumBookingConfirmStates> with NetworkCancel {
   CentrumBookingConfirmCubit(String bilingId) : super(CentrumBookingConfirmInitState()){
   if (bilingId != '0') {
     getTicketStatus(billingId: bilingId);
@@ -16,8 +16,9 @@ class CentrumBookingConfirmCubit extends Cubit<CentrumBookingConfirmStates> {
     required Map<String, dynamic> params,
   }) async {
     emit(CentrumBookingConfirmLoadingState());
-    final NetworkResponse response =
-        await bookingService.centrumConfirmBooking(params: params);
+    final NetworkResponse response = await withNetworkCancel(
+      () => bookingService.centrumConfirmBooking(params: params),
+    );
     if (isClosed) return;
     if (response is NetworkSuccessResponse) {
       emit(CentrumBookingConfirmSuccessState(response.data));
@@ -30,8 +31,9 @@ class CentrumBookingConfirmCubit extends Cubit<CentrumBookingConfirmStates> {
     required String cardNumber,
   }) async {
     emit(CentrumBookingConfirmCardInfoLoadingState());
-    final NetworkResponse response =
-        await bookingService.getCardInfo(cardNumber: cardNumber);
+    final NetworkResponse response = await withNetworkCancel(
+      () => bookingService.getCardInfo(cardNumber: cardNumber),
+    );
     if (isClosed) return;
     if (response is NetworkSuccessResponse) {
       emit(CentrumBookingConfirmCardInfoSuccessState(response.data));
@@ -45,9 +47,11 @@ class CentrumBookingConfirmCubit extends Cubit<CentrumBookingConfirmStates> {
     required int otpCode,
   }) async {
     emit(CentrumBookingConfirmLoadingState());
-    final NetworkResponse response = await bookingService.centrumConfirmPayment(
-      trId: trId,
-      otp: otpCode,
+    final NetworkResponse response = await withNetworkCancel(
+      () => bookingService.centrumConfirmPayment(
+        trId: trId,
+        otp: otpCode,
+      ),
     );
     if (isClosed) return;
     if (response is NetworkSuccessResponse) {
@@ -59,8 +63,9 @@ class CentrumBookingConfirmCubit extends Cubit<CentrumBookingConfirmStates> {
   Future<void> getTicketStatus({
     required String billingId,
   }) async {
-    final NetworkResponse response =
-        await bookingService.getTicketStatus(billingId: billingId);
+    final NetworkResponse response = await withNetworkCancel(
+      () => bookingService.getTicketStatus(billingId: billingId),
+    );
     if (isClosed) return;
     if (response is NetworkSuccessResponse) {
       emit(CentrumBookingConfirmChangeAmountSuccessState(response.data));
