@@ -242,7 +242,6 @@ class _MainPageState extends State<MainPage> {
                             tooltipBackgroundColor: ProjectTheme.brandColor,
                             textColor: Colors.white,
                             child: const MainPopularDestinations()),
-                        const RecentSearchesWidget(),
                         const HomeSupportBanner(),
                         const SizedBox(height: 24),
                       ],
@@ -317,8 +316,9 @@ class _MainPageState extends State<MainPage> {
                       homeStyle: true, nearbyAirport: _nearbyAirport),
                 ),
               ),
-              // Compact From/To kartadan keyin hero ostida biroz rasm.
-              const SizedBox(height: 36),
+              // Oxirgi qidiruvlar — aylanuvchi rasm ICHIDA, shahar kartasi ostida.
+              const RecentSearchesWidget(),
+              const SizedBox(height: 20),
             ],
           ),
         ],

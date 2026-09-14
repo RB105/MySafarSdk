@@ -1,3 +1,4 @@
+import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
 import 'package:mysafar_sdk/src/view/profile/pages/my_contracts/logic/my_contract_detail_cubit.dart';
 import 'package:mysafar_sdk/src/view/profile/pages/my_contracts/service/my_contract_model.dart';
@@ -75,9 +76,7 @@ class _MyContractDetailPageState extends State<MyContractDetailPage> {
   Future<void> _openAddCard() async {
     final contractId = widget.contractId;
     if (contractId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("error_other".tr())),
-      );
+      showErrorMessage("error_other".tr(), context: context);
       return;
     }
     final added = await Navigator.push<bool>(

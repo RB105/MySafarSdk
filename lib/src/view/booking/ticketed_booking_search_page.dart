@@ -12,6 +12,7 @@ import 'package:mysafar_sdk/src/core/styles/theme.dart';
 import 'package:mysafar_sdk/src/core/tools/formatters.dart';
 import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart';
 import 'package:mysafar_sdk/src/core/widgets/main_button_widget.dart';
+import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/cubit/booking/ticketed_search/ticketed_booking_search_cubit.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_model.dart'
     show FlightPrice, FluffyUzs;
@@ -271,9 +272,7 @@ class _TicketResultCardState extends State<_TicketResultCard> {
       await OpenFilex.open(filePath);
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("file_open_error".tr())),
-        );
+        showErrorMessage("file_open_error".tr(), context: context);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -286,6 +285,10 @@ class _TicketResultCardState extends State<_TicketResultCard> {
     if (responseData == null) return const SizedBox.shrink();
 
     final status = widget.ticket.callbackStatus ?? "";
+    final displayStatus = status == 'Booked' &&
+            !ElementFormatter.expireStatus(widget.ticket.createdAt ?? "")
+        ? 'payment_time_expired'
+        : status;
     final segments = responseData.book?.flight?.segments ?? [];
     final order = responseData.book?.order;
     final passengers = responseData.book?.passengers ?? [];
@@ -300,7 +303,7 @@ class _TicketResultCardState extends State<_TicketResultCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildHeader(context, status),
+          _buildHeader(context, displayStatus),
           context.szBoxHeight16,
           Divider(color: context.color.outline.withAlpha(80), height: 1),
           context.szBoxHeight16,
@@ -358,13 +361,17 @@ class _TicketResultCardState extends State<_TicketResultCard> {
         ? ProjectTheme.warning
         : status == 'Ticketed'
             ? ProjectTheme.success
-            : context.color.primary;
+            : status == 'payment_time_expired'
+                ? ProjectTheme.error
+                : context.color.primary;
 
     final statusLabel = status == 'Booked'
         ? 'status_booked'.tr()
         : status == 'Ticketed'
             ? 'status_ticketed'.tr()
-            : status;
+            : status == 'payment_time_expired'
+                ? 'payment_time_expired'.tr()
+                : status;
 
     return Row(
       children: [
@@ -536,7 +543,12 @@ class _TicketResultCardState extends State<_TicketResultCard> {
                   ),
                 ),
                 const Spacer(),
-                ExpireTimeText(createdAt: widget.ticket.createdAt ?? ""),
+                ExpireTimeText(
+                  createdAt: widget.ticket.createdAt ?? "",
+                  onExpired: () {
+                    if (mounted) setState(() {});
+                  },
+                ),
               ],
             ),
           ),

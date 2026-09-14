@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mysafar_sdk/src/core/widgets/edge_swipe_back.dart';
+import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -83,10 +84,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
       launched = false;
     }
     if (!mounted || launched) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Ilova o'rnatilmagan yoki ochib bo'lmadi"),
-      ),
+    showErrorMessage(
+      "Ilova o'rnatilmagan yoki ochib bo'lmadi",
+      context: context,
     );
   }
 

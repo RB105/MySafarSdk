@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart';
 import 'package:mysafar_sdk/src/core/tools/project_utils.dart';
 import 'package:mysafar_sdk/src/core/widgets/response_state.dart';
+import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/cubit/profile/users_data/users_data_cubit.dart';
 import 'package:mysafar_sdk/src/view/booking/support/country_name_list.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/custom_input_field_widget.dart';
@@ -427,13 +428,7 @@ class _AddPassengerPageState extends State<AddPassengerPage> {
                         ? () {
                             final errorMessage = validateForm();
                             if (errorMessage != null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(errorMessage),
-                                  backgroundColor: Colors.red,
-                                  duration: const Duration(seconds: 3),
-                                ),
-                              );
+                              showErrorMessage(errorMessage, context: context);
                               setState(() {
                                 showErrors = true;
                               });
@@ -447,12 +442,9 @@ class _AddPassengerPageState extends State<AddPassengerPage> {
 
                             if (formattedBirthdate == null ||
                                 formattedDocexp == null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text("invalid_date_format".tr()),
-                                  backgroundColor: Colors.red,
-                                  duration: const Duration(seconds: 3),
-                                ),
+                              showErrorMessage(
+                                "invalid_date_format".tr(),
+                                context: context,
                               );
                               setState(() {
                                 showErrors = true;

@@ -9,6 +9,7 @@ import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart';
 import 'package:mysafar_sdk/src/core/widgets/county_pick/country_code_picker.dart';
 import 'package:mysafar_sdk/src/core/widgets/county_pick/src/country_code_model.dart';
 import 'package:mysafar_sdk/src/core/widgets/response_state.dart';
+import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/cubit/profile/users_data/users_data_cubit.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/custom_input_field_widget.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/passenger_controller.dart';
@@ -272,13 +273,7 @@ class _UpdatePhoneAndEmailPageState extends State<UpdatePhoneAndEmailPage> {
                         ? () {
                             final errorMessage = validateForm();
                             if (errorMessage != null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(errorMessage),
-                                  backgroundColor: Colors.red,
-                                  duration: const Duration(seconds: 3),
-                                ),
-                              );
+                              showErrorMessage(errorMessage, context: context);
                               setState(() {
                                 showErrors = true;
                               });

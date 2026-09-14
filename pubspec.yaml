@@ -39,7 +39,6 @@ dependencies:
   package_info_plus: '>=8.3.0 <11.0.0'
   equatable: ^2.0.7
   decimal: ^3.2.4
-  fluttertoast: '>=8.2.12 <10.0.0'
   # open_file emas open_filex: host applar (Unired) open_filex ishlatadi va
   # ikkalasi bir xil native klasslarni beradi (dex to'qnashuvi).
   open_filex: ^4.7.0

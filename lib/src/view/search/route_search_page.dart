@@ -20,6 +20,7 @@ import 'package:mysafar_sdk/src/core/tools/sdk_sheets.dart';
 import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/cubit/search/route_search_cubit.dart'
     show RouteSearchCubit, RouteSearchState, RouteLeg;
+import 'package:mysafar_sdk/src/service/avia/recent_search_cache.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/airports_model.dart'
     show AirPortsModel;
 import 'package:mysafar_sdk/src/model/remote/avia/ticket_date_price_model.dart'
@@ -333,7 +334,7 @@ class _RouteSearchViewState extends State<_RouteSearchView>
       return _search();
     }
     if (state.isSameAirport) {
-      showToastTr("same_airport_warning");
+      showToastTr("same_airport_warning", type: AppMessageType.warning);
       return;
     }
     HapticFeedback.mediumImpact();
@@ -341,6 +342,8 @@ class _RouteSearchViewState extends State<_RouteSearchView>
     // ketayotgan paytda yuboriladi (bu yerda takrorlanmaydi).
     final params = _cubit.buildRequest();
     ProjectUtils.setRecommendationParams(params);
+    // Home oqimi shu sahifadan qidiradi — tarix shu yerda saqlanadi.
+    RecentSearchCache().add(params);
     Navigator.pushNamed(
       context,
       RecommendationsTicketPage.routeName,
@@ -351,12 +354,13 @@ class _RouteSearchViewState extends State<_RouteSearchView>
   void _searchMulti() {
     final String? error = _cubit.validateLegs();
     if (error != null) {
-      showToastTr(error);
+      showToastTr(error, type: AppMessageType.warning);
       return;
     }
     HapticFeedback.mediumImpact();
     final params = _cubit.buildMultiRequest();
     ProjectUtils.setRecommendationParams(params);
+    RecentSearchCache().add(params);
     Navigator.pushNamed(
       context,
       RecommendationsTicketPage.routeName,

@@ -82,6 +82,8 @@ class ProjectAssets {
   static const String searchIcon = "$_assetHomeIconPath/search_icon.svg";
   static const String searchWhiteIcon =
       "$_assetHomeIconPath/search_white_icon.svg";
+  static const String searchHistoryIcon =
+      "$_assetHomeIconPath/search_history_icon.svg";
   static const String trashIcon = "$_assetHomeIconPath/trash_icon.svg";
   static const String phoneCallIcon = "$_assetHomeIconPath/phone_call_icon.svg";
   static const String messageIcon = "$_assetHomeIconPath/message_icon.svg";
