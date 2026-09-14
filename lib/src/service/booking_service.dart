@@ -7,6 +7,7 @@ import 'package:mysafar_sdk/src/core/constants/end_points.dart';
 import 'package:mysafar_sdk/src/core/enum/currency.dart';
 import 'package:mysafar_sdk/src/core/tools/currency_provider.dart'
     show CurrencyProvider;
+import 'package:mysafar_sdk/src/core/tools/phone_format.dart';
 import 'package:mysafar_sdk/src/model/remote/booking/booking_create_model.dart';
 import 'package:mysafar_sdk/src/model/remote/booking/payment_type_model.dart';
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart';
@@ -28,6 +29,15 @@ class BookingService with RequestConfig {
     final currencyProvider =
         Provider.of<CurrencyProvider>(context, listen: false);
     await TokenVerificationCache.ensureVerified(apiService);
+    final normalizedPhone = normalizePhoneDigits(clientPhoneNum);
+    final normalizedPassengers = passenger.map((p) {
+      final copy = Map<String, dynamic>.from(p);
+      final rawPhone = copy['phone'];
+      if (rawPhone != null) {
+        copy['phone'] = normalizePhoneDigits('$rawPhone');
+      }
+      return copy;
+    }).toList();
     NetworkResponse response = await postRequest(
         headers: false,
         partnerToken: true,
@@ -41,8 +51,8 @@ class BookingService with RequestConfig {
           "currency": currencyProvider.currency.label == "UZS" ? "UZS" : "RUB",
           "client_email": clientEmail,
           "payer_name": firstName,
-          "client_phone": clientPhoneNum,
-          "passengers": passenger
+          "client_phone": normalizedPhone,
+          "passengers": normalizedPassengers
         });
     if (response is NetworkSuccessResponse) {
       if (response.data["tr_id"] != null) {

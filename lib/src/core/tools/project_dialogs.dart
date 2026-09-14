@@ -29,6 +29,7 @@ import 'package:mysafar_sdk/src/core/widgets/search_city_widget.dart';
 import 'package:mysafar_sdk/src/core/widgets/theme_options_widget.dart';
 import 'package:mysafar_sdk/src/core/widgets/ticket_filters_widget.dart';
 import 'package:mysafar_sdk/src/core/widgets/ticket_tariffs_widget.dart';
+import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/core/widgets/verify_otp_widget.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart'
@@ -1493,26 +1494,13 @@ class ProjectDialogs {
     );
   }
 
-  static void showCustomToast(BuildContext context, String message) {
-    final overlay = Overlay.of(context);
-    final overlayEntry = OverlayEntry(
-      builder: (context) {
-        return Positioned(
-          bottom: 120,
-          left: 24,
-          right: 24,
-          child: _AnimatedToastWidget(
-            message: message,
-          ),
-        );
-      },
-    );
-
-    overlay.insert(overlayEntry);
-
-    Future.delayed(const Duration(seconds: 2), () {
-      overlayEntry.remove();
-    });
+  /// Legacy wrapper — iOS-style top banner ([showAppMessage]).
+  static void showCustomToast(
+    BuildContext context,
+    String message, {
+    AppMessageType type = AppMessageType.success,
+  }) {
+    showAppMessage(message, type: type, context: context);
   }
 
   static void dismissCurrentDialog<T>({T? result}) {
@@ -1772,65 +1760,5 @@ class ProjectDialogs {
 
   static Future<void> _afterComplete() async {
     _dialogContext = null;
-  }
-}
-
-class _AnimatedToastWidget extends StatefulWidget {
-  final String message;
-
-  const _AnimatedToastWidget({required this.message});
-
-  @override
-  State<_AnimatedToastWidget> createState() => _AnimatedToastWidgetState();
-}
-
-class _AnimatedToastWidgetState extends State<_AnimatedToastWidget>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    duration: const Duration(milliseconds: 500),
-    vsync: this,
-  )..forward();
-
-  @override
-  void initState() {
-    super.initState();
-    Future.delayed(const Duration(milliseconds: 1500), () {
-      if (mounted) _controller.reverse();
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _controller,
-      child: Material(
-        color: Colors.transparent,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          margin: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: context.color.primaryContainer,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(10),
-                blurRadius: 8,
-              )
-            ],
-          ),
-          child: Text(
-            widget.message,
-            style: context.textTheme.bodyMedium,
-            textAlign: TextAlign.center,
-          ),
-        ),
-      ),
-    );
   }
 }

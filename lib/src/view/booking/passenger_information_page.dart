@@ -9,6 +9,7 @@ import 'package:mysafar_sdk/src/core/styles/theme.dart';
 import 'package:mysafar_sdk/src/core/tools/formatters.dart'
     show ElementFormatter;
 import 'package:mysafar_sdk/src/core/tools/phone_format.dart';
+import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/cubit/booking/passenger/passenger_cubit.dart';
 import 'package:mysafar_sdk/src/cubit/booking/passenger/passenger_state.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_model.dart'
@@ -740,12 +741,7 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
   }
 
   void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        duration: const Duration(seconds: 3),
-      ),
-    );
+    showErrorMessage(message, context: context);
   }
 }
 

@@ -111,7 +111,7 @@ class ProfileCubit extends Cubit<ProfileState> with NetworkCancel {
 
     if (res is NetworkSuccessResponse) {
       emit(state.copyWith(updateProfileStatus: ActionStatus.isSuccess));
-      showToastTr('profile_success_update');
+      showToastTr('profile_success_update', type: AppMessageType.success);
 
       try {
         await _cache.write(profileModel.toJson());

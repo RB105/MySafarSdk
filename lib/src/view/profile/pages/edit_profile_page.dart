@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:mysafar_sdk/src/core/tools/phone_format.dart';
+import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/cubit/profile/update_profile/update_profile_cubit.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/custom_input_field_widget.dart';
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
@@ -71,12 +72,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
             Navigator.pop(context, state.profileModel);
           } else if (state is UpdateProfileError) {
             Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(state.error),
-                backgroundColor: Colors.red,
-              ),
-            );
+            showErrorMessage(state.error, context: context);
           }
         },
         builder: (context, state) {

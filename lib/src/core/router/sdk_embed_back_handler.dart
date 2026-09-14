@@ -94,7 +94,7 @@ class SdkEmbedBackHandler extends StatelessWidget {
 
     _lastBackAt = now;
     try {
-      showToastTr('press_again_to_exit');
+      showToastTr('press_again_to_exit', type: AppMessageType.warning);
     } catch (_) {
       // Test / toast plugin yo'q muhit — silent.
     }

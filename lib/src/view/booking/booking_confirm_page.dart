@@ -12,6 +12,7 @@ import 'package:mysafar_sdk/src/core/tools/formatters.dart';
 import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart';
 import 'package:mysafar_sdk/src/core/widgets/edge_swipe_back.dart';
 import 'package:mysafar_sdk/src/core/widgets/response_state.dart';
+import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/cubit/booking/confirm/booking_confirm_states.dart';
 import 'package:mysafar_sdk/src/model/local/payment_type.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_model.dart'
@@ -778,7 +779,8 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
 
   void _onPaymentPressed(BuildContext context, BookingConfirmStates state) {
     if (!_isSelectionActive()) {
-      ProjectDialogs.showCustomToast(context, 'select_payment_type'.tr());
+      ProjectDialogs.showCustomToast(context, 'select_payment_type'.tr(),
+          type: AppMessageType.warning);
       return;
     }
 
