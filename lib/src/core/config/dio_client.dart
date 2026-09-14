@@ -28,13 +28,20 @@ BaseOptions _baseOptions() => BaseOptions(
 class DioClient {
   DioClient._();
 
-  /// Main backend (`BASE_URL`). Handles bearer/partner auth and 401 refresh.
+  /// Main backend (`BASE_URL`). Bearer/partner auth + 401 refresh +
+  /// 502/503/504 va qisqa tarmoq uzilishida retry.
   static final Dio main = Dio(_baseOptions())
-    ..interceptors.add(_MainAuthInterceptor());
+    ..interceptors.addAll([
+      _RetryInterceptor(),
+      _MainAuthInterceptor(),
+    ]);
 
   /// Skote backend (`SKOTE_BASE_URL`). No auth header.
   static final Dio skote = Dio(_baseOptions())
-    ..interceptors.add(_SkoteInterceptor());
+    ..interceptors.addAll([
+      _RetryInterceptor(),
+      _SkoteInterceptor(),
+    ]);
 
   /// Fayl yuklash (PDF va h.k.) — uzun timeout, auth yo'q.
   static final Dio download = Dio(_baseOptions()
@@ -54,6 +61,65 @@ class DioClient {
       cancelToken: cancelToken,
       onReceiveProgress: onReceiveProgress,
     );
+  }
+}
+
+/// 502/503/504 (va qisqa tarmoq uzilishi) uchun engil retry — max 2 marta,
+/// exponential backoff. Bekor qilingan so'rov va `skipRetry` qayta yuborilmaydi.
+class _RetryInterceptor extends Interceptor {
+  static const int _maxRetries = 2;
+
+  @override
+  void onError(DioException err, ErrorInterceptorHandler handler) async {
+    final extra = err.requestOptions.extra;
+    final retryCount = (extra['retryCount'] as int?) ?? 0;
+    final skipRetry = extra['skipRetry'] == true;
+
+    if (skipRetry || retryCount >= _maxRetries || !_shouldRetry(err)) {
+      handler.next(err);
+      return;
+    }
+
+    final next = retryCount + 1;
+    err.requestOptions.extra['retryCount'] = next;
+
+    final delayMs = 300 * next * next; // 300ms, 1200ms
+    await Future<void>.delayed(Duration(milliseconds: delayMs));
+
+    // Kutish paytida so'rov bekor qilingan bo'lsa — qayta yubormaymiz.
+    if (err.requestOptions.cancelToken?.isCancelled ?? false) {
+      handler.next(err);
+      return;
+    }
+
+    if (kDebugMode) {
+      debugPrint(
+        'Retry $next/$_maxRetries: ${err.requestOptions.method} '
+        '${err.requestOptions.uri} (${err.response?.statusCode ?? err.type})',
+      );
+    }
+
+    try {
+      // Auth interceptor zanjiri saqlansin deb o'sha client orqali fetch.
+      final dio =
+          err.requestOptions.extra['dioClient'] as Dio? ?? DioClient.main;
+      final response = await dio.fetch(err.requestOptions);
+      handler.resolve(response);
+    } on DioException catch (e) {
+      handler.next(e);
+    }
+  }
+
+  bool _shouldRetry(DioException err) {
+    if (err.type == DioExceptionType.cancel) return false;
+    final code = err.response?.statusCode;
+    if (code == 502 || code == 503 || code == 504) return true;
+    // Qisqa tarmoq uzilishi — qayta urinish foydali.
+    if (err.type == DioExceptionType.connectionError ||
+        err.type == DioExceptionType.connectionTimeout) {
+      return true;
+    }
+    return false;
   }
 }
 
@@ -94,10 +160,13 @@ class TokenManager {
       final response = await dio.post(
         EndPoints.api_v1_token_refresh,
         data: {'refresh': refreshToken},
-        options: Options(headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        }),
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          extra: {'skipRetry': true},
+        ),
       );
       final access = response.data is Map ? response.data['access'] : null;
       if (response.statusCode == 200 && access != null) {
@@ -134,6 +203,8 @@ class _MainAuthInterceptor extends Interceptor {
     }
 
     options.baseUrl = AppConfig.baseUrl;
+    // Retry interceptor qaysi Dio orqali qayta yuborishni bilsin.
+    options.extra['dioClient'] = DioClient.main;
 
     final mode = options.extra['authMode'] as AuthMode? ?? AuthMode.none;
     final contentType = options.extra['contentType'] as String?;
@@ -153,6 +224,20 @@ class _MainAuthInterceptor extends Interceptor {
       options.headers['Authorization'] = 'Token ${AppConfig.partnerToken}';
     } else if (mode == AuthMode.bearer) {
       final token = MySafarSdk.tokens.accessToken ?? '';
+      // Bo'sh "Bearer " yubormaymiz — serverga ketmasdan aniq 401 qaytadi.
+      if (token.isEmpty) {
+        handler.reject(DioException(
+          requestOptions: options,
+          error: StateError('Access token is empty'),
+          type: DioExceptionType.badResponse,
+          response: Response(
+            requestOptions: options,
+            statusCode: 401,
+            statusMessage: 'Unauthorized',
+          ),
+        ));
+        return;
+      }
       options.headers['Authorization'] = 'Bearer $token';
     }
 
@@ -209,6 +294,7 @@ class _SkoteInterceptor extends Interceptor {
     }
 
     options.baseUrl = AppConfig.skoteBaseUrl;
+    options.extra['dioClient'] = DioClient.skote;
     final contentType = options.extra['contentType'] as String?;
     options.headers['Content-Type'] = contentType ?? 'application/json';
     options.headers['Accept'] = 'application/json';

@@ -5,6 +5,9 @@ import 'package:mysafar_sdk/src/core/widgets/county_pick/src/country_codes.dart'
 /// E.164 bo'yicha maksimal raqamlar soni.
 const int kMaxPhoneDigits = 15;
 
+/// Davlat kodi bilan birga to'liq hisoblanadigan eng kam raqamlar soni.
+const int kMinPhoneDigits = 9;
+
 /// Xalqaro telefon raqamini davlat kodiga mos maska bilan formatlaydi.
 ///
 /// Masalan: `998901234567` → `+998 90 123 45 67`

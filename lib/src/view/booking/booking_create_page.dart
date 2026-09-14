@@ -33,12 +33,17 @@ import '../../model/remote/avia/recommendation/get_recom_res_model.dart'
 
 class BookingCreatePage extends StatefulWidget {
   final List<Map<String, dynamic>> passenger;
+
+  /// "Saqlangan yo'lovchilarga qo'shish" yoqilgan yo'lovchilar — bron
+  /// muvaffaqiyatli bo'lgach faqat shular profilga saqlanadi.
+  final List<Map<String, dynamic>> passengersToSave;
   final FlightPrice? price;
   final String trId;
 
   const BookingCreatePage({
     super.key,
     required this.passenger,
+    this.passengersToSave = const [],
     required this.price,
     required this.trId,
   });
@@ -62,6 +67,7 @@ class _BookingCreatePageState extends State<BookingCreatePage> {
   /// keyingi bronlashda "Yo'lovchi tanlash" chiqishi uchun.
   Future<void> _savePassengersInBackground() async {
     if (!MySafarSdk.tokens.isLoggedIn) return;
+    if (widget.passengersToSave.isEmpty) return;
     try {
       final service = ProfileService();
       final box = sdkStorage();
@@ -85,7 +91,7 @@ class _BookingCreatePageState extends State<BookingCreatePage> {
       };
 
       var createdAny = false;
-      for (final p in widget.passenger) {
+      for (final p in widget.passengersToSave) {
         final docnum = (p['docnum'] ?? '').toString().trim();
         if (docnum.isEmpty) continue;
         if (!existingDocnums.add(docnum.toUpperCase())) continue;

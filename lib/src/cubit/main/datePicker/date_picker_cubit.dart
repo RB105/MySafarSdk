@@ -6,10 +6,12 @@ import 'package:mysafar_sdk/src/model/remote/avia/ticket_date_price_model.dart';
 import 'package:mysafar_sdk/src/service/avia_service.dart' show AviaService;
 import 'package:flutter/material.dart' show debugPrint;
 import 'package:flutter_bloc/flutter_bloc.dart' show Cubit;
+import 'package:mysafar_sdk/src/core/config/network_request_scope.dart'
+    show NetworkCancel;
 
 part 'date_picker_state.dart';
 
-class DatePickerCubit extends Cubit<DatePickerState> {
+class DatePickerCubit extends Cubit<DatePickerState> with NetworkCancel {
   final AirPortsModel? fromWhere;
   final AirPortsModel? toWhere;
   final int? flightType;
@@ -34,8 +36,12 @@ class DatePickerCubit extends Cubit<DatePickerState> {
       return;
     }
     try {
-      final response = await _aviaService.getPriceByMonth(
-          fromWhere?.cityIataCode ?? "", toWhere?.cityIataCode ?? "");
+      final response = await withNetworkCancel(
+        () => _aviaService.getPriceByMonth(
+          fromWhere?.cityIataCode ?? "",
+          toWhere?.cityIataCode ?? "",
+        ),
+      );
       if (isClosed) return;
       if (response is NetworkSuccessResponse) {
         emit(DatePickerFilledState(response.data));

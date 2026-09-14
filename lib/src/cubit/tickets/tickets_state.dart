@@ -21,10 +21,14 @@ class TicketEmptyState extends TicketsState {
 
 class TicketErrorState extends TicketsState {
   final String errorMsg;
-  const TicketErrorState(this.errorMsg);
+  /// Xato turi (tarmoq / server / client). UI shunga qarab xato dialogining
+  /// sarlavhasini tanlaydi; noma'lum bo'lsa `null`.
+  final ErrorType? errorType;
+
+  const TicketErrorState(this.errorMsg, {this.errorType});
 
   @override
-  List<Object?> get props => [errorMsg];
+  List<Object?> get props => [errorMsg, errorType];
 }
 
 class TicketSuccessState extends TicketsState {

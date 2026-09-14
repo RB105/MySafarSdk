@@ -188,7 +188,11 @@ class _RouteSearchViewState extends State<_RouteSearchView>
   }
 
   /// Sana → yo'lovchi yo'riqli oqim. Qidiruv faqat "Bilet izlash" da.
+  /// Istalgan bosqich bekor qilinsa oqim to'xtaydi (sahifa ochiq qolaveradi).
   Future<void> _runDatePassengerFlow() async {
+    // Sahifa ochilish (push) animatsiyasi tugashini kutamiz.
+    await Future.delayed(const Duration(milliseconds: 400));
+    if (!mounted || _cubit.state.date != null) return;
     final datePicked = await _pickDate();
     if (!mounted || !datePicked) return;
     await Future.delayed(const Duration(milliseconds: 300));
@@ -315,17 +319,18 @@ class _RouteSearchViewState extends State<_RouteSearchView>
 
   // ── Qidiruv ───────────────────────────────────────────────────────────
 
-  void _search() {
+  Future<void> _search() async {
     final state = _cubit.state;
     if (MySafarSdk.config.enableMultiSearch && state.multiMode) {
       _searchMulti();
       return;
     }
-    // Webda tugma doim faol — sana tanlanmagan bo'lsa ogohlantiramiz
-    // (bosh sahifadagi forma bilan bir xil xatti-harakat).
+    // Sana tanlanmagan — toast o'rniga sana tanlash oynasi ochiladi;
+    // tanlansa qidiruv shu zahoti davom etadi.
     if (!state.hasDate) {
-      showToastTr("home_fill_search");
-      return;
+      final bool picked = await _pickDate();
+      if (!mounted || !picked) return;
+      return _search();
     }
     if (state.isSameAirport) {
       showToastTr("same_airport_warning");

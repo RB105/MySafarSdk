@@ -1,6 +1,6 @@
 part of 'booking_create_states.dart';
 
-class BookingcreateCubit extends Cubit<BookingcreateStates> {
+class BookingcreateCubit extends Cubit<BookingcreateStates> with NetworkCancel {
   BookingcreateCubit() : super(BookingcreateInitState());
 
   TextEditingController clientEmailController = TextEditingController();
@@ -17,15 +17,15 @@ class BookingcreateCubit extends Cubit<BookingcreateStates> {
       required BuildContext context}) async {
     emit(BookingcreateLoadingState());
     // token verify
-    await _bookingService
-        .createBooking(
-            context: context,
-            passenger: passenger,
-            tid: tid,
-            clientEmail: email,
-            firstName: firstName,
-            clientPhoneNum: phoneNumber)
-        .then((NetworkResponse? response) {
+    await withNetworkCancel(
+      () => _bookingService.createBooking(
+          context: context,
+          passenger: passenger,
+          tid: tid,
+          clientEmail: email,
+          firstName: firstName,
+          clientPhoneNum: phoneNumber),
+    ).then((NetworkResponse? response) {
       if (isClosed) return;
       if (response is NetworkSuccessResponse) {
         // Voronka 2-bosqichi — booking yaratildi (to'lovdan oldingi qadam).

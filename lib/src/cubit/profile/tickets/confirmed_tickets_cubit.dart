@@ -9,9 +9,11 @@ import 'package:mysafar_sdk/src/service/profile/profile_service.dart'
 import 'package:mysafar_sdk/src/service/profile/tickets_cache.dart';
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/service/profile/profile_cache.dart';
+import 'package:mysafar_sdk/src/core/config/network_request_scope.dart'
+    show NetworkCancel;
 part 'confirmed_tickets_state.dart';
 
-class ConfirmedTicketsCubit extends Cubit<ConfirmedTicketsState> {
+class ConfirmedTicketsCubit extends Cubit<ConfirmedTicketsState> with NetworkCancel {
   ConfirmedTicketsCubit() : super(ConfirmedTicketsInitState()) {
     getTickets();
   }
@@ -73,8 +75,10 @@ class ConfirmedTicketsCubit extends Cubit<ConfirmedTicketsState> {
     // Butun server bo'limi try/catch ostida — malformed javob yoki parse xatosi
     // Loading spinnerni osib qo'ymasligi uchun (har doim terminal holatga o'tadi).
     try {
-      final response = await _profileService.getTickets(
-        params: {'phone_number': phone},
+      final response = await withNetworkCancel(
+        () => _profileService.getTickets(
+          params: {'phone_number': phone},
+        ),
       );
       if (isClosed) return;
 

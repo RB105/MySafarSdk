@@ -3,7 +3,6 @@
 import 'package:flutter/material.dart';
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
@@ -15,14 +14,9 @@ import 'package:mysafar_sdk/src/cubit/booking/passenger/passenger_state.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_model.dart'
     show FlightElement;
 import 'package:mysafar_sdk/src/view/booking/booking_create_page.dart';
+import 'package:mysafar_sdk/src/view/booking/passenger_form_page.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/contact_form_widget.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/next_button_widget.dart';
-import 'package:mysafar_sdk/src/view/booking/widget/passenger_card_widget.dart';
-import 'package:mysafar_sdk/src/view/booking/widget/passenger_controller.dart';
-import 'package:mysafar_sdk/src/view/booking/widget/passenger_date_picker.dart';
-import 'package:mysafar_sdk/src/view/booking/widget/paymentbottomsheet.dart'
-    show  showCitySearchPicker;
-import 'package:mysafar_sdk/src/view/booking/widget/scan_page.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/support_widget.dart';
 
 class PassengerInformationPage extends StatefulWidget {
@@ -103,32 +97,18 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
   final _scrollController = ScrollController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
-  late List<PassengerController> _passengerControllers;
 
-  /// Host/profil telefoni — faqat raqamlar (`998...`). UI formatlangan ko'rinishda.
+  /// Telefon — faqat raqamlar (`998...`). Profil/hostdan to'ldiriladi,
+  /// foydalanuvchi tahrirlashi mumkin. UI formatlangan ko'rinishda.
   String _rawPhoneDigits = '';
-
-  final _birthdateFormatter = MaskTextInputFormatter(
-    type: MaskAutoCompletionType.lazy,
-    mask: '##.##.####',
-  );
-  final _docexpFormatter = MaskTextInputFormatter(
-    type: MaskAutoCompletionType.lazy,
-    mask: '##.##.####',
-  );
 
   final _emailKey = GlobalKey();
   final _phoneKey = GlobalKey();
   final _continueButtonKey = GlobalKey();
   final _emailFocusNode = FocusNode(skipTraversal: true);
-  late List<GlobalKey> _citizenKeys;
-  late List<GlobalKey> _docnumKeys;
-  late List<GlobalKey> _docexpKeys;
-  late List<GlobalKey> _firstnameKeys;
-  late List<GlobalKey> _lastnameKeys;
-  late List<GlobalKey> _middlenameKeys;
-  late List<GlobalKey> _birthdateKeys;
-  late List<GlobalKey> _genderKeys;
+  final _phoneFocusNode = FocusNode(skipTraversal: true);
+  late final List<GlobalKey> _passengerSlotKeys =
+      List.generate(_totalPassengers, (_) => GlobalKey());
 
   int get _totalPassengers => widget.adt + widget.chd + widget.inf;
 
@@ -151,19 +131,9 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
     );
   }
 
-  // Saqlangan foydalanuvchilar ham sahifa ochiq turganda o'zgarmaydi —
-  // har bir qayta qurishda storage'dan o'qimaslik uchun bir marta keshlanadi.
-  List<dynamic>? _cachedUsersList;
-
-  List<dynamic> _cachedUsers() {
-    return _cachedUsersList ??= context.read<PassengerCubit>().getCachedUsers();
-  }
-
   @override
   void initState() {
     super.initState();
-    _initializeControllers();
-    _initializeKeys();
     _focusListener = _updateFormFocusState;
     FocusManager.instance.addListener(_focusListener);
     for (final node in _allFormFocusNodes) {
@@ -171,17 +141,11 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
     }
   }
 
+  /// Bron sahifasida faqat kontakt maydonlari qoldi — yo'lovchilar alohida
+  /// [PassengerFormPage] da to'ldiriladi.
   Iterable<FocusNode> get _allFormFocusNodes sync* {
     yield _emailFocusNode;
-    for (final controller in _passengerControllers) {
-      yield controller.lastnameFocus;
-      yield controller.firstnameFocus;
-      yield controller.middlenameFocus;
-      yield controller.birthdateFocus;
-      yield controller.citizenFocus;
-      yield controller.docnumFocus;
-      yield controller.docexpFocus;
-    }
+    yield _phoneFocusNode;
   }
 
   void _updateFormFocusState() {
@@ -191,24 +155,6 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
     if (hasFormFocus != _formFieldFocused && mounted) {
       setState(() => _formFieldFocused = hasFormFocus);
     }
-  }
-
-  void _initializeControllers() {
-    _passengerControllers = List.generate(
-      _totalPassengers,
-      (_) => PassengerController(),
-    );
-  }
-
-  void _initializeKeys() {
-    _citizenKeys = List.generate(_totalPassengers, (_) => GlobalKey());
-    _docnumKeys = List.generate(_totalPassengers, (_) => GlobalKey());
-    _docexpKeys = List.generate(_totalPassengers, (_) => GlobalKey());
-    _firstnameKeys = List.generate(_totalPassengers, (_) => GlobalKey());
-    _lastnameKeys = List.generate(_totalPassengers, (_) => GlobalKey());
-    _middlenameKeys = List.generate(_totalPassengers, (_) => GlobalKey());
-    _birthdateKeys = List.generate(_totalPassengers, (_) => GlobalKey());
-    _genderKeys = List.generate(_totalPassengers, (_) => GlobalKey());
   }
 
   @override
@@ -221,9 +167,7 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
     _emailController.dispose();
     _phoneController.dispose();
     _emailFocusNode.dispose();
-    for (final controller in _passengerControllers) {
-      controller.dispose();
-    }
+    _phoneFocusNode.dispose();
     super.dispose();
   }
 
@@ -292,7 +236,7 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
                 right: 0,
                 bottom: showKeyboardBar ? keyboardInset : 0,
                 child: showKeyboardBar
-                    ? _buildKeyboardNextBar(context, state)
+                    ? _buildKeyboardNextBar(context)
                     : _buildBottomButton(context),
               ),
             ],
@@ -322,7 +266,10 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
     if (key != null) {
       _scrollToField(key);
     }
-    _showSnackBar(state.message);
+    // Yo'lovchi maydonlari alohida sahifada — bu yerda umumiy xabar.
+    _showSnackBar(state.passengerIndex != null
+        ? "incomplete_passenger_data".tr()
+        : state.message);
   }
 
   Future<void> _navigateToBookingPage(
@@ -334,6 +281,7 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
       MaterialPageRoute(
         builder: (_) => BookingCreatePage(
           passenger: state.passengersJson,
+          passengersToSave: state.passengersToSaveJson,
           price: state.price,
           trId: state.trId,
         ),
@@ -470,15 +418,21 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
       emailKey: _emailKey,
       phoneKey: _phoneKey,
       emailFocusNode: _emailFocusNode,
+      phoneFocusNode: _phoneFocusNode,
+      onPhoneChanged: (digits) => _onPhoneChanged(cubit, digits),
       onNextField: _goToNextEmptyField,
       rawPhoneDigits: _rawPhoneDigits,
     );
   }
 
-  Widget _buildKeyboardNextBar(BuildContext context, PassengerLoaded state) {
+  void _onPhoneChanged(PassengerCubit cubit, String digits) {
+    setState(() => _rawPhoneDigits = digits);
+    cubit.updatePhone(digits);
+  }
+
+  Widget _buildKeyboardNextBar(BuildContext context) {
     final isDark = context.isDarkMode;
-    final cubit = context.read<PassengerCubit>();
-    final targets = _fieldTargets(cubit, state);
+    final targets = _fieldTargets;
     final allFilled = !targets.any(_fieldNeedsAttention);
 
     return Material(
@@ -518,79 +472,136 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
     );
   }
 
+  /// Yo'lovchilar bitta kartada ixcham slotlar ko'rinishida: sarlavha
+  /// ("Yo'lovchi 1 (12 yoshdan katta)") va ostida bosiladigan maydon — bo'sh
+  /// bo'lsa "Ma'lumotlarni to'ldiring +", to'ldirilgan bo'lsa ism va tahrir
+  /// ikonkasi. Bosilganda alohida [PassengerFormPage] ochiladi.
   Widget _buildPassengersList(BuildContext context, PassengerLoaded state) {
-    final cubit = context.read<PassengerCubit>();
-
     return BookingCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            "passenger_booking_title".tr(),
+            "passenger_data_title".tr(),
             style: context.textTheme.bodyLarge
                 ?.copyWith(fontSize: 17, fontWeight: FontWeight.w700),
           ),
-          const SizedBox(height: 3),
-          Text(
-            "passenger_booking_subtitle".tr(),
-            style: context.textTheme.headlineSmall?.copyWith(fontSize: 13.5),
-          ),
-          const SizedBox(height: 18),
           for (int index = 0; index < _totalPassengers; index++) ...[
-            if (index != 0) ...[
-              const SizedBox(height: 20),
-              Divider(height: 1, thickness: 1, color: context.color.outline),
-              const SizedBox(height: 20),
-            ],
-            RepaintBoundary(
-              child: _buildPassengerCard(context, cubit, state, index),
-            ),
+            const SizedBox(height: 16),
+            _buildPassengerSlot(context, state, index),
           ],
         ],
       ),
     );
   }
 
-  Widget _buildPassengerCard(
+  String _passengerSlotTitle(int index) {
+    final key = index < widget.adt
+        ? "passenger_adult"
+        : index < widget.adt + widget.chd
+            ? "passenger_child"
+            : "passenger_infant";
+    return key.tr(namedArgs: {"number": "${index + 1}"});
+  }
+
+  Widget _buildPassengerSlot(
     BuildContext context,
-    PassengerCubit cubit,
     PassengerLoaded state,
     int index,
   ) {
-    return PassengerCardWidget(
-      index: index,
-      adultCount: widget.adt,
-      childCount: widget.chd,
-      passenger: state.passengers[index],
-      controller: _passengerControllers[index],
-      showErrors: state.showErrors,
-      cachedUsers: _cachedUsers(),
-      getSuggestions: _cachedSuggestions,
-      onFieldChanged: (field, value) => _handlePassengerFieldChanged(
-        cubit,
-        index,
-        field,
-        value,
+    final passenger = state.passengers[index];
+    final filled = passenger.displayName.isNotEmpty;
+    final hasError = state.showErrors && !passenger.isValid;
+    final borderColor = hasError ? ProjectTheme.error : context.color.outline;
+
+    return Column(
+      key: _passengerSlotKeys[index],
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _passengerSlotTitle(index),
+          style: context.textTheme.bodyMedium
+              ?.copyWith(fontSize: 15, fontWeight: FontWeight.w500),
+        ),
+        const SizedBox(height: 8),
+        Material(
+          color: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(width: 1.5, color: borderColor),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => _openPassengerForm(index),
+            child: SizedBox(
+              height: 56,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 16, right: 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        filled
+                            ? passenger.displayName
+                            : "fill_passenger_data".tr(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: filled
+                            ? context.textTheme.bodyMedium
+                                ?.copyWith(fontWeight: FontWeight.w600)
+                            : context.textTheme.headlineSmall?.copyWith(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(
+                      filled ? Icons.edit_note_rounded : Icons.add_rounded,
+                      size: 26,
+                      color: ProjectTheme.brandColor,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (hasError) ...[
+          const SizedBox(height: 6),
+          Text(
+            "incomplete_passenger_data".tr(),
+            style: context.textTheme.bodySmall
+                ?.copyWith(color: ProjectTheme.error, fontSize: 13),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _openPassengerForm(int index) async {
+    FocusScope.of(context).unfocus();
+    final cubit = context.read<PassengerCubit>();
+    final current = cubit.state;
+    if (current is! PassengerLoaded) return;
+
+    final result = await Navigator.of(context).push<PassengerFormResult>(
+      MaterialPageRoute(
+        settings: const RouteSettings(name: PassengerFormPage.routeName),
+        builder: (_) => PassengerFormPage(
+          initial: current.passengers[index],
+          index: index,
+          adultCount: widget.adt,
+          childCount: widget.chd,
+          initialSaveToProfile: current.saveToProfile.contains(index),
+        ),
       ),
-      onUserSelected: (user) {
-        cubit.updatePassengerFromUser(index, user);
-        _updateControllersFromUser(index, user);
-      },
-      onScanTap: () => _openMrzScanner(index, cubit),
-      onCitizenTap: () => _showCitizenPicker(index, cubit),
-      onDocexpCalendarTap: () => _showDocexpDatePicker(index, cubit),
-      onBirthdateCalendarTap: () => _showBirthdateDatePicker(index, cubit),
-      onNextField: _goToNextEmptyField,
-      docexpFormatter: _docexpFormatter,
-      birthdateFormatter: _birthdateFormatter,
-      citizenKey: _citizenKeys[index],
-      docnumKey: _docnumKeys[index],
-      docexpKey: _docexpKeys[index],
-      firstnameKey: _firstnameKeys[index],
-      lastnameKey: _lastnameKeys[index],
-      middlenameKey: _middlenameKeys[index],
-      birthdateKey: _birthdateKeys[index],
-      genderKey: _genderKeys[index],
+    );
+    if (!mounted || result == null) return;
+    cubit.setPassenger(
+      index,
+      result.passenger,
+      saveToProfile: result.saveToProfile,
     );
   }
 
@@ -612,96 +623,11 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
     );
   }
 
-  void _updateControllersFromUser(int index, dynamic user) {
-    final controller = _passengerControllers[index];
-    controller.firstnameController.text =
-        PassengerCubit.sanitizeName(user.firstname);
-    controller.lastnameController.text =
-        PassengerCubit.sanitizeName(user.lastname);
-    controller.middlenameController.text =
-        PassengerCubit.sanitizeName(user.middlename);
-    controller.birthdateController.text = user.birthdate ?? '';
-    controller.docexpController.text = user.docexp ?? '';
-    controller.docnumController.text = user.docnum ?? '';
-  }
-
-  Future<void> _openMrzScanner(int index, PassengerCubit cubit) async {
-    final user = await showMrzScannerBottomSheet(context);
-    if (!mounted || user == null) return;
-    cubit.updatePassengerFromUser(index, user);
-    _updateControllersFromUser(index, user);
-  }
-
-  void _handlePassengerFieldChanged(
-    PassengerCubit cubit,
-    int index,
-    String field,
-    String value,
-  ) {
-    cubit.updatePassengerField(index, field, value);
-
-    if (field == 'gender' && index == _totalPassengers - 1) {
-      FocusManager.instance.primaryFocus?.unfocus();
-    }
-  }
-
-  Future<void> _showCitizenPicker(int index, PassengerCubit cubit) async {
-    final result = await showCitySearchPicker(context);
-    if (result != null) {
-      cubit.updateCitizen(index, result['code'] ?? '');
-    }
-    if (!mounted) return;
-    _passengerControllers[index].citizenFocus.requestFocus();
-  }
-
-  void _showDocexpDatePicker(int index, PassengerCubit cubit) {
-    PassengerDatePicker.show(
-      context: context,
-      controller: _passengerControllers[index].docexpController,
-      isFutureOnly: true,
-      title: 'passport_validity'.tr(),
-      onDateSelected: (date) {
-        cubit.updatePassengerField(
-          index,
-          'docexp',
-          DateFormat('dd.MM.yyyy').format(date),
-        );
-      },
-    );
-  }
-
-  void _showBirthdateDatePicker(int index, PassengerCubit cubit) {
-    PassengerDatePicker.show(
-      context: context,
-      controller: _passengerControllers[index].birthdateController,
-      isFutureOnly: false,
-      title: 'birth_date'.tr(),
-      onDateSelected: (date) {
-        cubit.updatePassengerField(
-          index,
-          'birthdate',
-          DateFormat('dd.MM.yyyy').format(date),
-        );
-      },
-    );
-  }
-
   GlobalKey? _getFieldKeyByName(int? index, String? fieldName) {
     if (fieldName == 'email') return _emailKey;
     if (fieldName == 'phone') return _phoneKey;
-    if (index == null || fieldName == null) return null;
-
-    return switch (fieldName) {
-      'citizen' => _citizenKeys[index],
-      'docnum' => _docnumKeys[index],
-      'docexp' => _docexpKeys[index],
-      'firstname' => _firstnameKeys[index],
-      'lastname' => _lastnameKeys[index],
-      'middlename' => _middlenameKeys[index],
-      'birthdate' => _birthdateKeys[index],
-      'gender' => _genderKeys[index],
-      _ => null,
-    };
+    if (index == null) return null;
+    return _passengerSlotKeys[index];
   }
 
   Future<void> _scrollToField(GlobalKey key) async {
@@ -726,33 +652,17 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
     return null;
   }
 
-  String? _validateDate(String value, {required String emptyMessage}) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return emptyMessage;
-    if (!RegExp(r'^\d{2}\.\d{2}\.\d{4}$').hasMatch(trimmed)) {
-      return 'invalid_date_format'.tr();
-    }
-    try {
-      DateFormat('dd.MM.yyyy').parseStrict(trimmed);
-    } catch (_) {
-      return 'invalid_date_format'.tr();
-    }
-    return null;
-  }
-
   bool _fieldNeedsAttention(_BookingFieldTarget target) {
-    if (target.isOptional) return false;
     final text = target.getText();
     if (text.trim().isEmpty) return true;
     final error = target.validator?.call(text);
     return error != null && error.isNotEmpty;
   }
 
-  List<_BookingFieldTarget> _fieldTargets(
-    PassengerCubit cubit,
-    PassengerLoaded state,
-  ) {
-    final targets = <_BookingFieldTarget>[
+  /// Kontakt maydonlari bo'ylab ketma-ket tartib — yo'lovchilar alohida
+  /// sahifada to'ldiriladi.
+  List<_BookingFieldTarget> get _fieldTargets {
+    return <_BookingFieldTarget>[
       _BookingFieldTarget(
         fieldName: 'email',
         key: _emailKey,
@@ -763,83 +673,13 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
       _BookingFieldTarget(
         fieldName: 'phone',
         key: _phoneKey,
+        focusNode: _phoneFocusNode,
         getText: () => _rawPhoneDigits,
-        isPicker: true, // read-only — klaviatura next fokus bermaydi
-        validator: (_) =>
-            _rawPhoneDigits.isEmpty ? 'enter_full_phone_number'.tr() : null,
+        validator: (_) => _rawPhoneDigits.length < kMinPhoneDigits
+            ? 'enter_full_phone_number'.tr()
+            : null,
       ),
     ];
-
-    for (int index = 0; index < _totalPassengers; index++) {
-      final controller = _passengerControllers[index];
-      final passenger = state.passengers[index];
-      targets.addAll([
-        _BookingFieldTarget(
-          passengerIndex: index,
-          fieldName: 'lastname',
-          key: _lastnameKeys[index],
-          focusNode: controller.lastnameFocus,
-          getText: () => controller.lastnameController.text,
-          validator: (v) => _validateRequired(v, 'surname_not_entered'.tr()),
-        ),
-        _BookingFieldTarget(
-          passengerIndex: index,
-          fieldName: 'firstname',
-          key: _firstnameKeys[index],
-          focusNode: controller.firstnameFocus,
-          getText: () => controller.firstnameController.text,
-          validator: (v) => _validateRequired(v, 'name_not_entered'.tr()),
-        ),
-        _BookingFieldTarget(
-          passengerIndex: index,
-          fieldName: 'middlename',
-          key: _middlenameKeys[index],
-          focusNode: controller.middlenameFocus,
-          isOptional: true,
-          getText: () => controller.middlenameController.text,
-        ),
-        _BookingFieldTarget(
-          passengerIndex: index,
-          fieldName: 'birthdate',
-          key: _birthdateKeys[index],
-          focusNode: controller.birthdateFocus,
-          getText: () => controller.birthdateController.text,
-          validator: (v) =>
-              _validateDate(v, emptyMessage: 'birthdate_required'.tr()),
-        ),
-        _BookingFieldTarget(
-          passengerIndex: index,
-          fieldName: 'citizen',
-          key: _citizenKeys[index],
-          isPicker: true,
-          focusNode: controller.citizenFocus,
-          getText: () => passenger.citizen,
-          validator: (v) =>
-              _validateRequired(v, 'citizenship_not_selected'.tr()),
-          onPickerTap: () => _showCitizenPicker(index, cubit),
-        ),
-        _BookingFieldTarget(
-          passengerIndex: index,
-          fieldName: 'docnum',
-          key: _docnumKeys[index],
-          focusNode: controller.docnumFocus,
-          getText: () => controller.docnumController.text,
-          validator: (v) =>
-              _validateRequired(v, 'passport_data_not_entered'.tr()),
-        ),
-        _BookingFieldTarget(
-          passengerIndex: index,
-          fieldName: 'docexp',
-          key: _docexpKeys[index],
-          focusNode: controller.docexpFocus,
-          getText: () => controller.docexpController.text,
-          validator: (v) =>
-              _validateDate(v, emptyMessage: 'passport_expiry_required'.tr()),
-        ),
-      ]);
-    }
-
-    return targets;
   }
 
   _BookingFieldTarget? _currentTarget(List<_BookingFieldTarget> targets) {
@@ -860,8 +700,7 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
 
     cubit.showErrors();
 
-    final state = cubit.state as PassengerLoaded;
-    final targets = _fieldTargets(cubit, state);
+    final targets = _fieldTargets;
     final current = _currentTarget(targets);
 
     if (current != null && _fieldNeedsAttention(current)) {
@@ -896,14 +735,6 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
   }
 
   Future<void> _activateField(_BookingFieldTarget target) async {
-    if (target.isPicker) {
-      // FocusScope.of(context).unfocus();
-      await _scrollToField(target.key);
-      target.focusNode?.requestFocus();
-      target.onPickerTap?.call();
-      return;
-    }
-
     await _scrollToField(target.key);
     target.focusNode?.requestFocus();
   }
@@ -919,13 +750,9 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
 }
 
 class _BookingFieldTarget {
-  final int? passengerIndex;
   final String fieldName;
   final GlobalKey key;
   final FocusNode? focusNode;
-  final bool isPicker;
-  final bool isOptional;
-  final VoidCallback? onPickerTap;
   final String Function() getText;
   final String? Function(String value)? validator;
 
@@ -933,11 +760,7 @@ class _BookingFieldTarget {
     required this.fieldName,
     required this.key,
     required this.getText,
-    this.passengerIndex,
     this.focusNode,
-    this.isPicker = false,
-    this.isOptional = false,
-    this.onPickerTap,
     this.validator,
   });
 }

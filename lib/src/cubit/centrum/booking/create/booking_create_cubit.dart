@@ -1,6 +1,6 @@
 part of 'booking_create_states.dart';
 
-class CentrumBookingcreateCubit extends Cubit<CentrumBookingcreateStates> {
+class CentrumBookingcreateCubit extends Cubit<CentrumBookingcreateStates> with NetworkCancel {
   CentrumBookingcreateCubit() : super(BookingcreateInitState());
 
   TextEditingController clientEmailController = TextEditingController();
@@ -11,9 +11,9 @@ class CentrumBookingcreateCubit extends Cubit<CentrumBookingcreateStates> {
     required Map<String, dynamic> params,
   }) async {
     emit(CentrumBookingcreateLoadingState());
-    await _bookingService
-        .createCentrum(params: params)
-        .then((NetworkResponse? response) {
+    await withNetworkCancel(
+      () => _bookingService.createCentrum(params: params),
+    ).then((NetworkResponse? response) {
       if (isClosed) return;
       if (response is NetworkSuccessResponse) {
         // Voronka 2-bosqichi — booking yaratildi (to'lovdan oldingi qadam).

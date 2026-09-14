@@ -3,10 +3,12 @@ import 'package:mysafar_sdk/src/core/config/response_config.dart';
 
 import '../service/my_application_model.dart';
 import '../service/my_applications_service.dart';
+import 'package:mysafar_sdk/src/core/config/network_request_scope.dart'
+    show NetworkCancel;
 
 part 'my_applications_state.dart';
 
-class MyApplicationsCubit extends Cubit<MyApplicationsState> {
+class MyApplicationsCubit extends Cubit<MyApplicationsState> with NetworkCancel {
   MyApplicationsCubit() : super(MyApplicationsInitState());
 
   final MyApplicationsService _service = MyApplicationsService();
@@ -29,7 +31,7 @@ class MyApplicationsCubit extends Cubit<MyApplicationsState> {
     }
 
     emit(MyApplicationsLoadingState());
-    final response = await _service.getMyApplications(pinfl: pinfl);
+    final response = await withNetworkCancel(() => _service.getMyApplications(pinfl: pinfl));
     if (isClosed) return;
 
     if (response is NetworkSuccessResponse<List<MyApplicationModel>>) {

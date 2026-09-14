@@ -179,16 +179,17 @@ class PassengerCardWidget extends StatelessWidget {
   }
 
   /// Tug'ilgan sana va jins bitta qatorda (maketdagidek).
+  ///
+  /// Tepaga tekislanadi: sana ostida xato matni chiqqanda jins tanlagich
+  /// cho'zilmasin — balandligi input maydoni bilan bir xil (58) qoladi.
   Widget _buildBirthdateAndGenderRow(BuildContext context) {
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(flex: 3, child: _buildBirthdateField(context)),
-          const SizedBox(width: 10),
-          Expanded(flex: 2, child: _buildGenderField(context)),
-        ],
-      ),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(flex: 3, child: _buildBirthdateField(context)),
+        const SizedBox(width: 10),
+        Expanded(flex: 2, child: _buildGenderField(context)),
+      ],
     );
   }
 
@@ -389,7 +390,7 @@ class PassengerCardWidget extends StatelessWidget {
 
     return SizedBox(
       key: genderKey,
-      height: 56,
+      height: 58,
       child: Stack(
         children: [
           // 1. Umumiy och kontur.

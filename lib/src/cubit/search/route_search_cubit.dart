@@ -14,13 +14,15 @@ import 'package:mysafar_sdk/src/service/avia_service.dart' show AviaService;
 import 'package:mysafar_sdk/src/service/fornex/fornex_repository.dart'
     show FornexRepository;
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
+import 'package:mysafar_sdk/src/core/config/network_request_scope.dart'
+    show NetworkCancel;
 
 part 'route_search_state.dart';
 
 /// Yo'nalish qidiruv oynasining biznes-mantig'i (RouteSearchPage). Barcha
 /// forma holati va yuklanadigan ma'lumot shu yerda — sahifaning o'zi faqat
 /// holatni chizadi va foydalanuvchi tanlovlarini shu cubit'ga uzatadi.
-class RouteSearchCubit extends Cubit<RouteSearchState> {
+class RouteSearchCubit extends Cubit<RouteSearchState> with NetworkCancel {
   RouteSearchCubit({
     required AirPortsModel from,
     required AirPortsModel to,
@@ -155,19 +157,22 @@ class RouteSearchCubit extends Cubit<RouteSearchState> {
   // ── Ma'lumot yuklash ──────────────────────────────────────────────────
 
   Future<void> _loadMonthPrices() async {
+    refreshNetworkCancel();
     final key = _routeKey;
     emit(state.copyWith(monthLoading: true, clearMonthPrices: true));
     try {
-      final response = await _avia.getPriceByMonth(
-        state.from.cityIataCode ?? '',
-        state.to.cityIataCode ?? '',
-        date: state.date,
-        adt: state.adt,
-        chd: state.chd,
-        inf: state.inf,
-        klass: state.klass,
-        direct: state.direct,
-        baggage: state.baggage,
+      final response = await withNetworkCancel(
+        () => _avia.getPriceByMonth(
+          state.from.cityIataCode ?? '',
+          state.to.cityIataCode ?? '',
+          date: state.date,
+          adt: state.adt,
+          chd: state.chd,
+          inf: state.inf,
+          klass: state.klass,
+          direct: state.direct,
+          baggage: state.baggage,
+        ),
       );
       if (isClosed || key != _routeKey) return;
       emit(state.copyWith(
@@ -219,9 +224,12 @@ class RouteSearchCubit extends Cubit<RouteSearchState> {
       final params = body.toJson();
       final List<String> endpoints =
           RemoteConfigService.instance.recommendationEndpoints;
-      final List<NetworkResponse> responses = await Future.wait(
-        endpoints.map(
-          (ep) => _avia.getRecommendations(params: params, endPoint: ep),
+      // Parallel so'rovlar; bekor qilish oylik narxlar bilan bir doirada.
+      final List<NetworkResponse> responses = await withNetworkCancel(
+        () => Future.wait(
+          endpoints.map(
+            (ep) => _avia.getRecommendations(params: params, endPoint: ep),
+          ),
         ),
       );
       if (isClosed || key != _routeKey) return;

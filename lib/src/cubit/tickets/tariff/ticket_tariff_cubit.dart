@@ -4,10 +4,12 @@ import 'package:mysafar_sdk/src/core/config/response_config.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/ticket_tariff_model.dart'
     show FlightTariffModel;
 import 'package:mysafar_sdk/src/service/avia_service.dart';
+import 'package:mysafar_sdk/src/core/config/network_request_scope.dart'
+    show NetworkCancel;
 
 part 'ticket_tariff_state.dart';
 
-class TicketTariffCubit extends Cubit<TicketTariffState> {
+class TicketTariffCubit extends Cubit<TicketTariffState> with NetworkCancel {
   TicketTariffCubit(String tid) : super(TicketTariffInitState()) {
     //
     getTariffs(tid);
@@ -21,7 +23,7 @@ class TicketTariffCubit extends Cubit<TicketTariffState> {
     emit(TicketTariffLoadingState());
 
     try {
-      final response = await _aviaService.getTariff(tid);
+      final response = await withNetworkCancel(() => _aviaService.getTariff(tid));
       if (isClosed) return;
 
       if (response is NetworkSuccessResponse) {

@@ -19,7 +19,8 @@ import 'package:mysafar_sdk/src/core/tools/formatters.dart';
 import 'package:mysafar_sdk/src/core/tools/project_assets.dart' show ProjectAssets;
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart' show Assets;
-import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart' show ProjectDialogs;
+import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart'
+    show ErrorDialogAction, ProjectDialogs;
 import 'package:mysafar_sdk/src/core/tools/sdk_sheets.dart';
 import 'package:mysafar_sdk/src/cubit/tickets/tickets_cubit.dart';
 import 'package:mysafar_sdk/src/model/local/recom_req_model.dart'
@@ -91,6 +92,13 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
   static const Duration _visibilityRecheck = Duration(milliseconds: 500);
   Timer? _priceRefreshTimer;
   bool _refreshDialogOpen = false;
+
+  // ── API xatosi dialogi ────────────────────────────────────────────────
+  // Qidiruvda barcha manbalar xato bergan bo'lsa (tarmoq uzilishi va h.k.),
+  // ro'yxat o'rniga dialog chiqaramiz: "Qayta urinish" — xuddi shu parametrlar
+  // bilan yangi so'rov; "Yopish" — bitta oldingi ekranga qaytish.
+  // Bayroq bir vaqtda ikkita dialog ochilib ketmasligi uchun.
+  bool _errorDialogOpen = false;
 
   // ── Sana-narx lentasi (web mobil dizayni) ─────────────────────────────
   // Qo'shni kunlarning eng arzon narxlari appbar ostidagi to'q ko'k lentada
@@ -296,6 +304,38 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
     }
   }
 
+  /// API'dan HAR QANDAY xato kelganda (tarmoq, timeout, 4xx, 5xx, noma'lum)
+  /// shu dialog ko'rsatiladi — sarlavha xato turiga qarab o'zgaradi.
+  /// "Qayta urinish" bosilsa — joriy parametrlar bilan yangi so'rov,
+  /// "Yopish" bosilsa — bitta oldingi ekranga (qidiruv formasiga) qaytamiz.
+  Future<void> _showErrorDialog(
+      TicketCubit cubit, TicketErrorState state) async {
+    if (!mounted || _errorDialogOpen || _refreshDialogOpen) return;
+
+    // Sahifa ekranda ko'rinmasa (masalan, user boshqa ekranga o'tib ketgan
+    // bo'lsa) dialogni chiqarmaymiz — narx yangilash dialogidagi qoidaning
+    // aynan o'zi.
+    final route = ModalRoute.of(context);
+    if (route == null || !route.isCurrent) return;
+
+    _errorDialogOpen = true;
+    final action = await ProjectDialogs.showApiErrorDialog(
+      context,
+      message: state.errorMsg,
+      errorType: state.errorType,
+    );
+    _errorDialogOpen = false;
+    if (!mounted) return;
+
+    if (action == ErrorDialogAction.retry) {
+      if (cubit.isClosed) return;
+      cubit.add(GetRecommendationsEvent(cubit.filterReqBody));
+    } else {
+      // Yopish — bitta oldingi ekranga (qidiruv formasiga) qaytamiz.
+      Navigator.of(context).maybePop();
+    }
+  }
+
   @override
   void dispose() {
     _priceRefreshTimer?.cancel();
@@ -355,6 +395,11 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
               _maybeScrollCheapestToTop();
             } else if (state is TicketEmptyState || state is TicketErrorState) {
               _restartPriceRefreshTimer(BlocProvider.of<TicketCubit>(context));
+              // API xato qaytardi (tur muhim emas) — ro'yxat o'rniga xato
+              // dialogini ko'rsatamiz (qayta urinish / orqaga qaytish).
+              if (state is TicketErrorState) {
+                _showErrorDialog(BlocProvider.of<TicketCubit>(context), state);
+              }
             }
           },
           builder: (context, state) {
@@ -526,16 +571,9 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
                                           )
                                         ],
                                       ),
-                                    TicketErrorState() => _TicketErrorView(
-                                        message: state.errorMsg,
-                                        onRetry: () {
-                                          final cubit =
-                                              BlocProvider.of<TicketCubit>(
-                                                  context);
-                                          cubit.add(GetRecommendationsEvent(
-                                              cubit.filterReqBody));
-                                        },
-                                      ),
+                                    // Xato dialog orqali ko'rsatiladi —
+                                    // sahifa tanasida takrorlanmasin.
+                                    TicketErrorState() => const SizedBox(),
                                     _ => const SizedBox(),
                                   },
                                 ),

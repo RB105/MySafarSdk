@@ -78,6 +78,8 @@ enum ErrorDialogKind {
       case ErrorType.badGateway_502:
       case ErrorType.serviceUnavailable_503:
       case ErrorType.gatewayTimeout_504:
+      // Ro'yxatda yo'q 5xx (505, Cloudflare 520–527) ham server xatosi.
+      case ErrorType.serverError_5xx:
         return ErrorDialogKind.server;
       default:
         return ErrorDialogKind.generic;

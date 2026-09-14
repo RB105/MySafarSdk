@@ -1,11 +1,12 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
-import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:mysafar_sdk/src/core/config/response_config.dart';
 import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/model/remote/profile/profile_model.dart';
 import 'package:mysafar_sdk/src/service/profile/profile_cache.dart';
 import 'package:mysafar_sdk/src/service/profile/profile_service.dart';
+import 'package:mysafar_sdk/src/core/config/network_request_scope.dart'
+    show NetworkCancel;
 
 // States
 abstract class UpdateProfileState {}
@@ -25,7 +26,7 @@ class UpdateProfileError extends UpdateProfileState {
 }
 
 // Cubit
-class UpdateProfileCubit extends Cubit<UpdateProfileState> {
+class UpdateProfileCubit extends Cubit<UpdateProfileState> with NetworkCancel {
   UpdateProfileCubit() : super(UpdateProfileInitial());
 
   final ProfileService _profileService = ProfileService();
@@ -34,7 +35,7 @@ class UpdateProfileCubit extends Cubit<UpdateProfileState> {
   Future<void> updateProfile(ProfileModel profileModel) async {
     emit(UpdateProfileLoading());
 
-    final response = await _profileService.updateProfileData(profileModel);
+    final response = await withNetworkCancel(() => _profileService.updateProfileData(profileModel));
     if (isClosed) return;
 
     if (response is NetworkSuccessResponse) {

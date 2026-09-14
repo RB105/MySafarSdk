@@ -1,4 +1,7 @@
+import 'package:mysafar_sdk/src/core/config/network_request_scope.dart'
+    show NetworkCancel;
 import 'package:mysafar_sdk/src/core/config/response_config.dart';
+import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:mysafar_sdk/src/core/tools/project_utils.dart';
 import 'package:mysafar_sdk/src/model/centrum/get_centrum_recommendation_model.dart';
 import 'package:mysafar_sdk/src/model/local/recom_req_model.dart';
@@ -12,7 +15,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 part 'tickets_state.dart';
 part 'tickets_event.dart';
 
-class TicketCubit extends Bloc<TicketEvent, TicketsState> {
+class TicketCubit extends Bloc<TicketEvent, TicketsState> with NetworkCancel {
   TicketCubit(RecommendationRequestBody reqBody, bool isCentrum)
       : super(TicketInitState()) {
     filterReqBody = reqBody;
@@ -41,11 +44,23 @@ class TicketCubit extends Bloc<TicketEvent, TicketsState> {
     GetRecommendationsEvent event,
     Emitter<TicketsState> emit,
   ) async {
+    // Yangi qidiruv — oldingi tarmoq so'rovlarini bekor qilamiz.
+    refreshNetworkCancel();
     // Yangi qidiruv avlodi — eski parallel so'rovlar natijasi UI'ga chiqmasin.
     final int generation = ++_requestGeneration;
 
     emit(TicketLoadingState());
 
+    await withNetworkCancel(() async {
+      await _runRecommendations(event, emit, generation);
+    });
+  }
+
+  Future<void> _runRecommendations(
+    GetRecommendationsEvent event,
+    Emitter<TicketsState> emit,
+    int generation,
+  ) async {
     final params = event.requestBody.toJson();
 
     // Firebase SDK'dan olib tashlangan — endpoint ro'yxati Hive keshi yoki
@@ -63,6 +78,10 @@ class TicketCubit extends Bloc<TicketEvent, TicketsState> {
     GetRecommendationResModel? accumulated;
     bool anyShown = false;
     NetworkErrorResponse? lastError;
+    // Kamida bitta manba "bu yo'nalish/sanada reys yo'q" deb javob berdi.
+    // Bu — xato emas, yo'nalish haqidagi haqiqiy javob; shuning uchun boshqa
+    // manbaning xatosidan USTUN turadi (pastdagi yakuniy tanlovga qarang).
+    bool anyEmpty = false;
 
     bool isStale() => isClosed || generation != _requestGeneration;
 
@@ -151,11 +170,16 @@ class TicketCubit extends Bloc<TicketEvent, TicketsState> {
         }
 
         anyShown = true;
-      } else if (response is NetworkErrorResponse &&
-          response.errorType != ErrorType.emptyResponse) {
-        // Qisman xato — userga ko'rsatilmaydi. Faqat saqlaymiz; barcha manba
-        // xato bo'lsa, oxirida chiqaramiz.
-        lastError = response;
+      } else if (response is NetworkErrorResponse) {
+        if (response.errorType == ErrorType.emptyResponse) {
+          // Manba muvaffaqiyatli javob berdi, lekin bu yo'nalish/sanada reys
+          // yo'q. Bu xato emas — "bilet topilmadi" holati.
+          anyEmpty = true;
+        } else {
+          // Qisman xato — userga ko'rsatilmaydi. Faqat saqlaymiz; hech qaysi
+          // manba javob bermasa, oxirida chiqaramiz.
+          lastError = response;
+        }
       }
 
       // Har bir manba tugagach UI yangilanadi: natija bo'lsa ro'yxat +
@@ -164,20 +188,36 @@ class TicketCubit extends Bloc<TicketEvent, TicketsState> {
       emitProgress();
     }
 
+    // Tarmoq xatolari `fetchWithRetry` ichida `NetworkErrorResponse`ga
+    // aylantiriladi; bu yerga faqat kutilmagan istisnolar (parse/cast va h.k.)
+    // tushadi — ularni ham "bo'sh natija" emas, xato deb ko'rsatamiz.
+    Object? unexpectedError;
+
     // Barcha manbalarga birdan (parallel) so'rov.
     try {
       await Future.wait(endpoints.map(runSource));
     } catch (e) {
+      unexpectedError = e;
       debugPrint("TicketCubit GetRecommendations error: $e");
     }
 
     if (isStale()) return;
 
     // Hech qaysi manba reys bermadi — endi (faqat shu holatda) xato yoki bo'sh
-    // holatni ko'rsatamiz.
+    // holatni ko'rsatamiz. Tartib muhim:
+    //   1) kamida bitta manba "reys yo'q" dedi → "bilet topilmadi" (xato dialogi
+    //      chiqmaydi; boshqa manbaning xatosi bu javobni bekor qilmaydi);
+    //   2) hech kim javob bermadi, faqat xatolar → xato dialogi;
+    //   3) kutilmagan istisno → umumiy xato;
+    //   4) qolgan hollarda → "bilet topilmadi".
     if (!anyShown) {
-      if (lastError != null) {
-        emit(TicketErrorState(lastError!.getError()));
+      if (anyEmpty) {
+        emit(TicketEmptyState());
+      } else if (lastError != null) {
+        emit(TicketErrorState(lastError!.getError(),
+            errorType: lastError!.errorType));
+      } else if (unexpectedError != null) {
+        emit(TicketErrorState("error_other".tr()));
       } else {
         emit(TicketEmptyState());
       }

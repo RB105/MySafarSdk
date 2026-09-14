@@ -8,10 +8,12 @@ import 'package:mysafar_sdk/src/service/avia_service.dart';
 import 'package:mysafar_sdk/src/service/geolacator/location_airport_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:mysafar_sdk/src/core/config/network_request_scope.dart'
+    show NetworkCancel;
 
 part 'city_choose_state.dart';
 
-class CityChooseCubit extends Cubit<CityChooseStates> {
+class CityChooseCubit extends Cubit<CityChooseStates> with NetworkCancel {
   CityChooseCubit({
     AirportLocalSearchService? localSearch,
     AviaService? aviaService,
@@ -63,6 +65,7 @@ class CityChooseCubit extends Cubit<CityChooseStates> {
   /// 1) Har doim local JSON (1+ harf) — isolate’da, Loading emit qilinmaydi
   /// 2) Local bo'sh va so'rov ≥ 3 harf bo'lsa — API fallback (+ Loading)
   Future<void> getAirports({required String part, String? lang}) async {
+    refreshNetworkCancel();
     final query = part.trim();
     if (query.isEmpty) {
       resetToInit();
@@ -103,8 +106,9 @@ class CityChooseCubit extends Cubit<CityChooseStates> {
       // API faqat local topmaganda — loading shu yerda.
       emit(const CityChooseLoadingState());
       final apiLang = searchLang == 'uz' ? 'en' : searchLang;
-      final NetworkResponse response =
-          await _aviaService.getAirports(part: query, lang: apiLang);
+      final NetworkResponse response = await withNetworkCancel(
+        () => _aviaService.getAirports(part: query, lang: apiLang),
+      );
       if (isClosed || seq != _searchSeq) return;
 
       if (response is NetworkSuccessResponse) {

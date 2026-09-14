@@ -6,10 +6,12 @@ import 'package:mysafar_sdk/src/service/profile/profile_cache.dart';
 import 'package:mysafar_sdk/src/service/profile/profile_service.dart';
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
+import 'package:mysafar_sdk/src/core/config/network_request_scope.dart'
+    show NetworkCancel;
 
 part 'profile_state.dart';
 
-class ProfileCubit extends Cubit<ProfileState> {
+class ProfileCubit extends Cubit<ProfileState> with NetworkCancel {
   ProfileCubit({bool? needGetProfile}) : super(ProfileState()) {
     if (needGetProfile ?? false) {
       getProfileData();
@@ -67,7 +69,8 @@ class ProfileCubit extends Cubit<ProfileState> {
       return NetworkSuccessResponse(data: cachedProfile);
     }
 
-    final NetworkResponse res = await _profileService.getProfileData();
+    final NetworkResponse res = 
+        await withNetworkCancel(_profileService.getProfileData);
     if (isClosed) return res;
 
     if (res is NetworkSuccessResponse) {
@@ -101,7 +104,9 @@ class ProfileCubit extends Cubit<ProfileState> {
   Future<void> updateProfileData(ProfileModel profileModel) async {
     emit(state.copyWith(updateProfileStatus: ActionStatus.isLoading));
 
-    final res = await _accountService.updateProfile(profileModel.toFormData());
+    final res = await withNetworkCancel(
+      () => _accountService.updateProfile(profileModel.toFormData()),
+    );
     if (isClosed) return;
 
     if (res is NetworkSuccessResponse) {

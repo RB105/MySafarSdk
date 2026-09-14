@@ -2,16 +2,29 @@ import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/service/auth_service.dart';
 import 'package:mysafar_sdk/src/service/telegram_auth.dart';
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
+import 'package:mysafar_sdk/src/core/config/network_request_scope.dart'
+    show NetworkCancel;
 
 part 'auth_state.dart';
 
-class AuthCubit extends Cubit<AuthState> {
+class AuthCubit extends Cubit<AuthState> with NetworkCancel {
   final AuthService _authService;
 
   AuthCubit({
     AuthService? authService,
   })  : _authService = authService ?? AuthService(),
         super(const AuthState());
+
+  /// Cubit yopilgandan keyin `emit` chaqirilsa `StateError: Cannot emit new
+  /// states after calling close` bo'lardi — foydalanuvchi auth oynasidan
+  /// chiqib ketganda async so'rov qaytib kelib holat yozmoqchi bo'ladi
+  /// (AppMetrica: 7 kunda 60 ta crash, 48 ta qurilma). Har bir metodda
+  /// alohida `isClosed` tekshirish o'rniga bitta joyda to'xtatamiz.
+  @override
+  void emit(AuthState state) {
+    if (isClosed) return;
+    super.emit(state);
+  }
 
   /// Telegram tugmasini ko'rsatish sharti.
   static bool get telegramAuthEnabled =>
@@ -29,8 +42,10 @@ class AuthCubit extends Cubit<AuthState> {
         emit(state.copyWith(telegramAuthStatus: ActionStatus.isInitial));
         return;
       }
-      final NetworkResponse res = await _authService.telegramAuth(
-        token: idToken,
+      final NetworkResponse res = await withNetworkCancel(
+        () => _authService.telegramAuth(
+          token: idToken,
+        ),
       );
 
       if (res is NetworkSuccessResponse) {
@@ -56,7 +71,7 @@ class AuthCubit extends Cubit<AuthState> {
       deleteError: '',
     ));
 
-    final response = await _authService.deleteUser();
+    final response = await withNetworkCancel(_authService.deleteUser);
     if (response is NetworkSuccessResponse) {
       emit(state.copyWith(deleteStatus: ActionStatus.isSuccess));
     } else if (response is NetworkErrorResponse) {
@@ -73,7 +88,9 @@ class AuthCubit extends Cubit<AuthState> {
       authError: '',
     ));
 
-    final NetworkResponse res = await _authService.sendOtp(phone);
+    final NetworkResponse res = await withNetworkCancel(
+      () async => await _authService.sendOtp(phone) as NetworkResponse,
+    );
     if (res is NetworkSuccessResponse) {
       emit(state.copyWith(
         loginAuthStatus: ActionStatus.isSuccess,
@@ -97,8 +114,13 @@ class AuthCubit extends Cubit<AuthState> {
       verifyError: '',
     ));
 
-    final NetworkResponse res =
-        await _authService.verifyOtp(phone: phone, token: token, otp: otp);
+    final NetworkResponse res = await withNetworkCancel(
+      () async => await _authService.verifyOtp(
+        phone: phone,
+        token: token,
+        otp: otp,
+      ) as NetworkResponse,
+    );
     if (res is NetworkSuccessResponse) {
       emit(state.copyWith(verifyStatus: ActionStatus.isSuccess));
     } else if (res is NetworkErrorResponse) {

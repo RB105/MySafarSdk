@@ -139,48 +139,12 @@ class _MainSearchFormState extends State<MainSearchForm> {
   /// Maydon bosilganda: qidiruv allaqachon to'liq bo'lsa — faqat shu maydonni
   /// tahrirlaymiz (oqim/avto-qidiruv yo'q); aks holda yo'riqli oqimni shu
   /// qadamdan boshlab yuritamiz.
-  ///
-  /// Bosh sahifa (`homeStyle`): faqat Qayerdan/Qayerga — sana/yo'lovchi
-  /// RouteSearchPage da. Ikkalasi tanlansa shu sahifaga o'tamiz.
   void _onFieldTap(int step) {
     HapticFeedback.selectionClick();
-    if (widget.homeStyle) {
-      _homeFieldTap(step);
-      return;
-    }
     if (isFilled) {
       _promptStep(step);
     } else {
       _runGuidedFlow(step);
-    }
-  }
-
-  Future<void> _homeFieldTap(int step) async {
-    // Ikkalasi oldindan to'liq bo'lsa — faqat tahrir; sana/yo'lovchi
-    // auto-oqimi qayta ochilmaydi.
-    final hadBoth = fromDir != null && toDir != null;
-    final picked = await _promptStep(step);
-    if (!mounted || !picked) return;
-
-    // Qayerdan → keyin avtomatik Qayerga.
-    if (step == _stepFrom && toDir == null) {
-      await Future.delayed(const Duration(milliseconds: 300));
-      if (!mounted) return;
-      final toPicked = await _promptStep(_stepTo);
-      if (!mounted || !toPicked) return;
-    }
-
-    if (fromDir != null && toDir != null) {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => RouteSearchPage(
-            from: fromDir!,
-            to: toDir!,
-            // Birinchi marta yo'nalish to'lganda: sana → yo'lovchi.
-            autoPromptDatePassengers: !hadBoth,
-          ),
-        ),
-      );
     }
   }
 
@@ -210,7 +174,11 @@ class _MainSearchFormState extends State<MainSearchForm> {
   /// to'lganda "Bilet topish"ni bosmasdan avtomatik qidiradi. Istalgan qadam
   /// bekor qilinsa (null qaytsa) oqim to'xtaydi va avto-qidiruv bo'lmaydi.
   Future<void> _runGuidedFlow(int startStep) async {
-    for (int step = startStep; step <= _stepPassengers; step++) {
+    // Bosh sahifa rejimida oqim faqat qayerdan → qayerga: ikkovi tanlangach
+    // RouteSearchPage ochiladi (sana va yo'lovchilar o'sha yerda avtomatik
+    // ketma-ket so'raladi).
+    final int lastStep = widget.homeStyle ? _stepTo : _stepPassengers;
+    for (int step = startStep; step <= lastStep; step++) {
       // Bosilgan qadamdan keyingilari faqat bo'sh bo'lsa ochiladi.
       if (step != startStep && _isStepFilled(step)) continue;
 
@@ -224,6 +192,12 @@ class _MainSearchFormState extends State<MainSearchForm> {
       if (!mounted) return;
       if (!picked) return; // bekor qilindi
     }
+
+    // Bosh sahifada "qayerga" hech qachon holatga saqlanmaydi (yuqoridagi
+    // _promptStep), shuning uchun bu yerga (halqadan keyin) faqat bekor
+    // qilingan holatda yetib keladi — navigatsiya allaqachon _promptStep
+    // ichida amalga oshadi.
+    if (widget.homeStyle) return;
 
     // Hammasi to'liq — avtomatik qidiruv.
     if (isFilled) _search();
@@ -241,19 +215,19 @@ class _MainSearchFormState extends State<MainSearchForm> {
       case _stepTo:
         final r = await ProjectDialogs.showCitySearchPicker(context, 1);
         if (!mounted || r == null) return false;
+        // Bosh sahifada "qayerga" holatga saqlanmaydi — faqat yo'nalish
+        // qidiruv sahifasiga uzatiladi. Shu tufayli qidiruv u yerda amalga
+        // oshmasa (orqaga qaytilsa), bosh sahifadagi maydon yana bo'sh
+        // turadi — foydalanuvchi har safar qaytadan tanlaydi.
+        if (widget.homeStyle) {
+          if (fromDir != null) _openRouteSearch(r);
+          return false;
+        }
         setState(() => toDir = r);
-        // Non-home: Qayerdan → qayerga tanlandi — RouteSearchPage ga o'tamiz.
-        // homeStyle da navigatsiya `_homeFieldTap` ichida (From ham yangilanganda).
-        if (!widget.homeStyle && fromDir != null) {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => RouteSearchPage(
-                from: fromDir!,
-                to: r,
-                autoPromptDatePassengers: true,
-              ),
-            ),
-          );
+        // Qayerdan → qayerga tanlandi — alohida yo'nalish qidiruv oynasiga
+        // o'tamiz (sana va yo'lovchilar o'sha yerda avtomatik so'raladi).
+        if (fromDir != null) {
+          _openRouteSearch(r);
           return false; // eski qadam zanjiri (sana/yo'lovchi) ochilmaydi
         }
         return true;
@@ -277,6 +251,20 @@ class _MainSearchFormState extends State<MainSearchForm> {
       default:
         return false;
     }
+  }
+
+  /// Yo'nalish qidiruv sahifasini ochadi — u yerda sana tanlash avtomatik
+  /// chiqadi, sana tanlangach yo'lovchilar soni so'raladi.
+  void _openRouteSearch(AirPortsModel to) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RouteSearchPage(
+          from: fromDir!,
+          to: to,
+          autoPromptDatePassengers: true,
+        ),
+      ),
+    );
   }
 
   void _search() {
