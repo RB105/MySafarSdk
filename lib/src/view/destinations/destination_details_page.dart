@@ -197,7 +197,7 @@ class _DestinationDetailsPageState extends State<DestinationDetailsPage> {
     final double bottomInset = MediaQuery.paddingOf(context).bottom;
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: RefreshIndicator(
+      body: AppRefreshIndicator(
         onRefresh: () => _cubit.load(refresh: true),
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(

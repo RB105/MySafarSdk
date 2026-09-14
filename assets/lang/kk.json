@@ -849,5 +849,16 @@
   "srv_contact_support_pid": "Белгісіз қате. PID нөмірін көшіріп, техқолдауға хабарласыңыз",
   "booking_missing_tr_id_notice": "Тапсырыс серверге жіберілді, бірақ жауапта техникалық ақау орын алды. 'Тапсырыстарым' бөлімін тексеріңіз немесе қолдау қызметіне хабарласыңыз.",
   "fill_passenger_data": "Деректерді толтырыңыз",
-  "add_to_saved_passengers": "Сақталған жолаушыларға қосу"
+  "add_to_saved_passengers": "Сақталған жолаушыларға қосу",
+  "place_where_from": "Қайдан?",
+  "place_where_to": "Қайда?",
+  "place_search_hint": "Ел, қала немесе әуежай",
+  "place_current_location": "Ағымдағы орналасқан жер",
+  "place_use_current_location": "Ағымдағы орналасқан жерді пайдалану",
+  "place_location_unavailable": "Орналасқан жерді анықтау мүмкін болмады",
+  "place_suggested": "Ұсынылған орындар",
+  "place_type_airport": "Әуежай",
+  "place_type_city": "Қала",
+  "place_type_country": "Ел",
+  "calendar_prices_hint": "Бағалар шамамен берілген және өзгеруі мүмкін"
 }

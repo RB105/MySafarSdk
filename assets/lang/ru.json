@@ -849,5 +849,16 @@
   "srv_contact_support_pid": "Неизвестная ошибка. Скопируйте номер PID и обратитесь в техподдержку",
   "booking_missing_tr_id_notice": "Заказ был отправлен на сервер, но в ответе произошёл технический сбой. Пожалуйста, проверьте раздел 'Мои заказы' или обратитесь в поддержку.",
   "fill_passenger_data": "Заполните данные",
-  "add_to_saved_passengers": "Добавить в сохранённые пассажиры"
+  "add_to_saved_passengers": "Добавить в сохранённые пассажиры",
+  "place_where_from": "Откуда?",
+  "place_where_to": "Куда?",
+  "place_search_hint": "Страна, город или аэропорт",
+  "place_current_location": "Текущее местоположение",
+  "place_use_current_location": "Использовать текущее местоположение",
+  "place_location_unavailable": "Не удалось определить местоположение",
+  "place_suggested": "Предлагаемые места",
+  "place_type_airport": "Аэропорт",
+  "place_type_city": "Город",
+  "place_type_country": "Страна",
+  "calendar_prices_hint": "Цены ориентировочные и могут меняться"
 }

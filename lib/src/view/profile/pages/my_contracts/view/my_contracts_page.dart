@@ -84,7 +84,7 @@ class _MyContractsPageState extends State<MyContractsPage> {
     if (state is MyContractsSuccessState) {
       final contracts = state.contracts;
       if (contracts.isEmpty) {
-        return RefreshIndicator(
+        return AppRefreshIndicator(
           onRefresh: _refresh,
           child: ListView(
             children: [
@@ -108,7 +108,7 @@ class _MyContractsPageState extends State<MyContractsPage> {
       }
 
       final bottomInset = MediaQuery.of(context).padding.bottom;
-      return RefreshIndicator(
+      return AppRefreshIndicator(
         onRefresh: _refresh,
         child: ListView.separated(
           padding: EdgeInsets.fromLTRB(16, 16, 16, 24 + bottomInset),

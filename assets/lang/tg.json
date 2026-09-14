@@ -849,5 +849,16 @@
   "srv_contact_support_pid": "Хатогии номаълум. Рақами PID-ро нусхабардорӣ карда, ба дастгирии техникӣ муроҷиат кунед",
   "booking_missing_tr_id_notice": "Фармоиш ба сервер фиристода шуд, аммо дар ҷавоб хатогии техникӣ рух дод. Лутфан бахши 'Фармоишҳои ман'-ро тафтиш кунед ё бо дастгирӣ тамос гиред.",
   "fill_passenger_data": "Маълумотро пур кунед",
-  "add_to_saved_passengers": "Ба мусофирони захирашуда илова кардан"
+  "add_to_saved_passengers": "Ба мусофирони захирашуда илова кардан",
+  "place_where_from": "Аз куҷо?",
+  "place_where_to": "Ба куҷо?",
+  "place_search_hint": "Кишвар, шаҳр ё фурудгоҳ",
+  "place_current_location": "Ҷойгиршавии ҷорӣ",
+  "place_use_current_location": "Истифодаи ҷойгиршавии ҷорӣ",
+  "place_location_unavailable": "Ҷойгиршавиро муайян кардан нашуд",
+  "place_suggested": "Ҷойҳои пешниҳодшуда",
+  "place_type_airport": "Фурудгоҳ",
+  "place_type_city": "Шаҳр",
+  "place_type_country": "Кишвар",
+  "calendar_prices_hint": "Нархҳо тахминӣ буда, метавонанд тағйир ёбанд"
 }

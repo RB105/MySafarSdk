@@ -176,6 +176,7 @@ class MySafarBottomBarStyle {
     this.shadowOpacityDark,
     this.shadowBlurRadius,
     this.shadowOffset,
+    this.blurSigma,
   });
 
   // /// 1 — panelning gorizontal margini (default: horizontal 14).
@@ -184,7 +185,10 @@ class MySafarBottomBarStyle {
   /// 2 — panel ichki padding (default: 6).
   final EdgeInsets? padding;
 
-  /// 3 — panel foni (default: light/dark card rangi).
+  /// 3 — shisha (glass) panel tonlovchi rangi. Orqa kontent ko'rinib turishi
+  /// uchun yarim shaffof rang bering (masalan `Colors.white.withOpacity(0.6)`);
+  /// to'liq opaque rang blur effektini yopib qo'yadi.
+  /// Default: light — oq 62%, dark — to'q kulrang 55%.
   final Color? backgroundColorLight;
   final Color? backgroundColorDark;
 
@@ -202,6 +206,9 @@ class MySafarBottomBarStyle {
 
   /// 7 — soyа offset (default: Offset(0, 8)).
   final Offset? shadowOffset;
+
+  /// 8 — iOS uslubidagi shisha blur kuchi (default: 24; 0 — blur o'chadi).
+  final double? blurSigma;
 }
 
 /// Bosh sahifa slogan qismi uchun host tomonidan beriladigan ixtiyoriy style.

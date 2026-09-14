@@ -10,7 +10,8 @@ import 'package:mysafar_sdk/src/service/avia/airport_local_search_service.dart';
 import 'package:mysafar_sdk/src/service/avia_service.dart';
 
 class LocationAirportService {
-  static final LocationAirportService _instance = LocationAirportService._internal();
+  static final LocationAirportService _instance =
+      LocationAirportService._internal();
   factory LocationAirportService() => _instance;
   LocationAirportService._internal();
 
@@ -66,17 +67,24 @@ class LocationAirportService {
     } catch (_) {}
   }
 
-  Future<AirPortsModel?> getNearbyAirport({String? lang}) async {
+  /// [force] — foydalanuvchi o'zi bosganda: oxirgi 5 daqiqadagi muvaffaqiyatsiz
+  /// urinish cheklovini chetlab o'tadi (masalan, sozlamalardan ruxsat berilgan).
+  Future<AirPortsModel?> getNearbyAirport({
+    String? lang,
+    bool force = false,
+  }) async {
     if (_cachedNearbyAirport != null) {
-      debugPrint("LocationAirportService: Returning cached nearby airport: ${_cachedNearbyAirport?.cityName}");
+      debugPrint(
+          "LocationAirportService: Returning cached nearby airport: ${_cachedNearbyAirport?.cityName}");
       return _cachedNearbyAirport;
     }
 
     final now = DateTime.now();
-    if (_hasAttemptedLocation && _cachedNearbyAirport == null) {
+    if (!force && _hasAttemptedLocation && _cachedNearbyAirport == null) {
       if (_lastAttemptTime != null &&
           now.difference(_lastAttemptTime!).inMinutes < 5) {
-        debugPrint("LocationAirportService: Already attempted recently, returning null");
+        debugPrint(
+            "LocationAirportService: Already attempted recently, returning null");
         return null;
       }
       _hasAttemptedLocation = false;
@@ -93,7 +101,8 @@ class LocationAirportService {
 
       if (!serviceEnabled) {
         serviceEnabled = await _location.requestService();
-        debugPrint("LocationAirportService: Service requested, result: $serviceEnabled");
+        debugPrint(
+            "LocationAirportService: Service requested, result: $serviceEnabled");
         if (!serviceEnabled) {
           debugPrint("LocationAirportService: Location service not enabled");
           return null;
@@ -106,7 +115,8 @@ class LocationAirportService {
       if (permission == loc.PermissionStatus.denied) {
         debugPrint("LocationAirportService: Requesting permission...");
         permission = await _location.requestPermission();
-        debugPrint("LocationAirportService: Permission after request: $permission");
+        debugPrint(
+            "LocationAirportService: Permission after request: $permission");
         if (permission != loc.PermissionStatus.granted &&
             permission != loc.PermissionStatus.grantedLimited) {
           debugPrint("LocationAirportService: Location permission not granted");
@@ -115,7 +125,8 @@ class LocationAirportService {
       }
 
       if (permission == loc.PermissionStatus.deniedForever) {
-        debugPrint("LocationAirportService: Location permission denied forever");
+        debugPrint(
+            "LocationAirportService: Location permission denied forever");
         return null;
       }
 
@@ -134,11 +145,13 @@ class LocationAirportService {
       }
 
       if (locationData.latitude == null || locationData.longitude == null) {
-        debugPrint("LocationAirportService: Could not get location coordinates");
+        debugPrint(
+            "LocationAirportService: Could not get location coordinates");
         return null;
       }
 
-      debugPrint("LocationAirportService: Current location: ${locationData.latitude}, ${locationData.longitude}");
+      debugPrint(
+          "LocationAirportService: Current location: ${locationData.latitude}, ${locationData.longitude}");
 
       List<Placemark> placemarks = [];
       try {
@@ -176,12 +189,14 @@ class LocationAirportService {
               : (placemark?.country ?? '').trim();
 
       if (searchQuery.isEmpty && countryQuery.isEmpty) {
-        debugPrint("LocationAirportService: No city/country name found in placemark");
+        debugPrint(
+            "LocationAirportService: No city/country name found in placemark");
         return null;
       }
 
       if (searchQuery.isNotEmpty) {
-        debugPrint("LocationAirportService: Local search by city: $searchQuery");
+        debugPrint(
+            "LocationAirportService: Local search by city: $searchQuery");
         final localByCity = await _localSearch.search(
           query: searchQuery,
           lang: lang ?? 'en',
@@ -193,7 +208,8 @@ class LocationAirportService {
       }
 
       if (countryQuery.isNotEmpty) {
-        debugPrint("LocationAirportService: Local search by country: $countryQuery");
+        debugPrint(
+            "LocationAirportService: Local search by country: $countryQuery");
         final localByCountry = await _localSearch.searchByCountry(
           country: countryQuery,
           lang: lang ?? 'en',
@@ -211,7 +227,8 @@ class LocationAirportService {
         return null;
       }
 
-      debugPrint("LocationAirportService: Searching airport for city: $searchQuery");
+      debugPrint(
+          "LocationAirportService: Searching airport for city: $searchQuery");
 
       final response = await _aviaService.getAirports(
         part: searchQuery,
@@ -229,15 +246,28 @@ class LocationAirportService {
           return _remember(picked, 'api/city', lang ?? 'en');
         }
       } else if (response is NetworkErrorResponse) {
-        debugPrint("LocationAirportService: Airport search error: ${response.error}");
+        debugPrint(
+            "LocationAirportService: Airport search error: ${response.error}");
       }
 
-      debugPrint("LocationAirportService: No airports found for city: $searchQuery");
+      debugPrint(
+          "LocationAirportService: No airports found for city: $searchQuery");
       return null;
     } catch (e, stackTrace) {
       debugPrint("LocationAirportService: Error getting nearby airport: $e");
       debugPrint("LocationAirportService: StackTrace: $stackTrace");
       return null;
+    }
+  }
+
+  /// Hech qanday tizim oynasi ko'rsatmasdan joylashuv olish mumkinmi:
+  /// ruxsat allaqachon berilgan va joylashuv xizmati yoqilgan.
+  Future<bool> canLocateSilently() async {
+    try {
+      return await isLocationPermissionGranted() &&
+          await _location.serviceEnabled();
+    } catch (e) {
+      return false;
     }
   }
 

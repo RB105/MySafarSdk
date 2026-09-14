@@ -9,6 +9,7 @@ export 'package:flutter_svg/flutter_svg.dart';
 export 'package:bloc/bloc.dart';
 export 'package:equatable/equatable.dart';
 export 'package:mysafar_sdk/src/core/widgets/loading_widget.dart';
+export 'package:mysafar_sdk/src/core/widgets/app_refresh_indicator.dart';
 export 'package:mysafar_sdk/src/model/remote/profile/profile_model.dart';
 export 'package:mysafar_sdk/src/core/config/request_config.dart';
 export 'package:mysafar_sdk/src/core/widgets/text_form_field_widget.dart';

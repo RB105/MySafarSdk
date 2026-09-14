@@ -126,7 +126,7 @@ class _MyContractDetailPageState extends State<MyContractDetailPage> {
 
     if (state is MyContractDetailSuccessState) {
       final bottomInset = MediaQuery.of(context).padding.bottom;
-      return RefreshIndicator(
+      return AppRefreshIndicator(
         onRefresh: () async => _cubit.loadDetail(widget.loanId, force: true),
         child: ListView(
           padding: EdgeInsets.fromLTRB(16, 16, 16, 24 + bottomInset),

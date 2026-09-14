@@ -76,8 +76,8 @@ class _DestinationsListPageState extends State<DestinationsListPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Fon — theme scaffoldBackgroundColor (boshqa tablar bilan bir xil).
     return Scaffold(
-      backgroundColor: context.color.surface,
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -157,7 +157,7 @@ class _DestinationsListPageState extends State<DestinationsListPage> {
     final bool hasMore =
         state is DestinationListSuccessState && state.hasMore && _query.isEmpty;
 
-    return RefreshIndicator(
+    return AppRefreshIndicator(
       onRefresh: _cubit.refresh,
       child: items.isEmpty
           ? ListView(
@@ -177,7 +177,8 @@ class _DestinationsListPageState extends State<DestinationsListPage> {
               physics: const AlwaysScrollableScrollPhysics(
                 parent: BouncingScrollPhysics(),
               ),
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
+              padding: EdgeInsets.fromLTRB(
+                  16, 0, 16, 16 + MediaQuery.paddingOf(context).bottom),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
                 mainAxisSpacing: 12,
@@ -216,7 +217,12 @@ class _SearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // Karta rangi + chegara — sahifa foni (scaffoldBackgroundColor) ustida
+    // aniq ko'rinishi uchun (light va dark).
+    final idleBorder = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(color: context.color.outline, width: 1),
+    );
     return TextField(
       controller: controller,
       onChanged: onChanged,
@@ -234,23 +240,13 @@ class _SearchField extends StatelessWidget {
           size: 22,
         ),
         filled: true,
-        fillColor: isDark ? const Color(0xFF1C2434) : const Color(0xFFF3F5F8),
+        fillColor: context.color.primaryContainer,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(
-            color: ProjectTheme.brandColor.withValues(alpha: 0.35),
-            width: 1.2,
-          ),
+        border: idleBorder,
+        enabledBorder: idleBorder,
+        focusedBorder: idleBorder.copyWith(
+          borderSide: BorderSide(color: ProjectTheme.brandColor, width: 1.2),
         ),
       ),
     );
@@ -472,7 +468,8 @@ class _DestinationGridShimmer extends StatelessWidget {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return GridView.builder(
       physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
+      padding: EdgeInsets.fromLTRB(
+          16, 0, 16, 16 + MediaQuery.paddingOf(context).bottom),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
         mainAxisSpacing: 12,

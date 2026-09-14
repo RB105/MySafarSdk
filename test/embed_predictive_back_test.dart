@@ -51,7 +51,7 @@ void main() {
   });
 
   setUp(() {
-    SdkEmbedBackHandler.resetDoubleBack();
+    SdkEmbedBackHandler.reset();
     BottomNavBarPage.currentTabIndex.value = 0;
   });
 
@@ -122,17 +122,13 @@ void main() {
     expect(find.text('Inner SDK Page'), findsOneWidget);
   }
 
-  testWidgets('3-button back at SDK root does not leave the embed at once',
+  testWidgets('3-button back on Main returns to host with one press',
       (tester) async {
     await openEmbed(tester);
 
     await sendSystemBack(tester, button: true);
-    expect(MySafarSdk.isEmbedded, isTrue,
-        reason: 'first back at SDK root must only warn, not exit');
-
-    await sendSystemBack(tester, button: true);
     expect(MySafarSdk.isEmbedded, isFalse,
-        reason: 'second back within the double-back window returns to host');
+        reason: 'back on Main at SDK root closes the embed');
     await tester.pumpAndSettle();
   });
 
@@ -158,18 +154,25 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('3-button back from a non-home tab returns to Main',
-      (tester) async {
-    await openEmbed(tester);
-    BottomNavBarPage.switchTo(3);
-    await tester.pumpAndSettle();
+  for (final button in [true, false]) {
+    final kind = button ? '3-button back' : 'system swipe back';
+    testWidgets('$kind from a non-home tab returns to Main, then closes',
+        (tester) async {
+      await openEmbed(tester);
+      BottomNavBarPage.switchTo(3);
+      await tester.pumpAndSettle();
 
-    await sendSystemBack(tester, button: true);
+      await sendSystemBack(tester, button: button);
 
-    expect(BottomNavBarPage.currentTabIndex.value, 0);
-    expect(MySafarSdk.isEmbedded, isTrue);
-    await tester.pumpAndSettle();
-  });
+      expect(BottomNavBarPage.currentTabIndex.value, 0);
+      expect(MySafarSdk.isEmbedded, isTrue);
+
+      await sendSystemBack(tester, button: button);
+
+      expect(MySafarSdk.isEmbedded, isFalse);
+      await tester.pumpAndSettle();
+    });
+  }
 
   testWidgets('embed keeps re-asserting frameworkHandlesBack while open',
       (tester) async {

@@ -12,10 +12,22 @@ class CityChooseInitState extends CityChooseStates {
   final AirPortsModel? nearbyAirport;
   final bool isLoadingNearby;
 
-  const CityChooseInitState({this.nearbyAirport, this.isLoadingNearby = false});
+  /// Foydalanuvchi "Joriy joylashuv"ni bosdi, lekin aeroport aniqlanmadi.
+  final bool locationFailed;
+
+  /// "Tavsiya etilgan joylar" — lokal qidiruvdan tilga mos to'ldirilgan.
+  final List<AirPortsModel> suggestions;
+
+  const CityChooseInitState({
+    this.nearbyAirport,
+    this.isLoadingNearby = false,
+    this.locationFailed = false,
+    this.suggestions = const [],
+  });
 
   @override
-  List<Object?> get props => [nearbyAirport, isLoadingNearby];
+  List<Object?> get props =>
+      [nearbyAirport, isLoadingNearby, locationFailed, suggestions];
 }
 
 class CityChooseLoadingState extends CityChooseStates {
@@ -32,8 +44,12 @@ class CityChooseErrorState extends CityChooseStates {
 
 class CityChooseSuccessState extends CityChooseStates {
   final List<AirPortsModel> airports;
-  const CityChooseSuccessState(this.airports);
+
+  /// Davlat bo'yicha ochilgan ro'yxat bo'lsa — o'sha davlat kodi/nomi.
+  final String? country;
+
+  const CityChooseSuccessState(this.airports, {this.country});
 
   @override
-  List<Object?> get props => [airports];
+  List<Object?> get props => [airports, country];
 }

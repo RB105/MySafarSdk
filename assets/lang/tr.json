@@ -849,5 +849,16 @@
   "srv_contact_support_pid": "Bilinmeyen hata. PID numarasını kopyalayıp teknik desteğe başvurun",
   "booking_missing_tr_id_notice": "Siparişiniz sunucuya gönderildi, ancak yanıtta teknik bir sorun oluştu. Lütfen 'Siparişlerim' bölümünü kontrol edin veya destek ekibiyle iletişime geçin.",
   "fill_passenger_data": "Bilgileri doldurun",
-  "add_to_saved_passengers": "Kayıtlı yolculara ekle"
+  "add_to_saved_passengers": "Kayıtlı yolculara ekle",
+  "place_where_from": "Nereden?",
+  "place_where_to": "Nereye?",
+  "place_search_hint": "Ülke, şehir veya havalimanı",
+  "place_current_location": "Mevcut konum",
+  "place_use_current_location": "Mevcut konumu kullan",
+  "place_location_unavailable": "Konumunuz belirlenemedi",
+  "place_suggested": "Önerilen yerler",
+  "place_type_airport": "Havalimanı",
+  "place_type_city": "Şehir",
+  "place_type_country": "Ülke",
+  "calendar_prices_hint": "Fiyatlar yaklaşıktır ve değişebilir"
 }

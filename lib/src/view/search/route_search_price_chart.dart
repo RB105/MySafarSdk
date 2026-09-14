@@ -109,8 +109,8 @@ class _PriceChartCard extends StatelessWidget {
             color: isDark ? ProjectTheme.brandColor : _Web.iconBoxBg,
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(
-            Icons.bar_chart_rounded,
+          child: _SvgIcon(
+            Assets.iconsSearchChartIcon,
             size: 17,
             color: isDark ? Colors.white : _Web.blue,
           ),
@@ -148,9 +148,9 @@ class _PriceChartCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 4),
-              Icon(
-                Icons.arrow_forward_rounded,
-                size: 14,
+              _SvgIcon(
+                Assets.iconsSearchArrowRightIcon,
+                size: 15,
                 color: isDark ? Colors.white : _Web.blue,
               ),
             ],
@@ -679,9 +679,11 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
                       Navigator.of(context).maybePop();
                     },
                     visualDensity: VisualDensity.compact,
-                    icon: Icon(
-                      Icons.close_rounded,
-                      color: context.textTheme.headlineSmall?.color,
+                    icon: _SvgIcon(
+                      Assets.iconsSearchCloseIcon,
+                      size: 22,
+                      color: context.textTheme.headlineSmall?.color ??
+                          _Web.label,
                     ),
                   ),
                 ],

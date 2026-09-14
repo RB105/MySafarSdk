@@ -149,7 +149,7 @@ class _MyApplicationsPageState extends State<MyApplicationsPage> {
     if (state is MyApplicationsSuccessState) {
       final apps = state.applications;
       if (apps.isEmpty) {
-        return RefreshIndicator(
+        return AppRefreshIndicator(
           onRefresh: _refresh,
           child: ListView(
             children: [
@@ -173,7 +173,7 @@ class _MyApplicationsPageState extends State<MyApplicationsPage> {
       }
 
       final bottomInset = MediaQuery.of(context).padding.bottom;
-      return RefreshIndicator(
+      return AppRefreshIndicator(
         onRefresh: _refresh,
         child: ListView.separated(
           padding: EdgeInsets.fromLTRB(16, 16, 16, 24 + bottomInset),

@@ -244,7 +244,7 @@ class _MySafarEmbedState extends State<MySafarEmbed> with WidgetsBindingObserver
   }
 
   /// Android/iOS tizim back — host navigator o'rniga SDK stack, tab→Main yoki
-  /// Main da double-back exit. `true` qaytarsak platforma default pop ishlamaydi.
+  /// Main da host'ga chiqish. `true` qaytarsak platforma default pop ishlamaydi.
   @override
   Future<bool> didPopRoute() async {
     MySafarSdk.logBack('didPopRoute');

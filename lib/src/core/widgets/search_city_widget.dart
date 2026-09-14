@@ -1,60 +1,72 @@
 import 'dart:async' show Timer;
 import 'dart:io' show Platform;
 
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:mysafar_sdk/src/core/tools/app_cache_manager.dart' show AppCacheManager;
-import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:get_storage/get_storage.dart';
+import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
+import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
-import 'package:mysafar_sdk/src/core/styles/theme_notifier.dart' show ThemeNotifier;
 import 'package:mysafar_sdk/src/core/tools/project_utils.dart';
 import 'package:mysafar_sdk/src/cubit/main/city/city_choose_cubit.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/airports_model.dart';
-import 'package:mysafar_sdk/src/model/remote/fornex/pop_destinations.dart';
-import 'package:provider/provider.dart' show Provider;
-import 'package:shimmer/shimmer.dart';
-import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
+import 'package:mysafar_sdk/src/service/avia/airport_local_search_service.dart';
 
+/// "Qayerdan? / Qayerga?" joy qidirish oynasi.
 class SearchCityWidget extends StatefulWidget {
   final int directionType;
 
-  const SearchCityWidget({super.key, required this.directionType});
+  /// Sheet'ning `DraggableScrollableSheet` controller'i — ro'yxat eng tepada
+  /// bo'lganda pastga tortib yopish shu orqali ishlaydi.
+  final ScrollController? scrollController;
+
+  const SearchCityWidget({
+    super.key,
+    required this.directionType,
+    this.scrollController,
+  });
 
   @override
   State<SearchCityWidget> createState() => _SearchCityWidgetState();
 }
 
 class _SearchCityWidgetState extends State<SearchCityWidget> {
-  late String title;
   final GetStorage _getStorage = sdkStorage();
   List<AirPortsModel> _recentSearches = [];
 
   /// Debounce timer for airport search.
   Timer? _searchDebounce;
 
+  /// Ro'yxat surilganda qidiruv maydoni ostida chiziq ko'rsatiladi.
+  final ValueNotifier<bool> _isScrolled = ValueNotifier(false);
+
   // Cache keys
   static const String _recentFromKey = 'recent_from_airports';
   static const String _recentToKey = 'recent_to_airports';
 
-  String get _cacheKey =>
-      widget.directionType == 0 ? _recentFromKey : _recentToKey;
+  static const double _hPadding = 16;
+  static const double _iconSize = 24;
+  static const double _iconGap = 12;
+
+  bool get _isFrom => widget.directionType == 0;
+
+  String get _cacheKey => _isFrom ? _recentFromKey : _recentToKey;
 
   @override
   void initState() {
-    title = getAppBarTitle(widget.directionType);
-    _loadRecentSearches();
     super.initState();
+    _loadRecentSearches();
   }
 
   @override
   void dispose() {
     _searchDebounce?.cancel();
+    _isScrolled.dispose();
     super.dispose();
   }
 
@@ -64,7 +76,6 @@ class _SearchCityWidgetState extends State<SearchCityWidget> {
       _recentSearches = cachedData
           .map((e) => AirPortsModel.fromJson(Map<String, dynamic>.from(e)))
           .toList();
-      setState(() {});
     }
   }
 
@@ -86,457 +97,566 @@ class _SearchCityWidgetState extends State<SearchCityWidget> {
   }
 
   void _onAirportSelected(AirPortsModel airport) {
+    HapticFeedback.selectionClick();
     _saveToRecentSearches(airport);
     Navigator.of(context).pop(airport);
   }
 
-  /// directionType: 0 = Qayerdan (from), 1 = Qayerga (to)
-  String getAppBarTitle(int type) {
-    if (type == 0) {
-      return "from".tr();
-    }
-    return "to".tr();
+  /// Local JSON search: uz / ru / en to'liq qo'llab-quvvatlanadi.
+  String _searchLang(BuildContext context) {
+    final code = context.locale.languageCode;
+    return (code == 'uz' || code == 'ru' || code == 'en') ? code : 'en';
   }
 
-  String _citySubtitle(AirPortsModel city) {
-    final code = city.cityIataCode ?? '';
-    final country = city.countryName ?? '';
-    if (code.isNotEmpty && country.isNotEmpty) {
-      return '$code · $country';
-    }
-    if (code.isNotEmpty) return code;
-    return country;
-  }
+  // ---------------------------------------------------------------------------
+  // Colors
+  // ---------------------------------------------------------------------------
+
+  Color get _sheetColor => context.isDarkMode
+      ? ProjectTheme.cardColorDark
+      : ProjectTheme.cardColorLight;
+
+  Color get _textColor => context.isDarkMode
+      ? ProjectTheme.textColorDark
+      : ProjectTheme.textColorLight;
+
+  Color get _secondaryColor => context.isDarkMode
+      ? ProjectTheme.secondaryTextDark
+      : ProjectTheme.secondaryTextLight;
+
+  Color get _hintColor => context.isDarkMode
+      ? ProjectTheme.disabledTextDark
+      : ProjectTheme.disabledTextLight;
+
+  Color get _borderColor =>
+      context.isDarkMode ? ProjectTheme.borderDark : ProjectTheme.borderLight;
+
+  TextStyle get _titleStyle => context.textTheme.bodyMedium!.copyWith(
+        color: _textColor,
+        fontSize: 16,
+        fontWeight: FontWeight.w400,
+        height: 1.25,
+      );
+
+  TextStyle get _subtitleStyle => context.textTheme.bodyMedium!.copyWith(
+        color: _textColor.withValues(alpha: 0.8),
+        fontSize: 14,
+        fontWeight: FontWeight.w400,
+        height: 1.25,
+      );
+
+  // ---------------------------------------------------------------------------
+  // Build
+  // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
-    final langCode = context.locale.languageCode;
-    // Local JSON search: uz / ru / en to'liq qo'llab-quvvatlanadi.
-    final searchLang =
-        (langCode == 'uz' || langCode == 'ru' || langCode == 'en')
-            ? langCode
-            : 'en';
-
     return BlocProvider(
-      create: (_) {
+      create: (context) {
+        final lang = _searchLang(context);
         final cubit = CityChooseCubit();
-        if (widget.directionType == 0) {
-          cubit.loadNearbyAirport(lang: searchLang);
-        }
+        if (_isFrom) cubit.loadNearbyAirport(lang: lang);
+        cubit.loadSuggestions(
+          isFrom: _isFrom,
+          lang: lang,
+          popularCodes: _isFrom
+              ? const []
+              : (ProjectUtils.popularDestinations ?? const [])
+                  .map((d) => d.destination.aviationCode),
+          exclude: _recentSearches
+              .map((e) => (e.cityIataCode ?? '').toUpperCase())
+              .toSet(),
+        );
         return cubit;
       },
       // TextField BlocBuilder tashqarisida — state o‘zgarganda klaviatura
       // qayta build bo‘lmaydi (qotishning asosiy UI sababi).
       child: Scaffold(
-        appBar: AppBar(
-          leading: SizedBox.fromSize(),
-          centerTitle: true,
-          title: Text(title, style: context.textTheme.bodyMedium),
-          actions: [
-            IconButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              icon: const Icon(Icons.close),
-            )
-          ],
-        ),
-        body: Padding(
-          padding: context.k16horizontalPadding,
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                context.szBoxHeight16,
-                SizedBox(
-                  height: 56,
-                  width: double.infinity,
-                  child: Builder(
-                    builder: (context) {
-                      final cubit = context.read<CityChooseCubit>();
-                      return TextFormField(
-                        autofocus: true,
-                        controller: cubit.controller,
-                        keyboardType: TextInputType.name,
-                        style: context.textTheme.bodyMedium,
-                        decoration: InputDecoration(
-                          contentPadding: const EdgeInsets.symmetric(
-                              vertical: 16.0, horizontal: 16),
-                          prefixIcon: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: SvgPicture.asset(
-                              Assets.iconsSearchIcon,
-                            ),
-                          ),
-                          suffixIcon: BlocBuilder<CityChooseCubit,
-                              CityChooseStates>(
-                            buildWhen: (prev, next) =>
-                                prev.runtimeType != next.runtimeType,
-                            builder: (context, state) =>
-                                getLoadingWidget(state, context),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(20),
-                              borderSide: BorderSide(
-                                  color: context.color.outline, width: 1)),
-                          hintStyle: context.textTheme.headlineMedium,
-                          border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(20),
-                              borderSide: BorderSide(
-                                  color: context.color.outline, width: 1)),
-                        ),
-                        onChanged: (value) {
-                          _searchDebounce?.cancel();
-                          final trimmed = value.trim();
-                          if (trimmed.isNotEmpty) {
-                            final code = context.locale.languageCode;
-                            final lang = (code == 'uz' ||
-                                    code == 'ru' ||
-                                    code == 'en')
-                                ? code
-                                : 'en';
-                            _searchDebounce = Timer(
-                              const Duration(milliseconds: 350),
-                              () {
-                                cubit.getAirports(
-                                    part: trimmed, lang: lang);
-                              },
-                            );
-                          } else {
-                            cubit.resetToInit();
-                          }
-                        },
-                      );
+        backgroundColor: _sheetColor,
+        body: Column(
+          children: [
+            _buildHeader(context),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(_hPadding, 12, _hPadding, 12),
+              child: Builder(builder: _buildSearchField),
+            ),
+            ValueListenableBuilder<bool>(
+              valueListenable: _isScrolled,
+              builder: (context, scrolled, _) => AnimatedOpacity(
+                opacity: scrolled ? 1 : 0,
+                duration: const Duration(milliseconds: 150),
+                child: Divider(height: 1, thickness: 1, color: _borderColor),
+              ),
+            ),
+            Expanded(
+              child: NotificationListener<ScrollUpdateNotification>(
+                onNotification: (n) {
+                  if (n.depth == 0) _isScrolled.value = n.metrics.pixels > 0;
+                  return false;
+                },
+                child: BlocBuilder<CityChooseCubit, CityChooseStates>(
+                  builder: (context, state) => ListView(
+                    controller: widget.scrollController,
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    padding: EdgeInsets.fromLTRB(
+                      _hPadding,
+                      12,
+                      _hPadding,
+                      context.bottomPadding + 24,
+                    ),
+                    children: switch (state) {
+                      CityChooseSuccessState() => _buildResults(context, state),
+                      CityChooseErrorState() => [_buildEmpty(state.error)],
+                      CityChooseInitState() => _buildInitial(context, state),
+                      _ => _buildInitial(context, null),
                     },
                   ),
                 ),
-                BlocBuilder<CityChooseCubit, CityChooseStates>(
-                  builder: (context, state) {
-                    switch (state) {
-                      case CityChooseSuccessState():
-                        return ListView.builder(
-                          physics: const NeverScrollableScrollPhysics(),
-                          padding: EdgeInsets.zero,
-                          shrinkWrap: true,
-                          itemCount: state.airports.length,
-                          itemBuilder: (context, index) {
-                            final city = state.airports[index];
-                            return Column(
-                              children: [
-                                ListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  onTap: () {
-                                    _onAirportSelected(state.airports[index]);
-                                  },
-                                  leading: SizedBox(
-                                    height: 24,
-                                    width: 24,
-                                    child: SvgPicture.asset(
-                                      Assets.homeMapLocationPin,
-                                    ),
-                                  ),
-                                  title: Text(
-                                    state.airports[index].cityName ?? "",
-                                    style: context.textTheme.bodyMedium,
-                                  ),
-                                  subtitle: Text(
-                                    _citySubtitle(state.airports[index]),
-                                    style: context.textTheme.headlineMedium,
-                                  ),
-                                ),
-                                Column(
-                                  children: List.generate(
-                                    city.airports?.length ?? 0,
-                                    (i) => ListTile(
-                                      onTap: () {
-                                        final selectedAirport = city.copyWith(
-                                          cityIataCode: city.airports
-                                              ?.elementAt(i)
-                                              .airportIataCode,
-                                        );
-                                        _onAirportSelected(selectedAirport);
-                                      },
-                                      contentPadding: const EdgeInsets.only(
-                                        left: 24.0,
-                                      ),
-                                      leading: SizedBox(
-                                        height: 24,
-                                        width: 24,
-                                        child: SvgPicture.asset(
-                                            Assets.iconsPlaneIcon),
-                                      ),
-                                      title: Text(
-                                        city.airports?[i].airportName ?? "",
-                                      ),
-                                      subtitle: Text(
-                                        city.airports?[i].airportIataCode ??
-                                            "",
-                                        style: context
-                                            .textTheme.headlineMedium,
-                                      ),
-                                    ),
-                                  ),
-                                )
-                              ],
-                            );
-                          },
-                        );
-                      case CityChooseErrorState():
-                        return Center(
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 16.0),
-                            child: Text(state.error),
-                          ),
-                        );
-                      case CityChooseInitState():
-                        return _buildInitialContent(context, state);
-                      default:
-                        return _buildInitialContent(context, null);
-                    }
-                  },
-                ),
-                SizedBox(
-                  height: context.height * 0.1,
-                )
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildInitialContent(
-      BuildContext context, CityChooseInitState? initState) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Nearby airport section (only for 'from' direction)
-        if (widget.directionType == 0) ...[
-          _buildNearbyAirportSection(context, initState),
-        ],
-        // Recent searches
-        if (_recentSearches.isNotEmpty) ...[
-          Padding(
-            padding: context.k16verticalPadding,
-            child: Text("recent_searches".tr(),
-                style: context.textTheme.displayMedium),
-          ),
-          ListView.separated(
-            physics: const NeverScrollableScrollPhysics(),
-            padding: EdgeInsets.zero,
-            shrinkWrap: true,
-            itemCount: _recentSearches.length,
-            separatorBuilder: (context, index) => const Divider(height: 1),
-            itemBuilder: (context, index) {
-              final airport = _recentSearches[index];
-              return ListTile(
-                contentPadding: EdgeInsets.zero,
-                onTap: () => _onAirportSelected(airport),
-                leading: SizedBox(
-                  height: 24,
-                  width: 24,
-                  child: SvgPicture.asset(Assets.homeMapLocationPin),
+  Widget _buildHeader(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
+      child: SizedBox(
+        height: 48,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 52),
+              child: Text(
+                (_isFrom ? 'place_where_from' : 'place_where_to').tr(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: context.textTheme.labelMedium?.copyWith(
+                  color: _textColor,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
                 ),
-                title: Text(
-                  airport.cityName ?? "",
-                  style: context.textTheme.bodyMedium,
-                ),
-                subtitle: Text(
-                  _citySubtitle(airport),
-                  style: context.textTheme.headlineMedium,
-                ),
-              );
-            },
-          ),
-        ],
-        // Popular destinations
-        if (ProjectUtils.popularDestinations?.isNotEmpty ?? false) ...[
-          Padding(
-            padding: context.k16verticalPadding,
-            child: Text("popular_city".tr(),
-                style: context.textTheme.displayMedium),
-          ),
-          ListView.separated(
-            physics: const NeverScrollableScrollPhysics(),
-            padding: EdgeInsets.zero,
-            shrinkWrap: true,
-            itemCount: ProjectUtils.popularDestinations?.length ?? 0,
-            separatorBuilder: (context, index) => context.szBoxHeight8,
-            itemBuilder: (context, index) {
-              final destinations = ProjectUtils.popularDestinations;
-              return InkWell(
-                onTap: () {
-                  final airport = AirPortsModel(
-                    cityIataCode: destinations?[index].destination.aviationCode,
-                    cityName: _getDestinationTitle(
-                        destinations?[index].destination.name,
-                        context.locale.languageCode),
-                  );
-                  _onAirportSelected(airport);
-                },
-                child: Row(children: [
-                  SizedBox(
-                    width: 58,
-                    height: 58,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: CachedNetworkImage(
-                        cacheManager: AppCacheManager.instance,
-                        cacheKey: destinations?[index].images[0].image,
-                        imageUrl: "${destinations?[index].images[0].image}",
-                        fit: BoxFit.cover,
-                        memCacheWidth: 120,
-                        memCacheHeight: 120,
-                      ),
-                    ),
-                  ),
-                  context.szBoxWidth8,
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                          _getDestinationTitle(
-                              destinations?[index].destination.name,
-                              context.locale.languageCode),
-                          style: context.textTheme.bodyMedium),
-                      Text(destinations?[index].destination.aviationCode ?? "",
-                          style: context.textTheme.headlineMedium)
-                    ],
-                  )
-                ]),
-              );
-            },
-          ),
-        ],
-      ],
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: IconButton(
+                onPressed: () => Navigator.pop(context),
+                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                icon: _svg(Assets.iconsPlaceCloseIcon, size: 24),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _buildNearbyAirportSection(
-      BuildContext context, CityChooseInitState? state) {
-    // Show shimmer while loading
-    if (state?.isLoadingNearby == true) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: context.k16verticalPadding,
-            child: Text("nearby_airport".tr(),
-                style: context.textTheme.displayMedium),
-          ),
-          Shimmer.fromColors(
-            baseColor: Colors.grey.shade300,
-            highlightColor: Colors.grey.shade100,
-            child: ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Container(
-                height: 24,
-                width: 24,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-              title: Container(
-                height: 16,
-                width: 100,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-              subtitle: Container(
-                height: 12,
-                width: 60,
-                margin: const EdgeInsets.only(top: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-            ),
-          ),
-        ],
-      );
-    }
+  Widget _buildSearchField(BuildContext context) {
+    final cubit = context.read<CityChooseCubit>();
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: _borderColor, width: 1),
+    );
 
-    // Show nearby airport if found
-    if (state?.nearbyAirport != null) {
-      final airport = state!.nearbyAirport!;
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: context.k16verticalPadding,
-            child: Text("nearby_airport".tr(),
-                style: context.textTheme.displayMedium),
+    return TextField(
+      controller: cubit.controller,
+      keyboardType: TextInputType.name,
+      textInputAction: TextInputAction.search,
+      textAlignVertical: TextAlignVertical.center,
+      cursorColor: _textColor,
+      style: _titleStyle,
+      decoration: InputDecoration(
+        isDense: true,
+        filled: false,
+        contentPadding: const EdgeInsets.symmetric(vertical: 14),
+        hintText: 'place_search_hint'.tr(),
+        hintStyle: _titleStyle.copyWith(color: _hintColor),
+        prefixIcon: Padding(
+          padding: const EdgeInsets.only(left: 14, right: 8),
+          child: Text(
+            (_isFrom ? 'from' : 'to').tr(),
+            style: _titleStyle.copyWith(color: _secondaryColor),
           ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            onTap: () => _onAirportSelected(airport),
-            leading: Container(
-              height: 40,
-              width: 40,
-              decoration: BoxDecoration(
-                color: ProjectTheme.brandColor.withAlpha(30),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                Icons.my_location,
-                color: ProjectTheme.brandColor,
-                size: 20,
-              ),
-            ),
-            title: Text(
-              airport.cityName ?? "",
-              style: context.textTheme.bodyMedium,
-            ),
-            subtitle: Text(
-              airport.cityIataCode ?? "",
-              style: context.textTheme.headlineMedium,
-            ),
-            trailing: Icon(
-              Icons.arrow_forward_ios,
-              size: 16,
-              color: context.color.onSurface.withValues(alpha: 0.5),
-            ),
-          ),
-          const Divider(height: 1),
-        ],
-      );
-    }
-
-    return const SizedBox.shrink();
-  }
-
-  Widget getLoadingWidget(CityChooseStates state, BuildContext context) {
-    switch (state) {
-      case CityChooseLoadingState():
-        if (Platform.isIOS) {
-          return CupertinoActivityIndicator(
-            radius: 10,
-            color: Provider.of<ThemeNotifier>(context).isDark
-                ? Colors.white
-                : Colors.black,
-          );
+        ),
+        prefixIconConstraints: const BoxConstraints(minWidth: 0),
+        suffixIcon: _buildSuffix(cubit),
+        suffixIconConstraints:
+            const BoxConstraints(minWidth: 44, minHeight: 44),
+        border: border,
+        enabledBorder: border,
+        focusedBorder: border.copyWith(
+          borderSide: BorderSide(color: _textColor, width: 1.5),
+        ),
+      ),
+      onChanged: (value) {
+        _searchDebounce?.cancel();
+        final trimmed = value.trim();
+        if (trimmed.isEmpty) {
+          cubit.resetToInit();
+          return;
         }
-        return Transform.scale(
-          scale: 0.5,
-          child: const CircularProgressIndicator(),
+        final lang = _searchLang(context);
+        _searchDebounce = Timer(
+          const Duration(milliseconds: 350),
+          () => cubit.getAirports(part: trimmed, lang: lang),
         );
-      default:
-        return SizedBox();
-    }
+      },
+    );
   }
 
-  String _getDestinationTitle(PopDestinationsText? name, String lang) {
-    switch (lang) {
-      case 'en':
-        return name?.en ?? "";
-      case 'ru':
-        return name?.ru ?? "";
-      default:
-        return name?.uz ?? "";
+  Widget _buildSuffix(CityChooseCubit cubit) {
+    return BlocBuilder<CityChooseCubit, CityChooseStates>(
+      buildWhen: (prev, next) => prev.runtimeType != next.runtimeType,
+      builder: (context, state) {
+        if (state is CityChooseLoadingState) return _loader();
+        return ValueListenableBuilder<TextEditingValue>(
+          valueListenable: cubit.controller,
+          builder: (context, value, _) {
+            if (value.text.isEmpty) return const SizedBox.shrink();
+            return IconButton(
+              onPressed: () {
+                _searchDebounce?.cancel();
+                cubit.controller.clear();
+                cubit.resetToInit();
+              },
+              icon:
+                  _svg(Assets.iconsPlaceClearIcon, size: 20, color: _hintColor),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Initial content: current location, recent searches, suggested places
+  // ---------------------------------------------------------------------------
+
+  List<Widget> _buildInitial(BuildContext context, CityChooseInitState? state) {
+    final suggestions = state?.suggestions ?? const <AirPortsModel>[];
+    return [
+      if (_isFrom) _buildCurrentLocation(context, state),
+      if (_recentSearches.isNotEmpty) ...[
+        _sectionTitle('recent_searches'.tr()),
+        for (final airport in _recentSearches)
+          _PlaceTile(
+            icon: _svg(Assets.iconsPlaceRecentIcon),
+            title: _nameWithCode(airport.cityName, airport.cityIataCode),
+            subtitle: _typeWithCountry(
+              _isCityGroup(airport)
+                  ? 'place_type_city'.tr()
+                  : 'place_type_airport'.tr(),
+              airport.countryName,
+            ),
+            titleStyle: _titleStyle,
+            subtitleStyle: _subtitleStyle,
+            onTap: () => _onAirportSelected(airport),
+          ),
+      ],
+      if (suggestions.isNotEmpty) ...[
+        _sectionTitle('place_suggested'.tr()),
+        for (final place in suggestions) _suggestionTile(place),
+      ],
+    ];
+  }
+
+  Widget _buildCurrentLocation(
+      BuildContext context, CityChooseInitState? state) {
+    final nearby = state?.nearbyAirport;
+    final isLoading = state?.isLoadingNearby ?? false;
+
+    final String subtitle;
+    if (isLoading) {
+      subtitle = 'determining_location'.tr();
+    } else if (nearby != null) {
+      subtitle = _nameWithCode(nearby.cityName, nearby.cityIataCode);
+    } else if (state?.locationFailed ?? false) {
+      subtitle = 'place_location_unavailable'.tr();
+    } else {
+      subtitle = 'place_use_current_location'.tr();
     }
+
+    return _PlaceTile(
+      icon: isLoading ? _loader() : _svg(Assets.iconsPlaceCurrentLocationIcon),
+      title: 'place_current_location'.tr(),
+      subtitle: subtitle,
+      titleStyle: _titleStyle,
+      subtitleStyle: _subtitleStyle,
+      onTap: isLoading
+          ? null
+          : () async {
+              final cubit = context.read<CityChooseCubit>();
+              final airport =
+                  await cubit.locateCurrentAirport(lang: _searchLang(context));
+              if (airport != null && mounted) _onAirportSelected(airport);
+            },
+    );
+  }
+
+  Widget _suggestionTile(AirPortsModel place) {
+    final isCity = _isCityGroup(place);
+    return _PlaceTile(
+      icon: _svg(
+          isCity ? Assets.iconsPlaceCityIcon : Assets.iconsPlaceAirportIcon),
+      title: _nameWithCode(place.cityName, place.cityIataCode),
+      subtitle: _typeWithCountry(
+        isCity ? 'place_type_city'.tr() : 'place_type_airport'.tr(),
+        place.countryName,
+      ),
+      titleStyle: _titleStyle,
+      subtitleStyle: _subtitleStyle,
+      onTap: () => _onAirportSelected(place),
+    );
+  }
+
+  Widget _countryTile(AirPortsModel source) {
+    final name = source.countryName ?? '';
+    final code = source.countryIataCode ?? '';
+    if (name.isEmpty) return const SizedBox.shrink();
+    return Builder(
+      builder: (context) => _PlaceTile(
+        icon: _svg(Assets.iconsPlaceCountryIcon),
+        title: name,
+        subtitle: 'place_type_country'.tr(),
+        titleStyle: _titleStyle,
+        subtitleStyle: _subtitleStyle,
+        onTap: () {
+          _searchDebounce?.cancel();
+          final cubit = context.read<CityChooseCubit>();
+          cubit.controller.value = TextEditingValue(
+            text: name,
+            selection: TextSelection.collapsed(offset: name.length),
+          );
+          cubit.getAirportsByCountry(
+            country: code.isNotEmpty ? code : name,
+            lang: _searchLang(context),
+          );
+        },
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Search results
+  // ---------------------------------------------------------------------------
+
+  List<Widget> _buildResults(
+      BuildContext context, CityChooseSuccessState state) {
+    return [
+      if (state.country == null)
+        for (final country in _matchedCountries(context, state.airports))
+          _countryTile(country),
+      for (final city in state.airports) ..._resultGroup(city),
+    ];
+  }
+
+  /// So'rov davlat nomiga mos kelsa — natijalar tepasida davlat qatori.
+  List<AirPortsModel> _matchedCountries(
+      BuildContext context, List<AirPortsModel> results) {
+    final query = AirportLocalSearchService.normalize(
+        context.read<CityChooseCubit>().controller.text);
+    if (query.length < 2) return const [];
+    final seen = <String>{};
+    final matched = <AirPortsModel>[];
+    for (final place in results) {
+      final name = place.countryName ?? '';
+      if (name.isEmpty || !seen.add(name)) continue;
+      if (AirportLocalSearchService.normalize(name).startsWith(query)) {
+        matched.add(place);
+        if (matched.length == 2) break;
+      }
+    }
+    return matched;
+  }
+
+  List<Widget> _resultGroup(AirPortsModel city) {
+    final airports = city.airports ?? const <Airports>[];
+    if (airports.isEmpty) {
+      return [
+        _PlaceTile(
+          icon: _svg(Assets.iconsPlaceAirportIcon),
+          title: _nameWithCode(city.cityName, city.cityIataCode),
+          subtitle:
+              _typeWithCountry('place_type_airport'.tr(), city.countryName),
+          titleStyle: _titleStyle,
+          subtitleStyle: _subtitleStyle,
+          onTap: () => _onAirportSelected(city),
+        ),
+      ];
+    }
+
+    return [
+      _PlaceTile(
+        icon: _svg(Assets.iconsPlaceCityIcon),
+        title: _nameWithCode(city.cityName, city.cityIataCode),
+        subtitle: _typeWithCountry('place_type_city'.tr(), city.countryName),
+        titleStyle: _titleStyle,
+        subtitleStyle: _subtitleStyle,
+        onTap: () => _onAirportSelected(city),
+      ),
+      for (final airport in airports)
+        _PlaceTile(
+          indent: 24,
+          icon: _svg(Assets.iconsPlaceAirportIcon),
+          title: _nameWithCode(airport.airportName, airport.airportIataCode),
+          subtitle:
+              _typeWithCountry('place_type_airport'.tr(), city.countryName),
+          titleStyle: _titleStyle,
+          subtitleStyle: _subtitleStyle,
+          onTap: () => _onAirportSelected(
+            city.copyWith(cityIataCode: airport.airportIataCode),
+          ),
+        ),
+    ];
+  }
+
+  Widget _buildEmpty(String message) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 48),
+      child: Column(
+        children: [
+          _svg(Assets.iconsPlaceEmptySearchIcon, size: 40, color: _hintColor),
+          const SizedBox(height: 12),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: _titleStyle.copyWith(color: _secondaryColor),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+
+  Widget _sectionTitle(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 16, bottom: 4),
+      child: Text(
+        text,
+        style: context.textTheme.labelMedium?.copyWith(
+          color: _textColor,
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  Widget _svg(String asset, {double size = _iconSize, Color? color}) {
+    return SvgPicture.asset(
+      asset,
+      width: size,
+      height: size,
+      colorFilter: ColorFilter.mode(color ?? _textColor, BlendMode.srcIn),
+    );
+  }
+
+  Widget _loader() {
+    return SizedBox.square(
+      dimension: _iconSize,
+      child: Center(
+        child: Platform.isIOS
+            ? CupertinoActivityIndicator(radius: 9, color: _textColor)
+            : SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: _textColor,
+                ),
+              ),
+      ),
+    );
+  }
+
+  /// Bir nechta aeroportli shahar (metro kod, masalan MOW) — "Shahar".
+  bool _isCityGroup(AirPortsModel place) {
+    final airports = place.airports ?? const <Airports>[];
+    return airports.length > 1 &&
+        !airports.any((a) => a.airportIataCode == place.cityIataCode);
+  }
+
+  String _nameWithCode(String? name, String? code) {
+    final n = (name ?? '').trim();
+    final c = (code ?? '').trim();
+    if (n.isEmpty) return c;
+    if (c.isEmpty) return n;
+    return '$n ($c)';
+  }
+
+  String _typeWithCountry(String type, String? country) {
+    final c = (country ?? '').trim();
+    return c.isEmpty ? type : '$type · $c';
+  }
+}
+
+class _PlaceTile extends StatelessWidget {
+  final Widget icon;
+  final String title;
+  final String subtitle;
+  final TextStyle titleStyle;
+  final TextStyle subtitleStyle;
+  final VoidCallback? onTap;
+  final double indent;
+
+  const _PlaceTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.titleStyle,
+    required this.subtitleStyle,
+    required this.onTap,
+    this.indent = 0,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: EdgeInsets.only(left: indent, top: 12, bottom: 12),
+        child: Row(
+          children: [
+            SizedBox.square(
+              dimension: _SearchCityWidgetState._iconSize,
+              child: Center(child: icon),
+            ),
+            const SizedBox(width: _SearchCityWidgetState._iconGap),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: titleStyle,
+                  ),
+                  if (subtitle.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: subtitleStyle,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

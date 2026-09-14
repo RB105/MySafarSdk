@@ -849,5 +849,16 @@
   "srv_contact_support_pid": "Noma’lum xatolik. PID raqamini nusxalab, texnik yordamga murojaat qiling",
   "booking_missing_tr_id_notice": "Buyurtma serverga yuborildi, lekin javobda texnik nosozlik yuz berdi. Iltimos, 'Buyurtmalarim' bo'limini tekshiring yoki qo'llab-quvvatlash xizmatiga murojaat qiling.",
   "fill_passenger_data": "Ma'lumotlarni to'ldiring",
-  "add_to_saved_passengers": "Saqlangan yo'lovchilarga qo'shish"
+  "add_to_saved_passengers": "Saqlangan yo'lovchilarga qo'shish",
+  "place_where_from": "Qayerdan?",
+  "place_where_to": "Qayerga?",
+  "place_search_hint": "Davlat, shahar yoki aeroport",
+  "place_current_location": "Joriy joylashuv",
+  "place_use_current_location": "Joriy joylashuvdan foydalanish",
+  "place_location_unavailable": "Joylashuvni aniqlab bo'lmadi",
+  "place_suggested": "Tavsiya etilgan joylar",
+  "place_type_airport": "Aeroport",
+  "place_type_city": "Shahar",
+  "place_type_country": "Davlat",
+  "calendar_prices_hint": "Narxlar taxminiy va o'zgarishi mumkin"
 }

@@ -223,6 +223,9 @@ class _MainPageState extends State<MainPage> {
             ),
             body: SingleChildScrollView(
               controller: _scrollController,
+              // Shisha bottom bar ostida oxirgi kontent yopilib qolmasin.
+              padding: EdgeInsets.only(
+                  bottom: MediaQuery.paddingOf(context).bottom),
               child: Column(
                 children: [
                   _homeHeader(context),

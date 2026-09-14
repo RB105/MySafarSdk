@@ -67,6 +67,7 @@ class ProjectAssets {
   static const String usersIcon = "$_assetHomeIconPath/users_icon.svg";
   static const String arrowBackForwardIcon =
       "$_assetHomeIconPath/arrow_back_forward.svg";
+  static const String swapVertIcon = "$_assetHomeIconPath/swap_vert_icon.svg";
   static const String rotateIcon = "$_assetHomeIconPath/rotate_icon.svg";
   static const String profileIcon = "$_assetHomeIconPath/homeProfileIcon.svg";
   static const String calendarIcon = "$_assetHomeIconPath/calendar_icon.svg";

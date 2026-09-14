@@ -513,8 +513,15 @@ class _MainSearchFormState extends State<MainSearchForm> {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: _swap,
-          child: const Icon(Icons.swap_vert_rounded,
-              color: Colors.white, size: 24),
+          child: Center(
+            child: SvgPicture.asset(
+              ProjectAssets.swapVertIcon,
+              width: 22,
+              height: 22,
+              colorFilter:
+                  const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+            ),
+          ),
         ),
       ),
     );
@@ -775,10 +782,14 @@ class _MainSearchFormState extends State<MainSearchForm> {
         child: SizedBox(
           width: 38,
           height: 38,
-          child: Icon(
-            Icons.swap_vert_rounded,
-            color: ProjectTheme.brandColor,
-            size: 20,
+          child: Center(
+            child: SvgPicture.asset(
+              ProjectAssets.swapVertIcon,
+              width: 18,
+              height: 18,
+              colorFilter:
+                  ColorFilter.mode(ProjectTheme.brandColor, BlendMode.srcIn),
+            ),
           ),
         ),
       ),

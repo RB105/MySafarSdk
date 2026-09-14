@@ -849,5 +849,16 @@
   "srv_contact_support_pid": "Unknown error. Copy the PID and contact technical support",
   "booking_missing_tr_id_notice": "Your order was sent to the server, but the response had a technical issue. Please check the 'My Orders' section or contact support.",
   "fill_passenger_data": "Fill in the details",
-  "add_to_saved_passengers": "Add to saved passengers"
+  "add_to_saved_passengers": "Add to saved passengers",
+  "place_where_from": "Where from?",
+  "place_where_to": "Where to?",
+  "place_search_hint": "Country, city or airport",
+  "place_current_location": "Current location",
+  "place_use_current_location": "Use current location",
+  "place_location_unavailable": "Couldn't determine your location",
+  "place_suggested": "Suggested places",
+  "place_type_airport": "Airport",
+  "place_type_city": "City",
+  "place_type_country": "Country",
+  "calendar_prices_hint": "Prices are approximate and may change"
 }

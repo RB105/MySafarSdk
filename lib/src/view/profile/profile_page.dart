@@ -629,12 +629,10 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
               body: SafeArea(
                 top: Platform.isAndroid,
-                bottom: Platform.isAndroid,
-                child: RefreshIndicator(
-                  color: ProjectTheme.brandColor,
-                  backgroundColor: context.color.primaryContainer,
-                  displacement: 40,
-                  strokeWidth: 2.5,
+                // Pastki inset scroll padding'ida — kontent shisha bottom bar
+                // ostidan o'tadi (Android va iOS bir xil).
+                bottom: false,
+                child: AppRefreshIndicator(
                   onRefresh: () async {
                     // Qo'lda yangilash — profilni serverdan majburan qayta oladi.
                     await _profileCubit.getProfileData(forceRefresh: true);
@@ -643,7 +641,8 @@ class _ProfilePageState extends State<ProfilePage> {
                   child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(
                         parent: ClampingScrollPhysics()),
-                    padding: context.k16Padding,
+                    padding: context.k16Padding.copyWith(
+                        bottom: 16 + MediaQuery.paddingOf(context).bottom),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [

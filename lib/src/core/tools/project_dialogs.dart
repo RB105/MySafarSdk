@@ -164,25 +164,12 @@ class ProjectDialogs {
   ///
   /// 0 - from direction ; 1 - to direction
   static Future<AirPortsModel?> showCitySearchPicker(
-      BuildContext context, int directionType) async {
-    if (Platform.isIOS) {
-      return await showSdkCupertinoSheet<AirPortsModel?>(
-          context: context,
-          builder: (context) => MediaQuery.removePadding(
-                context: context,
-                removeTop: true,
-                child: SearchCityWidget(
-                  directionType: directionType,
-                ),
-              ));
-    }
-
-    return await showSdkModalBottomSheet<AirPortsModel?>(
+      BuildContext context, int directionType) {
+    return showSdkFullHeightSheet<AirPortsModel?>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (context) => SearchCityWidget(
+      builder: (context, controller) => SearchCityWidget(
         directionType: directionType,
+        scrollController: controller,
       ),
     );
   }

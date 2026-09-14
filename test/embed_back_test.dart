@@ -30,7 +30,7 @@ void main() {
   });
 
   setUp(() {
-    SdkEmbedBackHandler.resetDoubleBack();
+    SdkEmbedBackHandler.reset();
     BottomNavBarPage.currentTabIndex.value = 0;
   });
 
@@ -72,35 +72,51 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('system back on Main requires two presses to close embed',
+  testWidgets('system back on Main closes embed with one press',
       (tester) async {
     await openEmbed(tester);
-
-    await triggerSystemBack(tester);
-    expect(MySafarSdk.isEmbedded, isTrue);
-    expect(find.byType(MySafarEmbed), findsOneWidget);
 
     await triggerSystemBack(tester);
     expect(MySafarSdk.isEmbedded, isFalse);
     expect(find.byType(MySafarEmbed), findsNothing);
   });
 
-  testWidgets('system back from non-home tab switches to Main once',
+  testWidgets('system back from non-home tab goes to Main, then closes embed',
       (tester) async {
     await openEmbed(tester);
 
-    BottomNavBarPage.switchTo(3);
-    await tester.pumpAndSettle();
-    expect(BottomNavBarPage.currentTabIndex.value, 3);
+    for (final tab in [1, 2, 3]) {
+      BottomNavBarPage.switchTo(tab);
+      await tester.pumpAndSettle();
+      expect(BottomNavBarPage.currentTabIndex.value, tab);
+
+      await triggerSystemBack(tester);
+      expect(MySafarSdk.isEmbedded, isTrue,
+          reason: 'back on tab $tab must only return to Main');
+      expect(BottomNavBarPage.currentTabIndex.value, 0);
+    }
 
     await triggerSystemBack(tester);
-
-    expect(MySafarSdk.isEmbedded, isTrue);
-    expect(BottomNavBarPage.currentTabIndex.value, 0);
+    expect(MySafarSdk.isEmbedded, isFalse);
+    expect(find.byType(MySafarEmbed), findsNothing);
   });
 
-  testWidgets('system back pops inner SDK route before double-back exit',
+  testWidgets('duplicate back event from one gesture does not also exit',
       (tester) async {
+    await openEmbed(tester);
+    BottomNavBarPage.switchTo(2);
+    await tester.pumpAndSettle();
+
+    // PopScope + didPopRoute bitta gesture'da ikkalasi ham kelishi mumkin.
+    SdkEmbedBackHandler.handleBack();
+    SdkEmbedBackHandler.handleBack();
+    await tester.pumpAndSettle();
+
+    expect(BottomNavBarPage.currentTabIndex.value, 0);
+    expect(MySafarSdk.isEmbedded, isTrue);
+  });
+
+  testWidgets('system back pops inner SDK route before exit', (tester) async {
     await openEmbed(tester);
 
     NavigationService.navigatorKey.currentState!.push(
@@ -122,21 +138,12 @@ void main() {
     expect(find.text('Inner SDK Page'), findsNothing);
 
     await triggerSystemBack(tester);
-    expect(MySafarSdk.isEmbedded, isTrue);
-
-    await triggerSystemBack(tester);
     expect(MySafarSdk.isEmbedded, isFalse);
     expect(find.byType(MySafarEmbed), findsNothing);
   });
 
-  testWidgets('SdkEmbedBackHandler.handleBack double-back exits at Main',
-      (tester) async {
+  testWidgets('SdkEmbedBackHandler.handleBack exits at Main', (tester) async {
     await openEmbed(tester);
-
-    SdkEmbedBackHandler.handleBack();
-    await tester.pump(SdkEmbedBackHandler.rootBackLock);
-    await tester.pumpAndSettle();
-    expect(MySafarSdk.isEmbedded, isTrue);
 
     SdkEmbedBackHandler.handleBack();
     await tester.pumpAndSettle();

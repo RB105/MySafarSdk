@@ -3,7 +3,8 @@
 
 part of 'route_search_page.dart';
 
-/// Rejim tab paneli — oddiy qidiruv / murakkab marshrut.
+/// Rejim tab paneli — oddiy qidiruv / murakkab marshrut. Holat
+/// [TabController]da (sahifa uning tinglovchisi orqali cubit'ni yangilaydi).
 class _RouteModeTabBar extends StatelessWidget {
   final TabController controller;
 
@@ -11,68 +12,27 @@ class _RouteModeTabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brand = ProjectTheme.brandColor;
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    // Light (ko'k hero): yarim-shaffof + oq pill. Dark: dark trek + oq pill.
-    return Container(
-      height: 52,
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white.withAlpha(14) : Colors.white.withAlpha(28),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark ? Colors.white.withAlpha(40) : Colors.white.withAlpha(55),
-        ),
-      ),
-      child: TabBar(
-        controller: controller,
-        isScrollable: false,
-        labelColor: brand,
-        unselectedLabelColor: Colors.white,
-        labelPadding: EdgeInsets.zero,
-        dividerColor: Colors.transparent,
-        overlayColor: WidgetStatePropertyAll(brand.withAlpha(30)),
-        splashBorderRadius: BorderRadius.circular(12),
-        indicator: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(28),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        indicatorSize: TabBarIndicatorSize.tab,
-        padding: const EdgeInsets.all(4),
-        labelStyle: const TextStyle(
-          fontFamily: 'Gilroy',
-          fontSize: 13,
-          fontWeight: FontWeight.w700,
-        ),
-        unselectedLabelStyle: const TextStyle(
-          fontFamily: 'Gilroy',
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-        ),
-        tabs: [
-          _tab("simple_route".tr()),
-          _tab("multiway".tr()),
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) => _SegmentedPill(
+        onHero: true,
+        selectedIndex: controller.index,
+        onChanged: (i) => controller.index = i,
+        items: [
+          _SegmentItem(
+            "simple_route".tr(),
+            outlineIcon: Assets.iconsSearchOneWayOutline,
+            filledIcon: Assets.iconsSearchOneWayFilled,
+          ),
+          _SegmentItem(
+            "multiway".tr(),
+            outlineIcon: Assets.iconsSearchMultiRouteOutline,
+            filledIcon: Assets.iconsSearchMultiRouteFilled,
+          ),
         ],
       ),
     );
   }
-
-  Widget _tab(String text) => Tab(
-        height: 44,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(text, maxLines: 1),
-          ),
-        ),
-      );
 }
 
 /// Murakkab marshrut kartasi — oddiy qidiruv kartasi bilan bir xil oq karta,
@@ -136,7 +96,7 @@ class _MultiRouteCard extends StatelessWidget {
           _WebField(
             label: "passengers".tr(),
             value: paxText,
-            icon: Icons.people_outline_rounded,
+            icon: Assets.iconsSearchPassengersIcon,
             onTap: onPaxTap,
           ),
         ],
@@ -227,7 +187,7 @@ class _LegBlock extends StatelessWidget {
           label: "depDate".tr(),
           value: _dateText(leg.date),
           isPlaceholder: leg.date == null,
-          icon: Icons.calendar_today_outlined,
+          icon: Assets.iconsSearchCalendarIcon,
           onTap: onDateTap,
         ),
       ],
@@ -254,10 +214,12 @@ class _LegRemoveButton extends StatelessWidget {
         child: SizedBox(
           width: 24,
           height: 24,
-          child: Icon(
-            Icons.close_rounded,
-            size: 15,
-            color: ProjectTheme.error,
+          child: Center(
+            child: _SvgIcon(
+              Assets.iconsSearchCloseIcon,
+              size: 14,
+              color: ProjectTheme.error,
+            ),
           ),
         ),
       ),
@@ -274,6 +236,7 @@ class _AddLegButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color fg = isDark ? Colors.white : ProjectTheme.brandColor;
     return Opacity(
       opacity: enabled ? 1 : 0.45,
       child: Material(
@@ -290,17 +253,25 @@ class _AddLegButton extends StatelessWidget {
           child: SizedBox(
             height: 44,
             width: double.infinity,
-            child: Center(
-              child: Text(
-                "add_race".tr(),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: isDark ? Colors.white : ProjectTheme.brandColor,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _SvgIcon(Assets.iconsSearchAddIcon, size: 20, color: fg),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    // Tarjimada "+" belgisi bor — ikonka uni takrorlamasin.
+                    "add_race".tr().replaceFirst(RegExp(r'^\s*\+\s*'), ''),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: fg,
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
         ),

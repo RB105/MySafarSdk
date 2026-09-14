@@ -109,6 +109,7 @@ Future<T?> showSdkModalBottomSheet<T>({
   double? elevation,
   bool? showDragHandle,
   BoxConstraints? constraints,
+  AnimationStyle? sheetAnimationStyle,
 }) {
   final notifier = _tryThemeNotifier(context);
   // Ochilish paytidagi tema — keyin parent deactivate bo'lsa fallback.
@@ -132,6 +133,7 @@ Future<T?> showSdkModalBottomSheet<T>({
     elevation: elevation ?? 0,
     showDragHandle: showDragHandle,
     constraints: constraints,
+    sheetAnimationStyle: sheetAnimationStyle,
     builder: (_) => _wrapLiveTheme(
       initialTheme: initialTheme,
       notifier: notifier,
@@ -141,6 +143,143 @@ Future<T?> showSdkModalBottomSheet<T>({
       builder: builder,
     ),
   );
+}
+
+/// To'liq balandlikdagi SDK sheet'ining yuqori burchak radiusi.
+const double kSdkSheetTopRadius = 36;
+
+/// Status bar ostidan boshlanadigan to'liq balandlikdagi sheet — iOS va
+/// Android'da bir xil ko'rinish (katta yumaloq burchaklar).
+///
+/// Yopish: sarlavhani yoki ro'yxat eng tepada turganda kontentni pastga
+/// tortish (chorakdan o'tsa yoki tez silkitilsa yopiladi, aks holda qaytadi).
+/// Ro'yxat [builder]ga berilgan `controller`ni ishlatishi shart.
+Future<T?> showSdkFullHeightSheet<T>({
+  required BuildContext context,
+  required Widget Function(BuildContext context, ScrollController controller)
+      builder,
+}) {
+  return showSdkModalBottomSheet<T>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    // Tortish [_SdkFullHeightSheet] ichida boshqariladi.
+    enableDrag: false,
+    backgroundColor: Colors.transparent,
+    sheetAnimationStyle: const AnimationStyle(
+      duration: Duration(milliseconds: 380),
+      reverseDuration: Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+    ),
+    builder: (_) => _SdkFullHeightSheet(builder: builder),
+  );
+}
+
+class _SdkFullHeightSheet extends StatefulWidget {
+  const _SdkFullHeightSheet({required this.builder});
+
+  final Widget Function(BuildContext context, ScrollController controller)
+      builder;
+
+  @override
+  State<_SdkFullHeightSheet> createState() => _SdkFullHeightSheetState();
+}
+
+class _SdkFullHeightSheetState extends State<_SdkFullHeightSheet> {
+  /// Qo'yib yuborilganda shundan pastda bo'lsa — yopiladi.
+  static const double _closeBelowSize = 0.75;
+
+  /// Shundan tez pastga silkitilsa (px/s) — masofadan qat'i nazar yopiladi.
+  static const double _closeFlingVelocity = 700;
+
+  final DraggableScrollableController _controller =
+      DraggableScrollableController();
+  double _height = 1;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _animateTo(double size) {
+    if (!_controller.isAttached) return;
+    _controller.animateTo(
+      size,
+      duration: Duration(milliseconds: size == 0 ? 220 : 280),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  /// Sarlavha / qidiruv maydonini tortish (ro'yxatdan tashqari joy).
+  void _onHeaderDrag(DragUpdateDetails details) {
+    if (!_controller.isAttached) return;
+    final size = _controller.size - (details.primaryDelta ?? 0) / _height;
+    _controller.jumpTo(size.clamp(0.0, 1.0));
+  }
+
+  void _onHeaderDragEnd(DragEndDetails details) {
+    if (!_controller.isAttached || _controller.size >= 1) return;
+    final velocity = details.primaryVelocity ?? 0;
+    final close =
+        velocity > _closeFlingVelocity || _controller.size < _closeBelowSize;
+    _animateTo(close ? 0 : 1);
+  }
+
+  /// Ro'yxat tortib qo'yib yuborilganda sekin qo'yilsa ham yopish. Tez
+  /// silkitish va qaytishni `snap` o'zi hal qiladi. Microtask — drag'ning
+  /// o'z `goBallistic`idan keyin ishlashi uchun.
+  void _onPointerUp(PointerUpEvent _) {
+    Future.microtask(() {
+      if (!mounted || !_controller.isAttached) return;
+      if (_controller.size < _closeBelowSize) _animateTo(0);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fill = context.isDarkMode
+        ? ProjectTheme.cardColorDark
+        : ProjectTheme.cardColorLight;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        _height = constraints.maxHeight;
+        return DraggableScrollableSheet(
+          controller: _controller,
+          initialChildSize: 1,
+          minChildSize: 0,
+          maxChildSize: 1,
+          snap: true,
+          builder: (context, scrollController) => ClipRRect(
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(kSdkSheetTopRadius),
+            ),
+            // Kontent doim to'liq balandlikda chiziladi — sheet pastga
+            // tortilganda siqilmaydi (overflow yo'q), faqat pastga suriladi.
+            child: OverflowBox(
+              alignment: Alignment.topCenter,
+              minHeight: _height,
+              maxHeight: _height,
+              child: Listener(
+                onPointerUp: _onPointerUp,
+                // Ro'yxatning o'z drag'i arena'da yutadi — bu faqat
+                // ro'yxatdan tashqaridagi joylarni tortganda ishlaydi.
+                child: GestureDetector(
+                  onVerticalDragUpdate: _onHeaderDrag,
+                  onVerticalDragEnd: _onHeaderDragEnd,
+                  child: Material(
+                    color: fill,
+                    child: widget.builder(context, scrollController),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 /// Cupertino modal popup — host root navigator'ga chiqmasin + jonli tema.

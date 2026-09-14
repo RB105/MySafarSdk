@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/core/router/navigation_service.dart';
 import 'package:mysafar_sdk/src/core/widgets/edge_swipe_back.dart';
-import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/view/navbar/bottom_nav_bar.dart';
 
 /// Embed rejimida tizim back (Android), predictive back va iOS chetdan swipe
 /// UI orqaga tugmasi bilan bir xil ishlaydi:
 /// 1) SDK ichki stack → pop
 /// 2) non-home tab (profil / buyurtmalar / yo'nalishlar) → Main
-/// 3) Main → ikki marta orqaga → [MySafarSdk.exitEmbed]
+/// 3) Main → bir marta orqaga → [MySafarSdk.exitEmbed] (UI ← tugmasi bilan
+///    bir xil, toast yo'q)
 ///
 /// [MaterialApp.builder] ichida turishi shart — nested navigator back eventini
 /// host route'iga o'tkazib yubormasdan oldin ushlaydi.
@@ -23,19 +23,16 @@ class SdkEmbedBackHandler extends StatelessWidget {
 
   static bool get isHandlingInternalPop => _internalPopDepth > 0;
 
-  /// Double-back oynasi (Main → host).
-  static const Duration doubleBackWindow = Duration(seconds: 2);
-
   /// PopScope + didPopRoute bir gesture'da ikki marta kelishini yutish.
-  /// Foydalanuvchi ikkinchi "chiqish" bosishi odatda undan kechroq.
+  /// Shusiz bitta back tab → Main qilib, darhol SDK'ni ham yopib yuborardi.
+  /// Foydalanuvchining keyingi bosishi odatda undan kechroq.
   static const Duration rootBackLock = Duration(milliseconds: 400);
 
-  static DateTime? _lastBackAt;
   static bool _rootBackLocked = false;
 
-  /// Tab almashtirilganda yoki testda double-back holatini tozalash.
-  static void resetDoubleBack() {
-    _lastBackAt = null;
+  /// Testda root-back lock holatini tozalash.
+  @visibleForTesting
+  static void reset() {
     _rootBackLocked = false;
   }
 
@@ -56,13 +53,13 @@ class SdkEmbedBackHandler extends StatelessWidget {
     return false;
   }
 
-  /// SDK ichki stack → pop; root → tab/home yoki double-back exit.
+  /// SDK ichki stack → pop; root → non-home tab'dan Main yoki host'ga chiqish.
   static void handleBack() {
     if (handleSystemBack()) return;
     handleRootBack();
   }
 
-  /// Root (stack bo'sh): non-home tab → Main; Main → 2× back → host.
+  /// Root (stack bo'sh): non-home tab → Main; Main → host.
   static void handleRootBack() {
     MySafarSdk.logBack(
       'handleRootBack(embedded: ${MySafarSdk.isEmbedded}, '
@@ -77,27 +74,12 @@ class SdkEmbedBackHandler extends StatelessWidget {
       _rootBackLocked = false;
     });
 
-    final now = DateTime.now();
-    final tab = BottomNavBarPage.currentTabIndex.value;
-    if (tab != 0) {
-      _lastBackAt = null;
+    if (BottomNavBarPage.currentTabIndex.value != 0) {
       BottomNavBarPage.switchTo(0);
       return;
     }
 
-    if (_lastBackAt != null &&
-        now.difference(_lastBackAt!) < doubleBackWindow) {
-      _lastBackAt = null;
-      MySafarSdk.exitEmbed();
-      return;
-    }
-
-    _lastBackAt = now;
-    try {
-      showToastTr('press_again_to_exit');
-    } catch (_) {
-      // Test / toast plugin yo'q muhit — silent.
-    }
+    MySafarSdk.exitEmbed();
   }
 
   static bool get _atSdkRoot {

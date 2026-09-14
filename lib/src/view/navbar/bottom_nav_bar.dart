@@ -1,6 +1,10 @@
 // ignore_for_file: deprecated_member_use
 
-import 'package:flutter/services.dart' show HapticFeedback;
+import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
+
+import 'package:flutter/services.dart'
+    show HapticFeedback, SystemUiOverlayStyle;
 import 'package:showcaseview/showcaseview.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/service/deep_link_gateway.dart';
@@ -12,7 +16,6 @@ import 'package:mysafar_sdk/src/view/profile/pages/booked_tickets_page.dart';
 import 'package:mysafar_sdk/src/view/profile/profile_page.dart';
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
-import 'package:mysafar_sdk/src/core/router/sdk_embed_back_handler.dart';
 
 class BottomNavBarPage extends StatefulWidget {
   final int? pageIndex;
@@ -40,8 +43,6 @@ class BottomNavBarPage extends StatefulWidget {
 
 class _BottomNavBarPageState extends State<BottomNavBarPage> {
   int _pageIndex = 0;
-
-  static const int _profileIndex = 3;
 
   late final List<Widget> _pages = const [
     MainPage(),
@@ -87,7 +88,6 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
       _loaded[index] = true;
     });
     BottomNavBarPage.currentTabIndex.value = index;
-    SdkEmbedBackHandler.resetDoubleBack();
   }
 
   void _onTabRequest() {
@@ -126,6 +126,9 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
           backgroundColor: isDark
               ? ProjectTheme.backgroundDark
               : ProjectTheme.backgroundLight,
+          // Kontent shisha panel ostidan o'tadi; tab sahifalari pastki
+          // bo'shliqni `MediaQuery.paddingOf(context).bottom` orqali oladi.
+          extendBody: true,
           body: IndexedStack(
             index: _pageIndex,
             children: [
@@ -139,71 +142,182 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
     );
   }
 
+  /// iOS "liquid glass" uslubidagi suzuvchi panel — Android va iOS'da bir xil.
+  /// Scaffold `extendBody: true` bo'lgani uchun kontent panel ostidan
+  /// scroll bo'lib o'tadi va blur orqali ko'rinib turadi.
   Widget _buildBottomBar(BuildContext context, bool isDark) {
     final style = MySafarSdk.config.bottomBarStyle;
-    final shadowOpacity = isDark
+    final double radius = style?.borderRadius ?? 40;
+    final EdgeInsets padding = style?.padding ?? const EdgeInsets.all(6);
+    final double blurSigma = style?.blurSigma ?? 24;
+    final double shadowOpacity = isDark
         ? (style?.shadowOpacityDark ?? 0.45)
         : (style?.shadowOpacityLight ?? 0.12);
+    final Color tint = isDark
+        ? (style?.backgroundColorDark ??
+            const Color(0xFF2A2A2E).withOpacity(0.55))
+        : (style?.backgroundColorLight ?? Colors.white.withOpacity(0.62));
 
+    final items = <_NavItemData>[
+      _NavItemData(
+        label: "home".tr(),
+        outlineAsset: Assets.iconsNavHomeOutline,
+        filledAsset: Assets.iconsNavHomeFilled,
+      ),
+      _NavItemData(
+        label: "orders".tr(),
+        outlineAsset: Assets.iconsNavOrdersOutline,
+        filledAsset: Assets.iconsNavOrdersFilled,
+        showcaseKey: HomeShowcaseKeys.tabOrders,
+        showcaseTitle: "showcase_orders_title".tr(),
+        showcaseDesc: "showcase_orders_desc".tr(),
+      ),
+      _NavItemData(
+        label: "destinations_tab".tr(),
+        outlineAsset: Assets.iconsNavDestinationsOutline,
+        filledAsset: Assets.iconsNavDestinationsFilled,
+        showcaseKey: HomeShowcaseKeys.tabServices,
+        showcaseTitle: "showcase_popular_title".tr(),
+        showcaseDesc: "showcase_popular_desc".tr(),
+      ),
+      _NavItemData(
+        label: "profile".tr(),
+        outlineAsset: Assets.iconsNavProfileOutline,
+        filledAsset: Assets.iconsNavProfileFilled,
+        showcaseKey: HomeShowcaseKeys.tabProfile,
+        showcaseTitle: "showcase_profile_title".tr(),
+        showcaseDesc: "showcase_profile_desc".tr(),
+      ),
+    ];
+    assert(items.length == _pages.length);
+
+    final Color bodyColor =
+        isDark ? ProjectTheme.backgroundDark : ProjectTheme.backgroundLight;
+
+    // Region ekranning eng pastki qismini qoplaydi — Android tizim navigatsiya
+    // paneli rangi shu yerdan olinadi va sahifa foniga moslashadi.
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        systemNavigationBarColor: bodyColor,
+        systemNavigationBarDividerColor: bodyColor,
+        systemNavigationBarIconBrightness:
+            isDark ? Brightness.light : Brightness.dark,
+        systemNavigationBarContrastEnforced: false,
+      ),
+      child: _glassBar(
+        items: items,
+        isDark: isDark,
+        radius: radius,
+        padding: padding,
+        blurSigma: blurSigma,
+        shadowOpacity: shadowOpacity,
+        tint: tint,
+      ),
+    );
+  }
+
+  Widget _glassBar({
+    required List<_NavItemData> items,
+    required bool isDark,
+    required double radius,
+    required EdgeInsets padding,
+    required double blurSigma,
+    required double shadowOpacity,
+    required Color tint,
+  }) {
+    final style = MySafarSdk.config.bottomBarStyle;
     return SafeArea(
       top: false,
       minimum: const EdgeInsets.only(bottom: 10),
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 14),
-        padding: style?.padding ?? const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: isDark
-              ? (style?.backgroundColorDark ?? ProjectTheme.cardColorDark)
-              : (style?.backgroundColorLight ?? ProjectTheme.cardColorLight),
-          borderRadius: BorderRadius.circular(style?.borderRadius ?? 40),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(shadowOpacity),
-              blurRadius: style?.shadowBlurRadius ?? 24,
-              offset: style?.shadowOffset ?? const Offset(0, 8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        child: CustomPaint(
+          // Soya faqat panel TASHQARISIDA chiziladi — aks holda shaffof
+          // shisha ortidan qorayib ko'rinadi.
+          painter: _OuterShadowPainter(
+            radius: radius,
+            color: Colors.black.withOpacity(shadowOpacity),
+            blurRadius: style?.shadowBlurRadius ?? 24,
+            offset: style?.shadowOffset ?? const Offset(0, 8),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(radius),
+            child: BackdropFilter(
+              enabled: blurSigma > 0,
+              filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color.lerp(tint, Colors.white, isDark ? 0.04 : 0.25)!,
+                      tint,
+                    ],
+                  ),
+                ),
+                child: CustomPaint(
+                  foregroundPainter:
+                      _GlassRimPainter(radius: radius, isDark: isDark),
+                  child: Padding(
+                    padding: padding,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final double itemWidth =
+                            constraints.maxWidth / items.length;
+                        return Stack(
+                          children: [
+                            AnimatedPositioned(
+                              duration: const Duration(milliseconds: 420),
+                              curve: const Cubic(0.25, 1.1, 0.4, 1.0),
+                              left: itemWidth * _pageIndex,
+                              width: itemWidth,
+                              top: 0,
+                              bottom: 0,
+                              child: _selectionPill(
+                                radius: math.max(0, radius - padding.top),
+                                isDark: isDark,
+                              ),
+                            ),
+                            Row(
+                              children: [
+                                for (int i = 0; i < items.length; i++)
+                                  Expanded(
+                                    child: _navItem(
+                                      index: i,
+                                      data: items[i],
+                                      isDark: isDark,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ],
+          ),
         ),
-        child: Row(
-          children: [
-            Expanded(
-              child: _navItem(
-                  index: 0,
-                  asset: Assets.homeHouseIcon,
-                  label: "home".tr(),
-                  isDark: isDark),
-            ),
-            Expanded(
-              child: _navItem(
-                  index: 1,
-                  asset: Assets.homeTicket,
-                  label: "orders".tr(),
-                  isDark: isDark,
-                  showcaseKey: HomeShowcaseKeys.tabOrders,
-                  showcaseTitle: "showcase_orders_title".tr(),
-                  showcaseDesc: "showcase_orders_desc".tr()),
-            ),
-            Expanded(
-              child: _navItem(
-                  index: 2,
-                  iconData: Icons.location_on_rounded,
-                  label: "destinations_tab".tr(),
-                  isDark: isDark,
-                  showcaseKey: HomeShowcaseKeys.tabServices,
-                  showcaseTitle: "showcase_popular_title".tr(),
-                  showcaseDesc: "showcase_popular_desc".tr()),
-            ),
-            Expanded(
-              child: _navItem(
-                  index: _profileIndex,
-                  iconData: Icons.person_outline_rounded,
-                  label: "profile".tr(),
-                  isDark: isDark,
-                  showcaseKey: HomeShowcaseKeys.tabProfile,
-                  showcaseTitle: "showcase_profile_title".tr(),
-                  showcaseDesc: "showcase_profile_desc".tr()),
-            ),
-          ],
+      ),
+    );
+  }
+
+  /// Tanlangan tab ostidagi suzuvchi shisha "linza".
+  Widget _selectionPill({required double radius, required bool isDark}) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(radius),
+        color: isDark
+            ? Colors.white.withOpacity(0.14)
+            : const Color(0xFF1B2541).withOpacity(0.07),
+        border: Border.all(
+          width: 0.8,
+          color: isDark
+              ? Colors.white.withOpacity(0.10)
+              : Colors.white.withOpacity(0.70),
         ),
       ),
     );
@@ -211,54 +325,71 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
 
   Widget _navItem({
     required int index,
-    required String label,
+    required _NavItemData data,
     required bool isDark,
-    String? asset,
-    IconData? iconData,
-    GlobalKey? showcaseKey,
-    String? showcaseTitle,
-    String? showcaseDesc,
   }) {
     final bool selected = _pageIndex == index;
     final Color activeColor = isDark ? Colors.white : const Color(0xFF1B2541);
-    final Color unselectedColor =
-        isDark ? ProjectTheme.secondaryTextDark : const Color(0xFF8E99B5);
+    final Color unselectedColor = isDark
+        ? ProjectTheme.secondaryTextDark.withOpacity(0.75)
+        : const Color(0xFF7A849E);
     final Color color = selected ? activeColor : unselectedColor;
 
-    final Widget item = GestureDetector(
-      behavior: HitTestBehavior.opaque,
+    final Widget item = _PressScale(
       onTap: () {
         if (_pageIndex != index) {
           HapticFeedback.selectionClick();
           _setPageIndex(index);
         }
       },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOut,
+      child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 9),
-        decoration: BoxDecoration(
-          color: selected
-              ? (isDark
-                  ? Colors.white.withOpacity(0.10)
-                  : const Color(0xFFE4E6EC))
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(34),
-        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _icon(asset: asset, iconData: iconData, color: color),
+            AnimatedScale(
+              // Tanlangan ikonka biroz kattalashadi (yengil "pop" bilan).
+              scale: selected ? 1.18 : 1,
+              duration: const Duration(milliseconds: 320),
+              curve: selected ? Curves.easeOutBack : Curves.easeOut,
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 240),
+                  switchInCurve: Curves.easeOutBack,
+                  switchOutCurve: Curves.easeIn,
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: ScaleTransition(
+                      scale:
+                          Tween<double>(begin: 0.8, end: 1).animate(animation),
+                      child: child,
+                    ),
+                  ),
+                  child: SvgPicture.asset(
+                    selected ? data.filledAsset : data.outlineAsset,
+                    key: ValueKey<bool>(selected),
+                    width: 24,
+                    height: 24,
+                    colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(height: 4),
-            Text(
-              label,
-              maxLines: 1,
-              softWrap: false,
-              overflow: TextOverflow.fade,
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 220),
               style: TextStyle(
                 fontSize: 11.5,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                 color: color,
+              ),
+              child: Text(
+                data.label,
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.fade,
               ),
             ),
           ],
@@ -266,12 +397,12 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
       ),
     );
 
-    if (showcaseKey == null) return item;
+    if (data.showcaseKey == null) return item;
 
     return Showcase(
-      key: showcaseKey,
-      title: showcaseTitle,
-      description: showcaseDesc,
+      key: data.showcaseKey!,
+      title: data.showcaseTitle,
+      description: data.showcaseDesc,
       targetBorderRadius: BorderRadius.circular(30),
       targetPadding: const EdgeInsets.all(4),
       tooltipBackgroundColor: ProjectTheme.brandColor,
@@ -279,17 +410,135 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
       child: item,
     );
   }
+}
 
-  Widget _icon({String? asset, IconData? iconData, required Color color}) {
-    return SizedBox(
-      width: 24,
-      height: 24,
-      child: asset != null
-          ? SvgPicture.asset(
-              asset,
-              colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-            )
-          : Icon(iconData, size: 24, color: color),
+class _NavItemData {
+  const _NavItemData({
+    required this.label,
+    required this.outlineAsset,
+    required this.filledAsset,
+    this.showcaseKey,
+    this.showcaseTitle,
+    this.showcaseDesc,
+  });
+
+  final String label;
+  final String outlineAsset;
+  final String filledAsset;
+  final GlobalKey? showcaseKey;
+  final String? showcaseTitle;
+  final String? showcaseDesc;
+}
+
+/// Bosilganda elementni biroz kichraytiradi (iOS tab bar "press" hissi).
+class _PressScale extends StatefulWidget {
+  const _PressScale({required this.onTap, required this.child});
+
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  State<_PressScale> createState() => _PressScaleState();
+}
+
+class _PressScaleState extends State<_PressScale> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed != value) setState(() => _pressed = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onTap,
+      onTapDown: (_) => _setPressed(true),
+      onTapUp: (_) => _setPressed(false),
+      onTapCancel: () => _setPressed(false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.9 : 1,
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOut,
+        child: widget.child,
+      ),
     );
   }
+}
+
+/// Shisha panel qirrasidagi yorug' chiziq — tepada yorqin, pastga xiralashadi.
+class _GlassRimPainter extends CustomPainter {
+  const _GlassRimPainter({required this.radius, required this.isDark});
+
+  final double radius;
+  final bool isDark;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const double stroke = 1;
+    final Rect rect = (Offset.zero & size).deflate(stroke / 2);
+    final Paint paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: isDark
+            ? [Colors.white.withOpacity(0.22), Colors.white.withOpacity(0.05)]
+            : [Colors.white.withOpacity(0.95), Colors.white.withOpacity(0.35)],
+      ).createShader(rect);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+          rect, Radius.circular(math.max(0, radius - stroke / 2))),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_GlassRimPainter oldDelegate) =>
+      oldDelegate.radius != radius || oldDelegate.isDark != isDark;
+}
+
+/// Faqat panel tashqarisiga tushadigan soya.
+class _OuterShadowPainter extends CustomPainter {
+  const _OuterShadowPainter({
+    required this.radius,
+    required this.color,
+    required this.blurRadius,
+    required this.offset,
+  });
+
+  final double radius;
+  final Color color;
+  final double blurRadius;
+  final Offset offset;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final RRect shape =
+        RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius));
+    final Rect bounds =
+        (Offset.zero & size).inflate(blurRadius * 2 + offset.distance);
+
+    canvas.save();
+    canvas.clipPath(Path()
+      ..fillType = PathFillType.evenOdd
+      ..addRect(bounds)
+      ..addRRect(shape));
+    canvas.drawRRect(
+      shape.shift(offset),
+      Paint()
+        ..color = color
+        ..maskFilter = MaskFilter.blur(
+            BlurStyle.normal, Shadow.convertRadiusToSigma(blurRadius)),
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_OuterShadowPainter oldDelegate) =>
+      oldDelegate.radius != radius ||
+      oldDelegate.color != color ||
+      oldDelegate.blurRadius != blurRadius ||
+      oldDelegate.offset != offset;
 }

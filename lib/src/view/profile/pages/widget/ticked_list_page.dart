@@ -3,6 +3,7 @@ import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
+import 'package:mysafar_sdk/src/core/widgets/app_refresh_indicator.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart' show Assets;
 import 'package:mysafar_sdk/src/model/remote/profile/confirmed_ticket_models.dart';
 import 'package:mysafar_sdk/src/view/profile/src/my_ticket_widget.dart';
@@ -44,14 +45,16 @@ class TicketList extends StatelessWidget {
         ],
       );
     } else {
+      // removePadding'dan oldin olinadi — shisha bottom bar balandligi.
+      final double bottomInset = MediaQuery.paddingOf(context).bottom;
       child = MediaQuery.removePadding(
         context: context,
         removeTop: true,
         removeBottom: true,
         child: ListView.builder(
             scrollCacheExtent: ScrollCacheExtent.pixels(100), physics: const AlwaysScrollableScrollPhysics(),
-            padding:
-                const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 16),
+            padding: EdgeInsets.only(
+                left: 16, right: 16, top: 16, bottom: 16 + bottomInset),
             itemCount: tickets.length,
             itemBuilder: (context, index) => Padding(
                   padding: EdgeInsets.only(
@@ -66,6 +69,6 @@ class TicketList extends StatelessWidget {
     }
 
     if (onRefresh == null) return child;
-    return RefreshIndicator(onRefresh: onRefresh!, child: child);
+    return AppRefreshIndicator(onRefresh: onRefresh!, child: child);
   }
 }

@@ -404,7 +404,8 @@ class _BookedTicketsPageState extends State<BookedTicketsPage>
   Widget _buildLoadingState(BuildContext context) {
     final isDark = context.themeProvider.isDark;
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.fromLTRB(
+          16, 16, 16, 16 + MediaQuery.paddingOf(context).bottom),
       itemCount: BookedTicketsConstants.shimmerItemCount,
       itemBuilder: (context, index) => Padding(
         padding: const EdgeInsets.only(bottom: 16),
@@ -441,11 +442,12 @@ class _BookedTicketsPageState extends State<BookedTicketsPage>
   }
 
   Widget _buildErrorState(BuildContext context, String error) {
-    return RefreshIndicator(
+    return AppRefreshIndicator(
       onRefresh: () => _refresh(context),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 32),
+        padding: EdgeInsets.fromLTRB(
+            32, 0, 32, MediaQuery.paddingOf(context).bottom),
         children: [
           SizedBox(height: MediaQuery.of(context).size.height * 0.16),
           Column(
@@ -500,11 +502,12 @@ class _BookedTicketsPageState extends State<BookedTicketsPage>
 
   Widget _buildEmptyState(BuildContext context) {
     final brand = ProjectTheme.brandColor;
-    return RefreshIndicator(
+    return AppRefreshIndicator(
       onRefresh: () => _refresh(context),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 24),
+        padding: EdgeInsets.fromLTRB(
+            24, 0, 24, MediaQuery.paddingOf(context).bottom),
         children: [
           SizedBox(height: MediaQuery.of(context).size.height * 0.08),
           Column(
@@ -597,7 +600,8 @@ class _BookedTicketsPageState extends State<BookedTicketsPage>
     final isDark = context.themeProvider.isDark;
     return Center(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.fromLTRB(
+            24, 24, 24, 24 + MediaQuery.paddingOf(context).bottom),
         child: Container(
           padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
           decoration: BoxDecoration(

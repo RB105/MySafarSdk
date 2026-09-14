@@ -12,6 +12,10 @@ part of 'route_search_page.dart';
 class _Web {
   const _Web._();
 
+  /// SDK paketidagi shrift nomi. `'Gilroy'` deb yozilsa paket ichida
+  /// topilmaydi va tizim shriftiga tushib qoladi.
+  static const fontFamily = 'packages/mysafar_sdk/Gilroy';
+
   /// Sahifa foni (`#f4f7fc`) — maydonlar foni ham shu rang.
   static const pageBg = Color(0xFFF4F7FC);
   static const fieldBg = Color(0xFFF4F7FC);
@@ -56,6 +60,239 @@ class _Web {
   ];
 }
 
+/// Rang bilan bo'yaladigan SVG ikonka (Solar / Phosphor to'plamlari).
+class _SvgIcon extends StatelessWidget {
+  final String asset;
+  final double size;
+  final Color color;
+
+  const _SvgIcon(
+    this.asset, {
+    super.key,
+    required this.size,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SvgPicture.asset(
+      asset,
+      width: size,
+      height: size,
+      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+    );
+  }
+}
+
+/// Bosilganda biroz kichrayadi (iOS "press" hissi) — bottom nav bilan bir xil.
+class _Pressable extends StatefulWidget {
+  final VoidCallback onTap;
+  final Widget child;
+
+  const _Pressable({required this.onTap, required this.child});
+
+  @override
+  State<_Pressable> createState() => _PressableState();
+}
+
+class _PressableState extends State<_Pressable> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed != value) setState(() => _pressed = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onTap,
+      onTapDown: (_) => _setPressed(true),
+      onTapUp: (_) => _setPressed(false),
+      onTapCancel: () => _setPressed(false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.95 : 1,
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOut,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+class _SegmentItem {
+  final String label;
+  final String? outlineIcon;
+  final String? filledIcon;
+
+  const _SegmentItem(this.label, {this.outlineIcon, this.filledIcon});
+}
+
+/// iOS uslubidagi kapsula segment tanlagich: yarim shaffof trek ustida
+/// sirg'aluvchi "pill" (yengil prujina bilan), tanlangan ikonka to'ldiriladi.
+/// Bosh sahifadagi shisha bottom nav bilan bir xil xarakter.
+///
+/// [onHero] — ko'k hero ustida (oq shaffof trek); aks holda oq karta/sheet
+/// ustida (och kulrang trek).
+class _SegmentedPill extends StatelessWidget {
+  final List<_SegmentItem> items;
+  final int selectedIndex;
+  final ValueChanged<int> onChanged;
+  final bool onHero;
+  final double height;
+
+  const _SegmentedPill({
+    required this.items,
+    required this.selectedIndex,
+    required this.onChanged,
+    this.onHero = false,
+    this.height = 48,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color brand = ProjectTheme.brandColor;
+    const double inset = 4;
+    final double radius = height / 2;
+
+    final Color track = isDark
+        ? Colors.white.withAlpha(onHero ? 18 : 20)
+        : (onHero ? Colors.white.withAlpha(40) : const Color(0xFFEDF1F7));
+    final Color rim = isDark
+        ? Colors.white.withAlpha(26)
+        : (onHero ? Colors.white.withAlpha(70) : Colors.transparent);
+    final Color pill = isDark ? brand : Colors.white;
+    final Color activeColor = isDark ? Colors.white : brand;
+    final Color idleColor = onHero || isDark
+        ? Colors.white.withAlpha(isDark ? 170 : 225)
+        : const Color(0xFF5B6B85);
+
+    return Container(
+      height: height,
+      padding: const EdgeInsets.all(inset),
+      decoration: BoxDecoration(
+        color: track,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: rim),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final double segmentWidth = constraints.maxWidth / items.length;
+          final double x = items.length == 1
+              ? 0
+              : -1 + 2 * selectedIndex / (items.length - 1);
+          return Stack(
+            children: [
+              AnimatedAlign(
+                duration: const Duration(milliseconds: 420),
+                curve: const Cubic(0.25, 1.1, 0.4, 1.0),
+                alignment: Alignment(x, 0),
+                child: Container(
+                  width: segmentWidth,
+                  height: double.infinity,
+                  decoration: BoxDecoration(
+                    color: pill,
+                    borderRadius: BorderRadius.circular(radius - inset),
+                    boxShadow: [
+                      BoxShadow(
+                        color: isDark
+                            ? Colors.black.withAlpha(60)
+                            : const Color(0x260A2540),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  for (int i = 0; i < items.length; i++)
+                    Expanded(
+                      child: _segment(
+                        items[i],
+                        selected: i == selectedIndex,
+                        color: i == selectedIndex ? activeColor : idleColor,
+                        onTap: () {
+                          if (i == selectedIndex) return;
+                          HapticFeedback.selectionClick();
+                          onChanged(i);
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _segment(
+    _SegmentItem item, {
+    required bool selected,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    final String? icon = selected ? item.filledIcon : item.outlineIcon;
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: _Pressable(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Center(
+            // Uzun tarjimalar (ru/tr) tor ekranda qirqilmay kichrayadi.
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (icon != null) ...[
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 240),
+                      switchInCurve: Curves.easeOutBack,
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: ScaleTransition(
+                          scale: Tween<double>(begin: 0.7, end: 1)
+                              .animate(animation),
+                          child: child,
+                        ),
+                      ),
+                      child: _SvgIcon(
+                        icon,
+                        key: ValueKey<String>(icon),
+                        size: 18,
+                        color: color,
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                  ],
+                  AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 200),
+                    style: TextStyle(
+                      fontFamily: _Web.fontFamily,
+                      fontSize: 14,
+                      height: 1.2,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                      color: color,
+                    ),
+                    child: Text(item.label, maxLines: 1),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Doiraviy "orqaga" tugmasi.
 /// Light (ko'k hero): oq doira. Dark: dark doira + oq ikonka (MySafar).
 class _HeroBackButton extends StatelessWidget {
@@ -76,10 +313,12 @@ class _HeroBackButton extends StatelessWidget {
         child: SizedBox(
           width: 34,
           height: 34,
-          child: Icon(
-            Icons.arrow_back_rounded,
-            size: 18,
-            color: isDark ? ProjectTheme.textColorDark : _Web.toggleText,
+          child: Center(
+            child: _SvgIcon(
+              Assets.iconsSearchBackIcon,
+              size: 18,
+              color: isDark ? ProjectTheme.textColorDark : _Web.toggleText,
+            ),
           ),
         ),
       ),
@@ -187,7 +426,7 @@ class _WebSearchCard extends StatelessWidget {
                     label: "product_dates".tr(),
                     value: dateText,
                     isPlaceholder: dateIsPlaceholder,
-                    icon: Icons.calendar_today_outlined,
+                    icon: Assets.iconsSearchCalendarIcon,
                     onTap: onDateTap,
                   ),
                 ),
@@ -196,7 +435,7 @@ class _WebSearchCard extends StatelessWidget {
                   child: _WebField(
                     label: "passengers".tr(),
                     value: paxText,
-                    icon: Icons.people_outline_rounded,
+                    icon: Assets.iconsSearchPassengersIcon,
                     onTap: onPaxTap,
                   ),
                 ),
@@ -218,7 +457,9 @@ class _WebField extends StatelessWidget {
   final String label;
   final String value;
   final bool isPlaceholder;
-  final IconData? icon;
+
+  /// O'ng tomondagi SVG ikonka asset'i ([Assets]).
+  final String? icon;
   final double rightPadding;
   final VoidCallback onTap;
 
@@ -284,7 +525,7 @@ class _WebField extends StatelessWidget {
               ),
               if (icon != null) ...[
                 const SizedBox(width: 8),
-                Icon(icon, size: 18, color: _Web.placeholder),
+                _SvgIcon(icon!, size: 20, color: _Web.placeholder),
               ],
             ],
           ),
@@ -328,7 +569,13 @@ class _WebSwapButton extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          child: const Icon(Icons.swap_vert_rounded, size: 20, color: Colors.white),
+          child: const Center(
+            child: _SvgIcon(
+              Assets.iconsSwapVertIcon,
+              size: 18,
+              color: Colors.white,
+            ),
+          ),
         ),
       ),
     );
@@ -467,7 +714,11 @@ class _WebSearchButton extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.search_rounded, size: 18, color: Colors.white),
+                  const _SvgIcon(
+                    Assets.iconsSearchMagniferIcon,
+                    size: 20,
+                    color: Colors.white,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     "home_search_ticket".tr(),
