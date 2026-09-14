@@ -543,7 +543,12 @@ class _TicketResultCardState extends State<_TicketResultCard> {
                   ),
                 ),
                 const Spacer(),
-                ExpireTimeText(createdAt: widget.ticket.createdAt ?? ""),
+                ExpireTimeText(
+                  createdAt: widget.ticket.createdAt ?? "",
+                  onExpired: () {
+                    if (mounted) setState(() {});
+                  },
+                ),
               ],
             ),
           ),

@@ -241,19 +241,10 @@ class ElementFormatter {
     }
   }
 
+  /// To'lov muddati hali amal qiladimi (30 daqiqa / 1800 soniya).
+  /// `bookingExpireRemainingSeconds` bilan bir xil format va chegara.
   static bool expireStatus(String created) {
-    final DateTime now = DateTime.now();
-
-    final DateFormat formatter = DateFormat('dd-MM-yyyy HH:mm');
-    final DateTime createdTime = formatter.parse(created);
-
-    final bool isSameDay = createdTime.year == now.year &&
-        createdTime.month == now.month &&
-        createdTime.day == now.day;
-
-    final Duration diff = now.difference(createdTime);
-
-    return isSameDay && diff.inMinutes <= 30 && !diff.isNegative;
+    return ElementFormatter().bookingExpireRemainingSeconds(created) > 0;
   }
 
   static String formatNumberWithSpaces(dynamic number) {

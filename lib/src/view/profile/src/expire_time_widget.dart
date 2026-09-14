@@ -5,36 +5,57 @@ import 'package:mysafar_sdk/src/core/tools/formatters.dart';
 
 class ExpireTimeText extends StatefulWidget {
   final String createdAt;
-  const ExpireTimeText({super.key, required this.createdAt});
+
+  /// Taymer 0 ga tushganda chaqiriladi — parent status/tugmani yangilashi uchun.
+  final VoidCallback? onExpired;
+
+  const ExpireTimeText({
+    super.key,
+    required this.createdAt,
+    this.onExpired,
+  });
 
   @override
   State<ExpireTimeText> createState() => _ExpireTimeTextState();
 }
 
 class _ExpireTimeTextState extends State<ExpireTimeText> {
-  late Timer _timer;
+  Timer? _timer;
   int remainingSeconds = 0;
+  bool _expiredNotified = false;
 
   @override
   void initState() {
     super.initState();
-    remainingSeconds = ElementFormatter().bookingExpireRemainingSeconds(widget.createdAt);
+    remainingSeconds =
+        ElementFormatter().bookingExpireRemainingSeconds(widget.createdAt);
     if (remainingSeconds > 0) {
       _startTimer();
+    } else {
+      _notifyExpired();
     }
   }
 
   void _startTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) {
-        setState(() {
-          remainingSeconds--;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        remainingSeconds--;
+      });
 
       if (remainingSeconds <= 0) {
-        _timer.cancel();
+        _timer?.cancel();
+        _timer = null;
+        _notifyExpired();
       }
+    });
+  }
+
+  void _notifyExpired() {
+    if (_expiredNotified) return;
+    _expiredNotified = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onExpired?.call();
     });
   }
 
@@ -46,18 +67,16 @@ class _ExpireTimeTextState extends State<ExpireTimeText> {
 
   @override
   void dispose() {
-    _timer.cancel();
+    _timer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Text(
-      remainingSeconds > 0
-          ? formatDuration(remainingSeconds)
-          : "Vaqt tugagan",
+      remainingSeconds > 0 ? formatDuration(remainingSeconds) : "Vaqt tugagan",
       style: context.textTheme.bodySmall?.copyWith(
-        color:Colors.white,
+        color: Colors.white,
         fontSize: 16,
       ),
     );

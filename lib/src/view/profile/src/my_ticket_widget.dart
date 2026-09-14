@@ -710,13 +710,26 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
   }
 
   Widget _buildPayButton(ConfirmTicketResponseData responseData) {
-    return SizedBox(
+    const radius = BorderRadius.all(Radius.circular(16));
+    return Container(
       width: double.infinity,
       height: 52,
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        boxShadow: [
+          BoxShadow(
+            color: ProjectTheme.brandColor.withAlpha(100),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Material(
         color: Colors.transparent,
+        borderRadius: radius,
+        clipBehavior: Clip.antiAlias,
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: radius,
           onTap: () {
             final price = FlightPrice(
                 uzs: FluffyUzs(
@@ -743,7 +756,7 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
           },
           child: Ink(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: radius,
               gradient: LinearGradient(
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
@@ -752,13 +765,6 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
                   ProjectTheme.blueBg,
                 ],
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: ProjectTheme.brandColor.withAlpha(100),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
             ),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -788,7 +794,12 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
                     ),
                   ),
                   const Spacer(),
-                  ExpireTimeText(createdAt: widget.ticketsModel.createdAt ?? ""),
+                  ExpireTimeText(
+                    createdAt: widget.ticketsModel.createdAt ?? "",
+                    onExpired: () {
+                      if (mounted) setState(() {});
+                    },
+                  ),
                 ],
               ),
             ),
