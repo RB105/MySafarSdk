@@ -3,6 +3,7 @@ import 'package:mysafar_sdk/src/service/profile/profile_cache.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/card_payment_constants.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/custom_input_field_widget.dart';
+import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
 import 'package:mysafar_sdk/src/view/profile/pages/my_contracts/view/add_card/add_card_service.dart';
 import 'package:mysafar_sdk/src/view/profile/pages/my_contracts/view/add_card/card_otp_page.dart';
@@ -161,11 +162,13 @@ class _AddCardPageState extends State<AddCardPage> {
     }
 
     setState(() => _sending = true);
+    final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
     final response = await _service.sendCardOtp(
       cardNumber: cardNumber,
       expire: expire,
       cardType: cardType,
-      phone: "+$phone",
+      // Profilda "+" bo'lishi mumkin — ikki marta qo'shilmasin.
+      phone: '+$digits',
     );
     if (!mounted) return;
     setState(() => _sending = false);
@@ -210,9 +213,7 @@ class _AddCardPageState extends State<AddCardPage> {
   }
 
   void _showSnack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    showErrorMessage(message, context: context);
   }
 
   @override

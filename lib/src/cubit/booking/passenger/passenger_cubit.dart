@@ -1,5 +1,6 @@
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:mysafar_sdk/src/core/tools/phone_format.dart';
 import 'package:mysafar_sdk/src/model/local/passenger_model.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_model.dart'
     show FlightPrice;
@@ -50,7 +51,7 @@ class PassengerCubit extends Cubit<PassengerState> {
     final profileData = _getCachedProfile();
     if (profileData != null) {
       email = profileData.email ?? '';
-      phone = profileData.phoneNumber ?? '';
+      phone = normalizePhoneDigits(profileData.phoneNumber ?? '');
     }
 
 
@@ -84,7 +85,7 @@ class PassengerCubit extends Cubit<PassengerState> {
       final profileData = _getCachedProfile();
       if (profileData != null) {
         final email = profileData.email ?? '';
-        final phone = profileData.phoneNumber ?? '';
+        final phone = normalizePhoneDigits(profileData.phoneNumber ?? '');
 
         final updatedPassengers = currentState.passengers
             .map((p) => p.copyWith(email: email, phone: phone))
@@ -115,12 +116,13 @@ class PassengerCubit extends Cubit<PassengerState> {
   void updatePhone(String phone) {
     final currentState = state;
     if (currentState is PassengerLoaded) {
+      final normalized = normalizePhoneDigits(phone);
       final updatedPassengers = currentState.passengers
-          .map((p) => p.copyWith(phone: phone))
+          .map((p) => p.copyWith(phone: normalized))
           .toList();
       emit(currentState.copyWith(
         passengers: updatedPassengers,
-        phone: phone,
+        phone: normalized,
       ));
     }
   }

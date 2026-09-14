@@ -13,6 +13,7 @@ import 'package:mysafar_sdk/src/service/profile/profile_service.dart'
 import 'package:mysafar_sdk/src/core/tools/lang_helper.dart';
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
+import 'package:mysafar_sdk/src/core/tools/phone_format.dart';
 import 'package:mysafar_sdk/src/core/tools/project_utils.dart';
 import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart';
 import 'package:mysafar_sdk/src/core/widgets/booking_create_loading_widget.dart';
@@ -182,7 +183,10 @@ class _BookingCreatePageState extends State<BookingCreatePage> {
                             tid: widget.trId,
                             firstName: "${widget.passenger[0]["firstname"]}",
                             passenger: widget.passenger,
-                            phoneNumber: widget.passenger[0]["phone"]);
+                            // Backend +siz (998...) kutadi; profil/UI da
+                            // bo'lishi mumkin bo'lgan "+" ni olib tashlaymiz.
+                            phoneNumber: normalizePhoneDigits(
+                                "${widget.passenger[0]["phone"] ?? ''}"));
                       }
                     }
                   : null,
@@ -379,8 +383,13 @@ class _BookingCreatePageState extends State<BookingCreatePage> {
           _contactRow(context, Icons.alternate_email_rounded, "email".tr(),
               "${widget.passenger[0]["email"]}", muted),
           const SizedBox(height: 14),
-          _contactRow(context, Icons.phone_rounded, "phone_number_label".tr(),
-              "+${widget.passenger[0]["phone"]}", muted),
+          _contactRow(
+              context,
+              Icons.phone_rounded,
+              "phone_number_label".tr(),
+              formatInternationalPhone(
+                  "${widget.passenger[0]["phone"] ?? ''}"),
+              muted),
         ],
       ),
     );

@@ -4,6 +4,7 @@ import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/service/profile/profile_cache.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:mysafar_sdk/src/core/tools/project_assets.dart';
+import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/cubit/visa/my_id_session/myid_session_cubit.dart';
 import 'package:mysafar_sdk/src/service/ban_chek_and_visa_service.dart';
 import 'package:mysafar_sdk/src/view/ban_register/widget/container_column_widget.dart';
@@ -87,9 +88,7 @@ class _MyIdVerificationPageState extends State<MyIdVerificationPage> {
 
     final phone = profileData?.phoneNumber;
     if (phone == null || phone.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("enter_full_phone_number".tr())),
-      );
+      showWarningMessage("enter_full_phone_number".tr(), context: context);
       return null;
     }
     return phone;

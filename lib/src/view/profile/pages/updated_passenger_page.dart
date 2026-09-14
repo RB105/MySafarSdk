@@ -5,6 +5,7 @@ import 'package:mysafar_sdk/src/core/tools/project_assets.dart';
 import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart';
 import 'package:mysafar_sdk/src/core/tools/project_utils.dart';
 import 'package:mysafar_sdk/src/core/widgets/response_state.dart';
+import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/cubit/profile/users_data/users_data_cubit.dart';
 import 'package:mysafar_sdk/src/model/remote/profile/users_model.dart';
 import 'package:mysafar_sdk/src/view/booking/support/country_name_list.dart';
@@ -509,12 +510,9 @@ class _UpdatedPassengerPageState extends State<UpdatedPassengerPage> {
                               ? () {
                                   final errorMessage = validateForm();
                                   if (errorMessage != null) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(errorMessage),
-                                        backgroundColor: Colors.red,
-                                        duration: const Duration(seconds: 3),
-                                      ),
+                                    showErrorMessage(
+                                      errorMessage,
+                                      context: context,
                                     );
                                     setState(() {
                                       showErrors = true;
@@ -530,12 +528,9 @@ class _UpdatedPassengerPageState extends State<UpdatedPassengerPage> {
             
                                   if (formattedBirthdate == null ||
                                       formattedDocexp == null) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text("invalid_date_format".tr()),
-                                        backgroundColor: Colors.red,
-                                        duration: const Duration(seconds: 3),
-                                      ),
+                                    showErrorMessage(
+                                      "invalid_date_format".tr(),
+                                      context: context,
                                     );
                                     setState(() {
                                       showErrors = true;

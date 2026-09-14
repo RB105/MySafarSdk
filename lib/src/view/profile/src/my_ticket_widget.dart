@@ -13,6 +13,7 @@ import 'package:mysafar_sdk/src/core/styles/theme.dart';
 import 'package:mysafar_sdk/src/core/tools/formatters.dart';
 import 'package:mysafar_sdk/src/core/tools/project_assets.dart';
 import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart';
+import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/model/remote/booking/booking_create_model.dart';
 import 'package:mysafar_sdk/src/model/remote/profile/confirmed_ticket_models.dart';
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart'
@@ -80,9 +81,10 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
         errorType: 'ticket_download_error',
         error: e,
       );
-      // ignore: use_build_context_synchronously
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Faylni ochishda xatolik yuz berdi")),
+      if (!mounted) return;
+      showErrorMessage(
+        "Faylni ochishda xatolik yuz berdi",
+        context: context,
       );
     } finally {
       setState(() {
@@ -140,6 +142,7 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
     ConfirmTicketResponseData responseData =
         widget.ticketsModel.response!.data!;
     String callbackStatus = widget.ticketsModel.callbackStatus ?? "";
+    final displayStatus = _displayStatus(callbackStatus);
     final isDark = context.themeProvider.isDark;
     final segments = responseData.book?.flight?.segments ?? [];
     // Yig'ilgan holatda faqat birinchi parvoz ko'rinadi (bir segmentli oddiy
@@ -179,7 +182,7 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
               children: [
                 Row(
                   children: [
-                    Flexible(child: _statusChip(callbackStatus)),
+                    Flexible(child: _statusChip(displayStatus)),
                     const SizedBox(width: 8),
                     _idChip(),
                   ],
@@ -281,6 +284,16 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
   //  HEADER CHIPLARI
   // ──────────────────────────────────────────────────────────────────
 
+  /// Booked bo'lsa-yu to'lov muddati o'tgan bo'lsa, chipda
+  /// `payment_time_expired` ko'rsatiladi (tugma allaqachon yashiriladi).
+  String _displayStatus(String status) {
+    if (status == 'Booked' &&
+        !ElementFormatter.expireStatus(widget.ticketsModel.createdAt ?? "")) {
+      return 'payment_time_expired';
+    }
+    return status;
+  }
+
   /// Holat rangi — barcha ma'lum statuslar qamrab olingan.
   Color _statusColor(String status) {
     switch (status) {
@@ -293,6 +306,7 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
       case 'TicketedWaitingPNR':
         return ProjectTheme.success;
       case 'Cancelled':
+      case 'payment_time_expired':
         return ProjectTheme.error;
       case 'Refunded':
       case 'RefundInProcess':

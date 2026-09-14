@@ -7,6 +7,7 @@ import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
 import 'package:mysafar_sdk/src/core/tools/project_assets.dart';
 import 'package:mysafar_sdk/src/core/widgets/response_state.dart';
+import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/model/local/ticket_data.dart';
 import 'package:mysafar_sdk/src/cubit/profile/tickets/confirmed_tickets_cubit.dart';
 import 'package:mysafar_sdk/src/service/pdf/pdf_download_service.dart';
@@ -59,9 +60,7 @@ class _TicketPdfPageState extends State<TicketPdfPage> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    showErrorMessage(message, context: context);
   }
 
   void _navigateToHome() {

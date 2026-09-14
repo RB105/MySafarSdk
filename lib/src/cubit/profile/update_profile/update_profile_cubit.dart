@@ -46,7 +46,7 @@ class UpdateProfileCubit extends Cubit<UpdateProfileState> {
       }
 
       if (isClosed) return;
-      showToastTr('profile_success_update');
+      showToastTr('profile_success_update', type: AppMessageType.success);
       emit(UpdateProfileSuccess(updatedProfile));
     } else if (response is NetworkErrorResponse) {
       emit(UpdateProfileError(response.getError()));
