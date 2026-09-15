@@ -19,6 +19,10 @@ class CurrencyProvider extends ChangeNotifier {
 
   AppCurrency get currency => _currency;
 
+  /// Foydalanuvchi valyutani AYNAN o'zi tanlaganmi (storage'da saqlangan).
+  /// `false` — hali standart (UZS); birinchi qidiruvda bir marta so'rash uchun.
+  bool get hasSelected => storage.read(_key) != null;
+
   void loadCurrency() {
     final name = storage.read(_key);
     if (name != null) {

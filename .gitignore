@@ -9,3 +9,9 @@ example/build/
 example/env.json
 example/.env
 .port_marker
+
+# IDE / muhit / lokal vositalar
+.vscode/
+.claude/
+.flutter-plugins-dependencies
+*.log

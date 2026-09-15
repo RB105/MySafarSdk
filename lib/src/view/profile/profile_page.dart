@@ -63,7 +63,8 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _buildProfileActionTile({
     required BuildContext context,
-    required String assetPath,
+    String? assetPath,
+    IconData? materialIcon,
     required String title,
     required VoidCallback onTap,
     required Color iconBgColor,
@@ -90,15 +91,18 @@ class _ProfilePageState extends State<ProfilePage> {
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Center(
-                  child: SizedBox(
-                    width: iconWidth,
-                    height: iconHeight,
-                    child: SvgPicture.asset(
-                      assetPath,
-                      fit: fit,
-                      colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
-                    ),
-                  ),
+                  child: materialIcon != null
+                      ? Icon(materialIcon, size: 24, color: iconColor)
+                      : SizedBox(
+                          width: iconWidth,
+                          height: iconHeight,
+                          child: SvgPicture.asset(
+                            assetPath!,
+                            fit: fit,
+                            colorFilter:
+                                ColorFilter.mode(iconColor, BlendMode.srcIn),
+                          ),
+                        ),
                 ),
               ),
               context.szBoxWidth12,
@@ -777,6 +781,24 @@ class _ProfilePageState extends State<ProfilePage> {
                                   ),
                                 ),
                                 _buildDivider(context),
+                                ],
+                                // Embed/lite rejimda (to'liq Settings yashirin)
+                                // tilni bevosita profildan o'zgartirish — faqat
+                                // SDK ichida (host lokalizatsiyasiga tegmaydi).
+                                if (!MySafarSdk.config.enableFullProfile) ...[
+                                  _buildProfileActionTile(
+                                    context: context,
+                                    materialIcon: Icons.language_rounded,
+                                    title: "lang".tr(),
+                                    subtitle: context.locale.languageCode
+                                        .toUpperCase(),
+                                    iconBgColor: ProjectTheme.brandColor
+                                        .withOpacity(0.12),
+                                    iconColor: ProjectTheme.brandColor,
+                                    onTap: () => ProjectDialogs.showLanguageMenu(
+                                        context),
+                                  ),
+                                  _buildDivider(context),
                                 ],
                                 _buildProfileActionTile(
                                   context: context,

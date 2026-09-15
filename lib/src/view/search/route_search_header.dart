@@ -438,6 +438,66 @@ class _WebSwitch extends StatelessWidget {
   }
 }
 
+/// Valyuta tanlash "hap"i — qidiruv natijalariga (RecommendationsTicketPage)
+/// o'tishdan OLDIN valyutani tanlash uchun. Tanlov global [CurrencyProvider]ga
+/// yoziladi, shu sababli natijalar sahifasidagi narxlar shu valyutada chiqadi.
+class _WebCurrencyPill extends StatelessWidget {
+  final String value;
+  final VoidCallback onTap;
+
+  const _WebCurrencyPill({required this.value, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    return Material(
+      color: isDark ? ProjectTheme.cardColorDark : Colors.white,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(999),
+        side: BorderSide(
+          color: isDark ? ProjectTheme.borderDark : const Color(0xFFE7EDF6),
+        ),
+      ),
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 9, 10, 9),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.payments_rounded, size: 16, color: _Web.blue),
+              const SizedBox(width: 6),
+              Text(
+                "rate".tr(),
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w500,
+                  color: isDark ? ProjectTheme.textColorDark : _Web.toggleText,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: _Web.blue,
+                ),
+              ),
+              const Icon(Icons.keyboard_arrow_down_rounded,
+                  size: 18, color: _Web.blue),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Oltin "Bilet izlash" tugmasi — web: `h-12 rounded-[20px] bg-mysafar-gold
 /// text-[16px] font-bold shadow-[0_10px_22px_rgba(255,166,0,.3)]`.
 class _WebSearchButton extends StatelessWidget {
