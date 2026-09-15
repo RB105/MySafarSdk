@@ -18,3 +18,4 @@ export 'src/api/callbacks.dart';
 export 'src/api/config.dart';
 export 'src/api/sdk.dart';
 export 'src/api/token_store.dart';
+export 'src/api/user_data.dart';

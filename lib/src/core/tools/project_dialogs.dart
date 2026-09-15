@@ -25,16 +25,15 @@ import 'package:mysafar_sdk/src/core/widgets/currency_options_widget.dart';
 import 'package:mysafar_sdk/src/core/widgets/date_calendar_widget.dart';
 import 'package:mysafar_sdk/src/core/widgets/lang_options_widget.dart';
 import 'package:mysafar_sdk/src/core/widgets/passenger_count_widget.dart';
+import 'package:mysafar_sdk/src/core/widgets/sdk_dialog.dart';
 import 'package:mysafar_sdk/src/core/widgets/search_city_widget.dart';
 import 'package:mysafar_sdk/src/core/widgets/theme_options_widget.dart';
-import 'package:mysafar_sdk/src/core/widgets/ticket_filters_widget.dart';
 import 'package:mysafar_sdk/src/core/widgets/ticket_tariffs_widget.dart';
 import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/core/widgets/verify_otp_widget.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart'
     show AnalyticsService;
-import 'package:mysafar_sdk/src/model/local/recom_req_model.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/airports_model.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_model.dart'
     show FlightElement;
@@ -42,7 +41,8 @@ import 'package:mysafar_sdk/src/model/remote/avia/ticket_tariff_model.dart'
     show FlightTariffModel;
 import 'package:mysafar_sdk/src/view/auth/pages/auth_page.dart';
 import 'package:mysafar_sdk/src/view/navbar/bottom_nav_bar.dart';
-import 'package:mysafar_sdk/src/view/tickets/ticket_info_page.dart' show TicketInfoPage;
+import 'package:mysafar_sdk/src/view/tickets/ticket_info_page.dart'
+    show TicketInfoPage;
 import 'package:syncfusion_flutter_datepicker/datepicker.dart'
     show PickerDateRange;
 import 'package:url_launcher/url_launcher.dart'
@@ -98,6 +98,19 @@ enum ErrorDialogKind {
         ErrorDialogKind.server => "server_error_message".tr(),
         ErrorDialogKind.generic => "error_generic_message".tr(),
       };
+
+  String get icon => switch (this) {
+        ErrorDialogKind.network => Assets.iconsDialogNetworkIcon,
+        ErrorDialogKind.server => Assets.iconsDialogServerIcon,
+        ErrorDialogKind.generic => Assets.iconsDialogErrorIcon,
+      };
+
+  SdkDialogTone get tone => switch (this) {
+        ErrorDialogKind.network => SdkDialogTone.warning,
+        ErrorDialogKind.server ||
+        ErrorDialogKind.generic =>
+          SdkDialogTone.error,
+      };
 }
 
 class ProjectDialogs {
@@ -109,54 +122,26 @@ class ProjectDialogs {
       int type,
       PickerDateRange? selectedDates,
       final AirPortsModel? fromDir,
-      final AirPortsModel? toDir) async {
-    if (Platform.isIOS) {
-      return await showSdkCupertinoSheet<PickerDateRange?>(
-          context: context,
-          builder: (context) => MediaQuery.removePadding(
-                context: context,
-                removeTop: true,
-                child: DateCalendarWidget(
-                  type: type,
-                  params: selectedDates,
-                  fromDir: fromDir,
-                  toDir: toDir,
-                ),
-              ));
-    } else {
-      return await showSdkModalBottomSheet<PickerDateRange?>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        builder: (context) => DateCalendarWidget(
-          type: type,
-          params: selectedDates,
-          fromDir: fromDir,
-          toDir: toDir,
-        ),
-      );
-    }
+      final AirPortsModel? toDir) {
+    return showSdkFullHeightSheet<PickerDateRange?>(
+      context: context,
+      builder: (context, controller) => DateCalendarWidget(
+        type: type,
+        params: selectedDates,
+        fromDir: fromDir,
+        toDir: toDir,
+        scrollController: controller,
+      ),
+    );
   }
 
   static Future<Map<String, dynamic>?> showPassengerCountPicker(
-      BuildContext context, Map<String, dynamic>? params) async {
-    if (Platform.isIOS) {
-      return await showSdkCupertinoSheet<Map<String, dynamic>?>(
-          context: context,
-          builder: (context) => MediaQuery.removePadding(
-                context: context,
-                removeTop: true,
-                child: PassengerCountWidget(
-                  params: params ?? {},
-                ),
-              ));
-    }
-    return await showSdkModalBottomSheet<Map<String, dynamic>?>(
+      BuildContext context, Map<String, dynamic>? params) {
+    return showSdkFullHeightSheet<Map<String, dynamic>?>(
       context: context,
-      useSafeArea: true,
-      isScrollControlled: true,
-      builder: (context) => PassengerCountWidget(
+      builder: (context, controller) => PassengerCountWidget(
         params: params ?? {},
+        scrollController: controller,
       ),
     );
   }
@@ -175,108 +160,46 @@ class ProjectDialogs {
     );
   }
 
-  static Future<RecommendationRequestBody?> showTicketFilter(
-      BuildContext context, RecommendationRequestBody filterBody) async {
-    if (Platform.isIOS) {
-      return await showSdkCupertinoSheet<RecommendationRequestBody?>(
-        context: context,
-        builder: (context) => MediaQuery.removePadding(
-            context: context,
-            removeTop: true,
-            child: TicketFiltersWidget(params: filterBody)),
-      );
-    }
-
-    return await showSdkModalBottomSheet<RecommendationRequestBody?>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (context) => TicketFiltersWidget(params: filterBody),
-    );
-  }
-
   static Future showLowcostSheet(
       BuildContext context, FlightElement flightElement) async {
     final parentContext = context;
-    showSdkModalBottomSheet(
-      isScrollControlled: true,
+    showSdkSheetAlert<void>(
       context: context,
-      builder: (sheetContext) => SizedBox(
-        height: sheetContext.height * 0.7,
-        child: DecoratedBox(
+      icon: Assets.iconsDialogPlaneIcon,
+      tone: SdkDialogTone.warning,
+      title: "about_lowcost".tr(),
+      showCloseButton: true,
+      content: Builder(
+        builder: (context) => Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(12))),
-          child: Padding(
-            padding: sheetContext.k16horizontalPadding,
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  sheetContext.szBoxHeight16,
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        "lowcost".tr(),
-                        style: sheetContext.textTheme.bodyMedium,
-                      ),
-                      InkWell(
-                          splashColor: Colors.transparent,
-                          highlightColor: Colors.transparent,
-                          onTap: () => Navigator.of(sheetContext).pop(),
-                          child: Icon(Icons.close))
-                    ],
-                  ),
-                  Divider(
-                    thickness: 1,
-                    color: ProjectTheme.borderLight,
-                  ),
-                  sheetContext.szBoxHeight16,
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      "about_lowcost".tr(),
-                      style: sheetContext.textTheme.bodyMedium
-                          ?.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  Text(
-                    "low_cost_airline_info".tr(),
-                    style: sheetContext.textTheme.bodySmall,
-                  ),
-                  sheetContext.szBoxHeight16,
-                  Row(
-                    children: [
-                      Expanded(
-                          child: SizedBox(
-                        height: 36,
-                        child: ElevatedButton(
-                            style: ProjectTheme.blueBorderButtonStyle,
-                            onPressed: () {
-                              Navigator.of(sheetContext).pop();
-                            },
-                            child: Text("done".tr())),
-                      )),
-                      sheetContext.szBoxWidth12,
-                      Expanded(
-                          child: SizedBox(
-                        height: 36,
-                        child: ElevatedButton(
-                            style: ProjectTheme.blueButtonStyle,
-                            onPressed: () {
-                              Navigator.of(sheetContext).pop();
-                              TicketInfoPage.show(
-                                  parentContext, flightElement);
-                            },
-                            child: Text("continue_ticket".tr())),
-                      )),
-                    ],
-                  )
-                ],
-              ),
+            color: sdkDialogMutedFill(context),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Text(
+            "low_cost_airline_info".tr(),
+            style: context.textTheme.bodyMedium?.copyWith(
+              fontSize: 14,
+              fontWeight: FontWeight.w400,
+              height: 1.5,
             ),
           ),
         ),
       ),
+      actions: [
+        SdkDialogAction(
+          label: "continue_ticket".tr(),
+          onTap: (sheetContext) {
+            Navigator.of(sheetContext).pop();
+            TicketInfoPage.show(parentContext, flightElement);
+          },
+        ),
+        SdkDialogAction(
+          label: "done".tr(),
+          variant: SdkDialogButtonVariant.secondary,
+        ),
+      ],
     );
   }
 
@@ -354,136 +277,60 @@ class ProjectDialogs {
   ///
   /// 2 - via tg
   static Future<void> showSupportMenu(BuildContext context) async {
+    final telegramUrl = MySafarSdk.config.supportTelegramUrl;
+    final telegramHandle = Uri.tryParse(telegramUrl)?.pathSegments.firstOrNull;
     final action = await showSdkModalBottomSheet<int?>(
         context: context,
         backgroundColor: Colors.transparent,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-        ),
+        isScrollControlled: true,
+        useSafeArea: true,
         builder: (context) {
-          final isDark = Theme.of(context).brightness == Brightness.dark;
-          final sheetColor = isDark
-              ? ProjectTheme.cardColorDark
-              : ProjectTheme.cardColorLight;
-          final titleColor = isDark
-              ? ProjectTheme.textColorDark
-              : ProjectTheme.textColorLight;
-
-          return SafeArea(
-            bottom: Platform.isAndroid,
-            child: Material(
-              color: sheetColor,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(12)),
-              clipBehavior: Clip.antiAlias,
-              child: Padding(
-                padding: context.k16horizontalPadding
-                    .copyWith(bottom: 12.0, top: 12.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          "support_badge_title".tr(),
-                          style: context.textTheme.bodyMedium?.copyWith(
-                            color: titleColor,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const Expanded(child: SizedBox.shrink()),
-                        InkWell(
-                          onTap: () => Navigator.of(context).pop(),
-                          child: Icon(Icons.close, color: titleColor),
-                        ),
-                      ],
-                    ),
-                    Divider(
-                      thickness: 1,
-                      color: isDark
-                          ? ProjectTheme.borderDark
-                          : ProjectTheme.borderLight,
-                    ),
-                    Text(
-                      "support_subtitle".tr(),
-                      maxLines: 3,
-                      textAlign: TextAlign.start,
-                      style: context.textTheme.bodyMedium?.copyWith(
-                        color: isDark
-                            ? ProjectTheme.secondaryTextDark
-                            : ProjectTheme.secondaryTextLight,
-                      ),
-                    ),
-                    context.szBoxHeight12,
-                    SizedBox(
-                      height: 48,
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        style: ProjectTheme.blueButtonStyle,
-                        onPressed: () {
-                          HapticFeedback.lightImpact();
-                          Navigator.of(context).pop(0);
-                        },
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: SvgPicture.asset(
-                                Assets.iconsPhoneCallIcon,
-                                colorFilter: const ColorFilter.mode(
-                                  Colors.white,
-                                  BlendMode.srcIn,
-                                ),
-                              ),
-                            ),
-                            context.szBoxWidth12,
-                            Text(
-                              "support_via_phone".tr(),
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    context.szBoxHeight12,
-                    SizedBox(
-                      height: 48,
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        style: ProjectTheme.blueButtonStyle,
-                        onPressed: () {
-                          HapticFeedback.lightImpact();
-                          Navigator.of(context).pop(2);
-                        },
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: SvgPicture.asset(
-                                Assets.iconsTelegramIcon,
-                                colorFilter: const ColorFilter.mode(
-                                  Colors.white,
-                                  BlendMode.srcIn,
-                                ),
-                              ),
-                            ),
-                            context.szBoxWidth12,
-                            Text(
-                              "support_via_tg".tr(),
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
+          return SdkSheetFrame(
+            showCloseButton: true,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SdkDialogBadge(
+                  icon: Assets.iconsDialogSupportIcon,
+                  color: SdkDialogTone.info.color(context),
                 ),
-              ),
+                const SizedBox(height: 18),
+                Text(
+                  "support_badge_title".tr(),
+                  textAlign: TextAlign.center,
+                  style: context.textTheme.bodyMedium?.copyWith(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  "support_subtitle".tr(),
+                  textAlign: TextAlign.center,
+                  style: context.textTheme.headlineMedium?.copyWith(
+                    fontSize: 15,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 22),
+                _SupportOptionTile(
+                  icon: Assets.iconsDialogPhoneIcon,
+                  color: ProjectTheme.success,
+                  title: "support_via_phone".tr(),
+                  subtitle: MySafarSdk.config.supportPhone,
+                  onTap: () => Navigator.of(context).pop(0),
+                ),
+                const SizedBox(height: 10),
+                _SupportOptionTile(
+                  icon: Assets.iconsTelegramIcon,
+                  color: const Color(0xFF229ED9),
+                  title: "support_via_tg".tr(),
+                  subtitle: telegramHandle == null || telegramHandle.isEmpty
+                      ? null
+                      : "@$telegramHandle",
+                  onTap: () => Navigator.of(context).pop(2),
+                ),
+              ],
             ),
           );
         });
@@ -515,128 +362,106 @@ class ProjectDialogs {
     }
   }
 
-  static void showUnavailableService(BuildContext context) => showDialog(useRootNavigator: false, 
-      context: context,
-      useSafeArea: false,
-      barrierColor: Colors.black45,
-      builder: (context) => Center(
-              child: AlertDialog(
-            backgroundColor: context.color.primaryContainer,
-            title: Text("service_unavailable".tr()),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Center(
-                  child: Lottie.asset(
-                    Assets.homeDevProcessAnim,
-                    height: 160,
-                    repeat: true,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-                Text("service_soon_available".tr(),
-                    style: context.textTheme.displayMedium),
-              ],
-            ),
-            // actions: [
-            //   TextButton(
-            //       onPressed: () => Navigator.pop(context),
-            //       child:
-            //           Text("ok".tr(), style: context.textTheme.displayMedium))
-            // ],
-          )));
+  static void showUnavailableService(BuildContext context) =>
+      showSdkAlert<void>(
+        context: context,
+        icon: Assets.iconsDialogHourglassIcon,
+        title: "service_unavailable".tr(),
+        message: "service_soon_available".tr(),
+        actions: [SdkDialogAction(label: "understood".tr())],
+      );
 
-  static void showLogoutDialog(BuildContext context) => showAdaptiveDialog(useRootNavigator: false, 
-      context: context,
-      builder: (context) => AlertDialog.adaptive(
-              backgroundColor: context.color.primaryContainer,
-              title:
-                  Text("logout".tr(), style: context.theme.textTheme.bodyLarge),
-              content: Text("logout_des".tr(),
-                  style: context.theme.textTheme.bodyMedium),
-              actions: [
-                TextButton(
-                    onPressed: () async {
-                      final box = sdkStorage();
-                      final isFirstTime = box.read('isFirstTime');
-                      final lang = box.read('lang');
+  static void showLogoutDialog(BuildContext context) => showSdkAlert<void>(
+        context: context,
+        icon: Assets.iconsDialogLogoutIcon,
+        tone: SdkDialogTone.error,
+        title: "logout".tr(),
+        message: "logout_des".tr(),
+        actions: [
+          SdkDialogAction(
+            label: "logout".tr(),
+            variant: SdkDialogButtonVariant.danger,
+            onTap: (dialogContext) async {
+              final box = sdkStorage();
+              final isFirstTime = box.read('isFirstTime');
+              final lang = box.read('lang');
 
-                      await box.erase();
-                      // Custom TokenStore ishlatilgan bo'lsa ham tokenlar
-                      // aniq tozalanishi uchun (box.erase faqat GetStorage'ni
-                      // o'chiradi).
-                      await MySafarSdk.tokens.clear();
-                      // Hive keshlari (profil + biletlar) — oldingi
-                      // foydalanuvchi ma'lumoti qolib ketmasligi uchun tozalaymiz.
-                      await ProfileCache().clear();
-                      await TicketsCache().clear();
-                      // Analytics profil ID'sini tozalaymiz — keyingi
-                      // foydalanuvchi eski profil bilan aralashmasligi uchun.
-                      AnalyticsService().clearUser();
+              await box.erase();
+              // Custom TokenStore ishlatilgan bo'lsa ham tokenlar
+              // aniq tozalanishi uchun (box.erase faqat GetStorage'ni
+              // o'chiradi).
+              await MySafarSdk.tokens.clear();
+              // Hive keshlari (profil + biletlar) — oldingi
+              // foydalanuvchi ma'lumoti qolib ketmasligi uchun tozalaymiz.
+              await ProfileCache().clear();
+              await TicketsCache().clear();
+              // Analytics profil ID'sini tozalaymiz — keyingi
+              // foydalanuvchi eski profil bilan aralashmasligi uchun.
+              AnalyticsService().clearUser();
 
-                      if (isFirstTime != null) {
-                        await box.write('isFirstTime', isFirstTime);
-                      }
-                      if (lang != null) {
-                        await box.write('lang', lang);
-                      }
+              if (isFirstTime != null) {
+                await box.write('isFirstTime', isFirstTime);
+              }
+              if (lang != null) {
+                await box.write('lang', lang);
+              }
 
-                      MySafarSdk.callbacks.onLoggedOut?.call();
-                      // ignore: use_build_context_synchronously
-                      Navigator.pushNamedAndRemoveUntil(context,
-                          BottomNavBarPage.routeName, (route) => false,
-                          arguments: 0);
-                    },
-                    child: Text("yes".tr(),
-                        style: context.theme.textTheme.bodyMedium)),
-                TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text("no".tr(),
-                        style: context.theme.textTheme.bodyMedium))
-              ]));
+              MySafarSdk.callbacks.onLoggedOut?.call();
+              if (!dialogContext.mounted) return;
+              Navigator.pushNamedAndRemoveUntil(
+                  dialogContext, BottomNavBarPage.routeName, (route) => false,
+                  arguments: 0);
+            },
+          ),
+          SdkDialogAction(
+            label: "cancel".tr(),
+            variant: SdkDialogButtonVariant.secondary,
+          ),
+        ],
+      );
 
   static void showDeleteAccountDialog(BuildContext context) =>
-      showAdaptiveDialog(useRootNavigator: false, 
-          context: context,
-          builder: (context) => AlertDialog(
-                  backgroundColor: context.color.primaryContainer,
-                  title: Text("delete_account_title".tr(),
-                      style: context.theme.textTheme.bodyLarge),
-                  content: Text("delete_account_subtitle".tr(),
-                      style: context.theme.textTheme.bodyMedium),
-                  actions: [
-                    TextButton(
-                        onPressed: () async {
-                          final box = sdkStorage();
-                          final isFirstTime = box.read('isFirstTime');
-                          final lang = box.read('lang');
+      showSdkAlert<void>(
+        context: context,
+        icon: Assets.iconsDialogDeleteIcon,
+        tone: SdkDialogTone.error,
+        title: "delete_account_title".tr(),
+        message: "delete_account_subtitle".tr(),
+        actions: [
+          SdkDialogAction(
+            label: "yes_delete".tr(),
+            variant: SdkDialogButtonVariant.danger,
+            onTap: (dialogContext) async {
+              final box = sdkStorage();
+              final isFirstTime = box.read('isFirstTime');
+              final lang = box.read('lang');
 
-                          await box.erase();
-                          await MySafarSdk.tokens.clear();
-                          await ProfileCache().clear();
-                          await TicketsCache().clear();
-                          AnalyticsService().clearUser();
+              await box.erase();
+              await MySafarSdk.tokens.clear();
+              await ProfileCache().clear();
+              await TicketsCache().clear();
+              AnalyticsService().clearUser();
 
-                          if (isFirstTime != null) {
-                            await box.write('isFirstTime', isFirstTime);
-                          }
-                          if (lang != null) {
-                            await box.write('lang', lang);
-                          }
+              if (isFirstTime != null) {
+                await box.write('isFirstTime', isFirstTime);
+              }
+              if (lang != null) {
+                await box.write('lang', lang);
+              }
 
-                              MySafarSdk.callbacks.onLoggedOut?.call();
-                          // ignore: use_build_context_synchronously
-                          Navigator.pushNamedAndRemoveUntil(context,
-                              BottomNavBarPage.routeName, (route) => false,
-                              arguments: 0);
-                        },
-                        child: Text("yes".tr(),
-                            style: context.theme.textTheme.bodyMedium)),
-                    TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: Text("no".tr(),
-                            style: context.theme.textTheme.bodyMedium))
-                  ]));
+              MySafarSdk.callbacks.onLoggedOut?.call();
+              if (!dialogContext.mounted) return;
+              Navigator.pushNamedAndRemoveUntil(
+                  dialogContext, BottomNavBarPage.routeName, (route) => false,
+                  arguments: 0);
+            },
+          ),
+          SdkDialogAction(
+            label: "no_cancel".tr(),
+            variant: SdkDialogButtonVariant.secondary,
+          ),
+        ],
+      );
 
   static Future<DateTime?> showAdaptiveDateTimePicker(BuildContext context,
       {DateTime? initialDate}) async {
@@ -762,138 +587,26 @@ class ProjectDialogs {
 
   static void changeAmountPrice(
       BuildContext context, double oldCurrency, double newCurrency) {
-    final isDark = context.isDarkMode;
-    final cardColor =
-        isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight;
-    final textColor =
-        isDark ? ProjectTheme.textColorDark : ProjectTheme.textColorLight;
-    final secondaryTextColor = isDark
-        ? ProjectTheme.secondaryTextDark
-        : ProjectTheme.secondaryTextLight;
-
-    showSdkModalBottomSheet(
+    showSdkSheetAlert<void>(
       context: context,
-      backgroundColor: Colors.transparent,
-      isDismissible: true,
+      icon: Assets.iconsDialogPriceIcon,
+      tone: SdkDialogTone.warning,
       enableDrag: false,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-              child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    color: cardColor,
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 32),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        // Warning icon
-                        Container(
-                          width: 64,
-                          height: 64,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.warning_amber_rounded,
-                            color: Colors.amber,
-                            size: 40,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Title
-                        Text(
-                          "ticket_price_changed_title".tr(),
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
-                            color: textColor,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-
-                        Text(
-                          "ticket_price_changed_message".tr(namedArgs: {
-                            "old_price":
-                                ElementFormatter.formatAmount(oldCurrency),
-                            "new_price":
-                                ElementFormatter.formatAmount(newCurrency),
-                          }),
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 16,
-                            height: 1.4,
-                            color: secondaryTextColor,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-
-                        // Buttons
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () =>
-                                    Navigator.pushNamedAndRemoveUntil(
-                                        context,
-                                        BottomNavBarPage.routeName,
-                                        (route) => false,
-                                        arguments: 0),
-                                style: OutlinedButton.styleFrom(
-                                  side: const BorderSide(color: Colors.grey),
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(16)),
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 12),
-                                ),
-                                child: Text(
-                                  "cancel".tr(),
-                                  style: TextStyle(
-                                    color: textColor,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: () {
-                                  Navigator.pop(context);
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: ProjectTheme.brandColor,
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(16)),
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 12),
-                                ),
-                                child: Text(
-                                  "continue".tr(),
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        )
-                      ],
-                    ),
-                  ))),
-        );
-      },
+      title: "ticket_price_changed_title".tr(),
+      message: "ticket_price_changed_message".tr(namedArgs: {
+        "old_price": ElementFormatter.formatAmount(oldCurrency),
+        "new_price": ElementFormatter.formatAmount(newCurrency),
+      }),
+      actions: [
+        SdkDialogAction(label: "continue".tr()),
+        SdkDialogAction(
+          label: "cancel".tr(),
+          variant: SdkDialogButtonVariant.secondary,
+          onTap: (sheetContext) => Navigator.pushNamedAndRemoveUntil(
+              sheetContext, BottomNavBarPage.routeName, (route) => false,
+              arguments: 0),
+        ),
+      ],
     );
   }
 
@@ -908,116 +621,27 @@ class ProjectDialogs {
     required double newPrice,
     required String currencyLabel,
   }) async {
-    final result = await showSdkModalBottomSheet<bool>(
+    final result = await showSdkSheetAlert<bool>(
       context: context,
-      backgroundColor: Colors.transparent,
+      icon: Assets.iconsDialogPriceIcon,
+      tone: SdkDialogTone.warning,
       isDismissible: false,
       enableDrag: false,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                color: context.color.primaryContainer,
-              ),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 64,
-                      height: 64,
-                      decoration: const BoxDecoration(shape: BoxShape.circle),
-                      child: const Icon(
-                        Icons.warning_amber_rounded,
-                        color: Colors.amber,
-                        size: 40,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      "ticket_price_changed_title".tr(),
-                      textAlign: TextAlign.center,
-                      style: context.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      "ticket_price_changed_message_currency".tr(namedArgs: {
-                        "old_price":
-                            "${ElementFormatter.formatAmount(oldPrice)} $currencyLabel",
-                        "new_price":
-                            "${ElementFormatter.formatAmount(newPrice)} $currencyLabel",
-                      }),
-                      textAlign: TextAlign.center,
-                      style: context.textTheme.bodyMedium?.copyWith(
-                        fontSize: 16,
-                        height: 1.4,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () =>
-                                Navigator.pop(sheetContext, false),
-                            style: OutlinedButton.styleFrom(
-                              side: BorderSide(color: context.color.outline),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            child: Text(
-                              "cancel".tr(),
-                              style: context.textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () => Navigator.pop(sheetContext, true),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: ProjectTheme.brandColor,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            child: Text(
-                              "continue".tr(),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
+      title: "ticket_price_changed_title".tr(),
+      message: "ticket_price_changed_message_currency".tr(namedArgs: {
+        "old_price":
+            "${ElementFormatter.formatAmount(oldPrice)} $currencyLabel",
+        "new_price":
+            "${ElementFormatter.formatAmount(newPrice)} $currencyLabel",
+      }),
+      actions: [
+        SdkDialogAction(label: "continue".tr(), value: true),
+        SdkDialogAction(
+          label: "cancel".tr(),
+          value: false,
+          variant: SdkDialogButtonVariant.secondary,
+        ),
+      ],
     );
     return result ?? false;
   }
@@ -1031,7 +655,6 @@ class ProjectDialogs {
     bool showRetry = true,
     String? secondaryLabel,
   }) async {
-    final bool isDark = context.isDarkMode;
     final ErrorDialogKind errorKind =
         kind ?? ErrorDialogKind.fromErrorType(errorType);
     final String title = errorKind.title;
@@ -1039,99 +662,29 @@ class ProjectDialogs {
     final String body = (rawMessage.isEmpty || rawMessage == title)
         ? errorKind.fallbackMessage
         : rawMessage;
-    final result = await showDialog<ErrorDialogAction>(
+    HapticFeedback.mediumImpact();
+    final result = await showSdkAlert<ErrorDialogAction>(
       context: context,
+      icon: errorKind.icon,
+      tone: errorKind.tone,
       barrierDismissible: false,
-      builder: (dialogContext) {
-        return PopScope(
-          canPop: false,
-          child: Dialog(
-            backgroundColor: context.color.primaryContainer,
-            insetPadding: const EdgeInsets.symmetric(horizontal: 24),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (title.isNotEmpty) ...[
-                    Text(
-                      title,
-                      textAlign: TextAlign.center,
-                      style: context.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 18,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                  Text(
-                    body,
-                    textAlign: TextAlign.center,
-                    style: context.textTheme.bodyMedium?.copyWith(
-                      fontSize: 15,
-                      height: 1.35,
-                      color: context.color.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  if (showRetry) ...[
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.pop(
-                            dialogContext, ErrorDialogAction.retry),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: ProjectTheme.brandColor,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
-                        child: Text(
-                          "retry_search".tr(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                  ],
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () =>
-                          Navigator.pop(dialogContext, ErrorDialogAction.close),
-                      style: ElevatedButton.styleFrom(
-                        elevation: 0,
-                        backgroundColor: isDark
-                            ? Colors.white.withAlpha(20)
-                            : ProjectTheme.brandColor.withAlpha(20),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      child: Text(
-                        secondaryLabel ?? "close".tr(),
-                        style: context.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w500,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+      canPop: false,
+      title: title,
+      message: body,
+      actions: [
+        if (showRetry)
+          SdkDialogAction(
+            label: "retry_search".tr(),
+            value: ErrorDialogAction.retry,
           ),
-        );
-      },
+        SdkDialogAction(
+          label: secondaryLabel ?? "close".tr(),
+          value: ErrorDialogAction.close,
+          variant: showRetry
+              ? SdkDialogButtonVariant.secondary
+              : SdkDialogButtonVariant.primary,
+        ),
+      ],
     );
     return result ?? ErrorDialogAction.close;
   }
@@ -1142,87 +695,15 @@ class ProjectDialogs {
   /// Faqat "qayta qidirish" tugmasi bor; tashqarini bossa yopilmaydi. Tugma
   /// bosilganda yopiladi va `true` qaytaradi.
   static Future<bool> showPricesOutdatedDialog(BuildContext context) async {
-    final result = await showSdkModalBottomSheet<bool>(
+    final result = await showSdkSheetAlert<bool>(
       context: context,
-      backgroundColor: Colors.transparent,
+      icon: Assets.iconsDialogClockIcon,
+      tone: SdkDialogTone.warning,
       isDismissible: false,
       enableDrag: false,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                color: context.color.primaryContainer,
-              ),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 64,
-                      height: 64,
-                      decoration: const BoxDecoration(shape: BoxShape.circle),
-                      child: const Icon(
-                        Icons.access_time_rounded,
-                        color: Colors.amber,
-                        size: 40,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      "prices_outdated_title".tr(),
-                      textAlign: TextAlign.center,
-                      style: context.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      "prices_outdated_message".tr(),
-                      textAlign: TextAlign.center,
-                      style: context.textTheme.bodyMedium?.copyWith(
-                        fontSize: 15,
-                        height: 1.4,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.pop(sheetContext, true),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: ProjectTheme.brandColor,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        child: Text(
-                          "search_again".tr(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
+      title: "prices_outdated_title".tr(),
+      message: "prices_outdated_message".tr(),
+      actions: [SdkDialogAction(label: "search_again".tr(), value: true)],
     );
     return result ?? false;
   }
@@ -1231,124 +712,76 @@ class ProjectDialogs {
     BuildContext context, {
     required VoidCallback onConfirm,
   }) {
-    showSdkModalBottomSheet(
+    HapticFeedback.lightImpact();
+    showSdkSheetAlert<void>(
       context: context,
+      tone: SdkDialogTone.success,
       isDismissible: false,
       enableDrag: false,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (bottomSheetContext) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-                color: context.color.primaryContainer,
-                borderRadius: BorderRadius.circular(16)),
+      title: "operation_success_title".tr(),
+      message: "changes_saved_desc".tr(),
+      actions: [
+        SdkDialogAction(
+          label: "understood".tr(),
+          onTap: (sheetContext) {
+            Navigator.pop(sheetContext);
+            Navigator.pop(context, true);
+            onConfirm();
+          },
+        ),
+      ],
+    );
+  }
+
+  static void showDeleteDialog(BuildContext context) {
+    showDialog(
+      useRootNavigator: false,
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      builder: (dialogContext) => PopScope(
+        canPop: false,
+        child: Center(
+          child: Material(
+            color: dialogContext.isDarkMode
+                ? ProjectTheme.cardColorDark
+                : ProjectTheme.cardColorLight,
+            borderRadius: BorderRadius.circular(24),
             child: Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.fromLTRB(28, 20, 28, 24),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Lottie.asset(
-                    'packages/mysafar_sdk/assets/img/profile/wallet_congrats.json',
-                    repeat: false,
+                    'packages/mysafar_sdk/assets/img/profile/utyan_cache.json',
+                    repeat: true,
                     fit: BoxFit.contain,
-                    width: 100,
-                    height: 100,
-                    errorBuilder: (context, error, stackTrace) => const Icon(
-                      Icons.check_circle,
-                      size: 100,
-                      color: Colors.green,
+                    width: 96,
+                    height: 96,
+                    errorBuilder: (context, error, stackTrace) => SizedBox(
+                      width: 96,
+                      height: 96,
+                      child: Center(
+                        child: CircularProgressIndicator.adaptive(
+                          valueColor:
+                              AlwaysStoppedAnimation(ProjectTheme.brandColor),
+                        ),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    "Operatsiya muvaffaqiyatli",
-                    style: TextStyle(
-                      fontSize: 20,
-                      color: Color(0xff27AE60),
-                      fontWeight: FontWeight.w700,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
+                  const SizedBox(height: 12),
                   Text(
-                    "O’zgartirishlar ma’lumotlar omborida muvaffaqiyatli saqlandi.",
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
+                    "deleting_data".tr(),
                     textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    height: 48,
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(bottomSheetContext);
-                        Navigator.pop(context, true);
-                        onConfirm();
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: ProjectTheme.brandColor,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Text(
-                        "understood".tr(),
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.white,
-                        ),
-                      ),
+                    style: dialogContext.textTheme.bodyMedium?.copyWith(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
               ),
             ),
           ),
-        );
-      },
-    );
-  }
-
-  static void showDeleteDialog(BuildContext context) {
-    showDialog(useRootNavigator: false, 
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: context.color.primaryContainer,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 16),
-            const Text(
-              "O'chirilmoqda...",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            Lottie.asset(
-              'packages/mysafar_sdk/assets/img/profile/utyan_cache.json',
-              repeat: true,
-              fit: BoxFit.contain,
-              width: 100,
-              height: 100,
-              errorBuilder: (context, error, stackTrace) => const Icon(
-                Icons.hourglass_empty,
-                size: 100,
-                color: Colors.blue,
-              ),
-            ),
-            const SizedBox(height: 24),
-          ],
         ),
       ),
     );
@@ -1358,103 +791,32 @@ class ProjectDialogs {
     BuildContext context, {
     required VoidCallback onPressed,
   }) {
-    showSdkModalBottomSheet(
+    showSdkSheetAlert<void>(
       context: context,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      "Ma'lumotlarni o'chirmoqchimisiz?",
-                      style: TextStyle(
-                        fontWeight: FontWeight.w500,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-            ),
-            Divider(),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                "Haqiqatan ham ma'lumotlaringizni o'chirmoqchimisiz? Ma'lumotlaringiz butunlay o'chirib tashlanadi.",
-                style: TextStyle(fontSize: 16),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: ProjectTheme.brandColor,
-                        foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Text(
-                        "Yo‘q, bekor qilish",
-                        style: context.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w500,
-                          color: Colors.white,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        onPressed();
-                      },
-                      style: OutlinedButton.styleFrom(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Text(
-                        "Ha, o‘chirish",
-                        style: context.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w500,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        );
-      },
+      icon: Assets.iconsDialogDeleteIcon,
+      tone: SdkDialogTone.error,
+      title: "delete_info".tr(),
+      message: "delete_data_desc".tr(),
+      actions: [
+        SdkDialogAction(
+          label: "yes_delete".tr(),
+          variant: SdkDialogButtonVariant.danger,
+          onTap: (sheetContext) {
+            Navigator.pop(sheetContext);
+            onPressed();
+          },
+        ),
+        SdkDialogAction(
+          label: "no_cancel".tr(),
+          variant: SdkDialogButtonVariant.secondary,
+        ),
+      ],
     );
   }
 
   static void showAiSearchLoader(BuildContext context) {
-    showDialog(useRootNavigator: false, 
+    showDialog(
+      useRootNavigator: false,
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.black.withAlpha(50),
@@ -1498,76 +860,19 @@ class ProjectDialogs {
   }
 
   static void showUpdateRequiredDialog(BuildContext context) {
-    showSdkModalBottomSheet(
-      backgroundColor: Colors.transparent,
+    showSdkSheetAlert<void>(
       context: context,
+      icon: Assets.iconsDialogUpdateIcon,
       isDismissible: false,
       enableDrag: false,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        _dialogContext = context;
-        return SafeArea(
-          bottom: Platform.isAndroid,
-          top: Platform.isAndroid,
-          child: SizedBox(
-              width: double.infinity,
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-                child: Container(
-                  decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      color: context.color.primaryContainer),
-                  child: SingleChildScrollView(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 32),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          SizedBox(
-                            width: double.infinity,
-                            height: context.height * 0.2,
-                            child: Lottie.asset(
-                                Assets.animUpdateAnimation,
-                                repeat: false),
-                          ),
-                          const SizedBox(height: 16),
-                          Center(
-                            child: Text(
-                              "update_required_title".tr(),
-                              textAlign: TextAlign.center,
-                              style: context.textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.w700, fontSize: 16),
-                            ),
-                          ),
-                          context.szBoxHeight16,
-                          ElevatedButton(
-                              style: ProjectTheme.blueButtonStyle,
-                              onPressed: () async {
-                                final url = Platform.isAndroid
-                                    ? EndPoints.playStoreUrl
-                                    : EndPoints.appStoreUrl;
-                                if (await canLaunchUrl(Uri.parse(url))) {
-                                  await launchUrl(Uri.parse(url),
-                                      mode: LaunchMode.externalApplication);
-                                } else {
-                                  // Optionally show an error dialog/snackbar
-                                  debugPrint('Could not launch store URL');
-                                }
-                              },
-                              child: Text("update_button_title".tr())),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              )),
-        );
-      },
+      message: "update_required_title".tr(),
+      onBuild: (sheetContext) => _dialogContext = sheetContext,
+      actions: [
+        SdkDialogAction(
+          label: "update_button_title".tr(),
+          onTap: (_) => _openStore(),
+        ),
+      ],
     ).whenComplete(_afterComplete);
   }
 
@@ -1576,176 +881,148 @@ class ProjectDialogs {
       required String title,
       required String subtitle,
       required void Function()? onPressed}) {
-    showSdkModalBottomSheet(
+    showSdkSheetAlert<void>(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.only(left: 16.0, right: 16.0, bottom: 64),
-          child: Container(
-            decoration: BoxDecoration(
-              color: context.color.primaryContainer,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 10,
-                  spreadRadius: 5,
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: Color(0xFF4CAF50),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.check,
-                      color: Colors.white,
-                      size: 40,
-                    ),
-                  ),
-                  SizedBox(height: 20),
-                  Text(
-                    title,
-                    style: context.textTheme.bodyLarge,
-                    textAlign: TextAlign.center,
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    subtitle,
-                    style: context.textTheme.bodyMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                  SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: ProjectTheme.brandColor,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      onPressed: onPressed,
-                      child: Text(
-                        "understand_close".tr(),
-                        style: TextStyle(fontSize: 16, color: Colors.white),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
+      tone: SdkDialogTone.success,
+      title: title,
+      message: subtitle,
+      actions: [
+        SdkDialogAction(
+          label: "understand_close".tr(),
+          onTap: (_) => onPressed?.call(),
+        ),
+      ],
     );
   }
 
   static void showUpdateOptionalDialog(BuildContext context) {
-    showSdkModalBottomSheet(
-      backgroundColor: Colors.transparent,
+    showSdkSheetAlert<void>(
       context: context,
-      isDismissible: true,
+      icon: Assets.iconsDialogUpdateIcon,
       enableDrag: false,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        _dialogContext = context;
-        return SafeArea(
-          bottom: Platform.isAndroid,
-          top: Platform.isAndroid,
-          child: SizedBox(
-              width: double.infinity,
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-                child: Container(
-                  decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      color: context.color.primaryContainer),
-                  child: SingleChildScrollView(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 32),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          SizedBox(
-                            width: double.infinity,
-                            height: context.height * 0.2,
-                            child: Lottie.asset(
-                                Assets.animUpdateAnimation,
-                                repeat: false),
-                          ),
-                          const SizedBox(height: 16),
-                          Center(
-                            child: Text(
-                              "update_optional_title".tr(),
-                              textAlign: TextAlign.center,
-                              style: context.textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.w700, fontSize: 16),
-                            ),
-                          ),
-                          context.szBoxHeight16,
-                          ElevatedButton(
-                              style: ProjectTheme.blueButtonStyle,
-                              onPressed: () async {
-                                final url = Platform.isAndroid
-                                    ? EndPoints.playStoreUrl
-                                    : EndPoints.appStoreUrl;
-                                if (await canLaunchUrl(Uri.parse(url))) {
-                                  await launchUrl(Uri.parse(url),
-                                      mode: LaunchMode.externalApplication);
-                                } else {
-                                  // Optionally show an error dialog/snackbar
-                                  debugPrint('Could not launch store URL');
-                                }
-                              },
-                              child: Text("update_button_title".tr())),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              )),
-        );
-      },
+      message: "update_optional_title".tr(),
+      onBuild: (sheetContext) => _dialogContext = sheetContext,
+      actions: [
+        SdkDialogAction(
+          label: "update_button_title".tr(),
+          onTap: (_) => _openStore(),
+        ),
+        SdkDialogAction(
+          label: "update_later".tr(),
+          variant: SdkDialogButtonVariant.secondary,
+        ),
+      ],
     ).whenComplete(_afterComplete);
   }
 
+  static Future<void> _openStore() async {
+    final url =
+        Platform.isAndroid ? EndPoints.playStoreUrl : EndPoints.appStoreUrl;
+    if (await canLaunchUrl(Uri.parse(url))) {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } else {
+      debugPrint('Could not launch store URL');
+    }
+  }
+
   static void showLoader(BuildContext context) {
-    showDialog(useRootNavigator: false, 
-        context: context,
-        builder: (dialogContext) {
-          _dialogContext = dialogContext;
-          return Center(
-            child: SizedBox(
-                width: 64,
-                height: 64,
-                child: DecoratedBox(
-                    decoration: BoxDecoration(
-                        color: context.color.primaryContainer,
-                        borderRadius: BorderRadius.circular(12)),
-                    child: const CircularProgressIndicator.adaptive())),
-          );
-        }).whenComplete(_afterComplete);
+    showSdkLoader(context,
+            onBuild: (dialogContext) => _dialogContext = dialogContext)
+        .whenComplete(_afterComplete);
   }
 
   static Future<void> _afterComplete() async {
     _dialogContext = null;
+  }
+}
+
+class _SupportOptionTile extends StatelessWidget {
+  const _SupportOptionTile({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.onTap,
+    this.subtitle,
+  });
+
+  final String icon;
+  final Color color;
+  final String title;
+  final String? subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: sdkDialogMutedFill(context),
+      borderRadius: BorderRadius.circular(18),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          onTap();
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: SvgPicture.asset(
+                  icon,
+                  width: 24,
+                  height: 24,
+                  colorFilter:
+                      const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.textTheme.bodyMedium?.copyWith(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.textTheme.headlineSmall?.copyWith(
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              SvgPicture.asset(
+                Assets.iconsBookingChevronRightIcon,
+                width: 20,
+                height: 20,
+                colorFilter: ColorFilter.mode(
+                  context.textTheme.headlineSmall?.color ?? Colors.grey,
+                  BlendMode.srcIn,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

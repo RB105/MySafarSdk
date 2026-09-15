@@ -3,42 +3,45 @@
 
 part of 'ticket_info_page.dart';
 
+/// Bitta yo'nalish (borish yoki qaytish) kartasi: sarlavha va reys
+/// bosqichlari vaqt chizig'i.
 class _FlightDirectionCard extends StatelessWidget {
   final FlightElement flightElement;
   final List<FlightSegment> segments;
   final int directionIndex;
 
+  /// Borish-kelish bo'lsa "Borish" / "Qaytish" belgisi ko'rsatiladi.
+  final bool showDirectionLabel;
+
   const _FlightDirectionCard({
     required this.flightElement,
     required this.segments,
     required this.directionIndex,
+    this.showDirectionLabel = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardColor =
-        isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight;
-    return Container(
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: context.shadowDown,
-      ),
+    return _TiCard(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
             child: _DirectionHeader(
               flightElement: flightElement,
               segments: segments,
               directionIndex: directionIndex,
+              showDirectionLabel: showDirectionLabel,
             ),
           ),
-          const _BoardingPassPerforation(),
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: context.color.outline.withValues(alpha: 0.6),
+          ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 16, 18),
+            padding: const EdgeInsets.fromLTRB(12, 10, 16, 14),
             child: _FlightTimeline(
               flightElement: flightElement,
               segments: segments,
@@ -55,20 +58,22 @@ class _DirectionHeader extends StatelessWidget {
   final FlightElement flightElement;
   final List<FlightSegment> segments;
   final int directionIndex;
+  final bool showDirectionLabel;
 
   const _DirectionHeader({
     required this.flightElement,
     required this.segments,
     required this.directionIndex,
+    required this.showDirectionLabel,
   });
 
   @override
   Widget build(BuildContext context) {
-    final brand = ProjectTheme.brandColor;
     final isDark = context.isDarkMode;
-    final secondary = isDark
-        ? ProjectTheme.secondaryTextDark
-        : ProjectTheme.secondaryTextLight;
+    final brand = ProjectTheme.brandColor;
+    final Color accent = isDark ? Colors.white : brand;
+    final muted = _tiMuted(context);
+
     final fromCity =
         segments.isNotEmpty ? (segments.first.dep.city?.title ?? '') : '';
     final toCity =
@@ -81,30 +86,33 @@ class _DirectionHeader extends StatelessWidget {
     final infoParts = <String>[
       if (date.isNotEmpty) date,
       if (dur.isNotEmpty) dur,
-      if (transfers > 0)
-        "transfer_count".tr(namedArgs: {"count": "$transfers"}),
+      transfers > 0
+          ? "transfer_count".tr(namedArgs: {"count": "$transfers"})
+          : "noTransfer".tr(),
     ];
+
+    final titleStyle = context.textTheme.bodyLarge
+        ?.copyWith(fontWeight: FontWeight.w700, fontSize: 16);
 
     return Row(
       children: [
         Container(
-          width: 46,
-          height: 46,
+          width: 40,
+          height: 40,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [brand, ProjectTheme.blueBg],
-            ),
-            borderRadius: BorderRadius.circular(14),
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : brand.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(
+          child: SvgPicture.asset(
             directionIndex == 0
-                ? Icons.flight_takeoff_rounded
-                : Icons.flight_land_rounded,
-            color: Colors.white,
-            size: 22,
+                ? Assets.iconsTicketTakeoffIcon
+                : Assets.iconsTicketLandingIcon,
+            width: 22,
+            height: 22,
+            colorFilter: ColorFilter.mode(accent, BlendMode.srcIn),
           ),
         ),
         const SizedBox(width: 12),
@@ -115,95 +123,59 @@ class _DirectionHeader extends StatelessWidget {
               Row(
                 children: [
                   Flexible(
-                    child: Text(
-                      fromCity,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: context.textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                      ),
-                    ),
+                    child: Text(fromCity,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: titleStyle),
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 6),
                     child: Icon(Icons.arrow_forward_rounded,
-                        size: 16, color: brand),
+                        size: 16, color: muted),
                   ),
                   Flexible(
-                    child: Text(
-                      toCity,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: context.textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                      ),
-                    ),
+                    child: Text(toCity,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: titleStyle),
                   ),
                 ],
               ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Icon(Icons.schedule_rounded, size: 13, color: secondary),
-                  const SizedBox(width: 4),
-                  Flexible(
-                    child: Text(
-                      infoParts.join("  •  "),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: context.textTheme.titleSmall
-                          ?.copyWith(fontSize: 12, color: secondary),
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 3),
+              Text(
+                infoParts.join(' · '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: context.textTheme.bodySmall?.copyWith(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: muted,
+                ),
               ),
             ],
           ),
         ),
-      ],
-    );
-  }
-}
-
-/// Boarding-pass perforation: a notched, dashed separator that "cuts" the card.
-class _BoardingPassPerforation extends StatelessWidget {
-  const _BoardingPassPerforation();
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = Theme.of(context).scaffoldBackgroundColor;
-    final dashColor = context.isDarkMode
-        ? Colors.white.withAlpha(40)
-        : Colors.black.withAlpha(26);
-    return SizedBox(
-      height: 22,
-      child: Row(
-        children: [
-          _notch(bg, left: true),
-          Expanded(
-            child: Center(
-              child: CustomPaint(
-                painter: _HDashedPainter(color: dashColor),
-                child: const SizedBox(height: 2, width: double.infinity),
+        if (showDirectionLabel) ...[
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: _tiTonal(context),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              (directionIndex == 0 ? "when" : "return").tr(),
+              style: context.textTheme.bodySmall?.copyWith(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: muted,
               ),
             ),
           ),
-          _notch(bg, left: false),
         ],
-      ),
+      ],
     );
   }
-
-  Widget _notch(Color bg, {required bool left}) => Transform.translate(
-        offset: Offset(left ? -11 : 11, 0),
-        child: Container(
-          width: 22,
-          height: 22,
-          decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
-        ),
-      );
 }
 
 class _FlightTimeline extends StatelessWidget {
@@ -225,7 +197,7 @@ class _FlightTimeline extends StatelessWidget {
       final isFirst = i == 0;
       final isLast = i == segments.length - 1;
 
-      // Departure node
+      // Jo'nash
       rows.add(_railRow(
         context,
         above: !isFirst,
@@ -242,7 +214,7 @@ class _FlightTimeline extends StatelessWidget {
         ),
       ));
 
-      // Flight leg connector
+      // Reys (aviakompaniya, davomiylik, samolyot)
       rows.add(_railRow(
         context,
         above: true,
@@ -251,7 +223,7 @@ class _FlightTimeline extends StatelessWidget {
         content: _legInfo(context, seg),
       ));
 
-      // Arrival node
+      // Yetib kelish
       rows.add(_railRow(
         context,
         above: true,
@@ -268,7 +240,7 @@ class _FlightTimeline extends StatelessWidget {
         ),
       ));
 
-      // Layover between legs
+      // Almashish
       if (!isLast) {
         final mins = flightElement.getLayoverMinutes(segments, i);
         final changed = flightElement.hasAirportChange(segments, i);
@@ -278,16 +250,17 @@ class _FlightTimeline extends StatelessWidget {
           context,
           above: true,
           below: true,
-          node: _transferNode(context),
+          node: const SizedBox.shrink(),
           content: _layover(context, mins, changeText),
         ));
       }
     }
 
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: rows);
+    return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch, children: rows);
   }
 
-  // ── Rail row scaffold ──────────────────────────────────────────────
+  // ── Qator karkasi: chapda chiziq + tugun, o'ngda kontent ───────────
   Widget _railRow(
     BuildContext context, {
     required bool above,
@@ -295,23 +268,25 @@ class _FlightTimeline extends StatelessWidget {
     required Widget node,
     required Widget content,
   }) {
-    final railColor = ProjectTheme.brandColor
-        .withAlpha(context.isDarkMode ? 150 : 110);
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SizedBox(
-            width: 34,
+            width: 30,
             child: CustomPaint(
-              painter: _RailPainter(color: railColor, above: above, below: below),
+              painter: _RailPainter(
+                color: context.color.outline,
+                above: above,
+                below: below,
+              ),
               child: Center(child: node),
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 7),
+              padding: const EdgeInsets.symmetric(vertical: 8),
               child: content,
             ),
           ),
@@ -320,66 +295,48 @@ class _FlightTimeline extends StatelessWidget {
     );
   }
 
-  // ── Rail nodes ─────────────────────────────────────────────────────
+  // ── Tugunlar ────────────────────────────────────────────────────────
   Widget _endpointDot(BuildContext context, {required bool filled}) {
     final brand = ProjectTheme.brandColor;
     return Container(
-      width: 16,
-      height: 16,
+      width: 12,
+      height: 12,
       decoration: BoxDecoration(
         color: filled ? brand : context.color.primaryContainer,
         shape: BoxShape.circle,
-        border: Border.all(color: brand, width: 3),
+        border: Border.all(color: brand, width: 2.5),
       ),
     );
   }
 
   Widget _airlineAvatar(BuildContext context, String code) {
-    final brand = ProjectTheme.brandColor;
-    final cardBg = context.color.primaryContainer;
     return Container(
-      width: 32,
-      height: 32,
-      padding: const EdgeInsets.all(2),
+      width: 28,
+      height: 28,
       decoration: BoxDecoration(
-        color: cardBg,
+        color: context.color.primaryContainer,
         shape: BoxShape.circle,
-        border: Border.all(color: brand.withAlpha(70), width: 1.5),
+        border: Border.all(color: context.color.outline),
       ),
       child: ClipOval(
         child: Image.network(
           ProjectAssets.getSegmentProviderImg(code),
           fit: BoxFit.cover,
-          // 32px logical avatar — ~2x px ekran zichligi uchun decode hajmini
-          // cheklab xotira/CPU sarfini kamaytiramiz.
+          // 28px avatar — decode hajmini cheklab xotira sarfini kamaytiramiz.
           cacheWidth: 64,
           cacheHeight: 64,
           errorBuilder: (_, __, ___) => Container(
-            color: brand.withAlpha(22),
+            color: _tiTonal(context),
             alignment: Alignment.center,
-            child: Icon(Icons.flight_rounded, size: 14, color: brand),
+            child:
+                Icon(Icons.flight_rounded, size: 14, color: _tiMuted(context)),
           ),
         ),
       ),
     );
   }
 
-  Widget _transferNode(BuildContext context) {
-    final warn = ProjectTheme.warning;
-    return Container(
-      width: 26,
-      height: 26,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: context.color.primaryContainer,
-        shape: BoxShape.circle,
-        border: Border.all(color: warn, width: 1.5),
-      ),
-      child: Icon(Icons.sync_alt_rounded, size: 13, color: warn),
-    );
-  }
-
-  // ── Rail content ───────────────────────────────────────────────────
+  // ── Kontent ─────────────────────────────────────────────────────────
   Widget _endpoint(
     BuildContext context, {
     String? time,
@@ -389,9 +346,7 @@ class _FlightTimeline extends StatelessWidget {
     String? terminal,
     String? date,
   }) {
-    final secondary = context.isDarkMode
-        ? ProjectTheme.secondaryTextDark
-        : ProjectTheme.secondaryTextLight;
+    final muted = _tiMuted(context);
     final airport = _airportText(airTitle, airCode, terminal);
     final dateStr = (date ?? '').isNotEmpty
         ? ElementFormatter.formatWithWeekDay(date!)
@@ -402,14 +357,14 @@ class _FlightTimeline extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
           children: [
             Text(
               ElementFormatter.formatTime(time ?? ''),
               style: context.textTheme.bodyLarge?.copyWith(
                 fontWeight: FontWeight.w800,
-                fontSize: 19,
-                height: 1.0,
+                fontSize: 17,
               ),
             ),
             const SizedBox(width: 10),
@@ -419,7 +374,7 @@ class _FlightTimeline extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: context.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                   fontSize: 15,
                 ),
               ),
@@ -429,21 +384,27 @@ class _FlightTimeline extends StatelessWidget {
                 padding: const EdgeInsets.only(left: 8),
                 child: Text(
                   dateStr,
-                  style: context.textTheme.titleSmall
-                      ?.copyWith(fontSize: 11, color: secondary),
+                  style: context.textTheme.bodySmall?.copyWith(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: muted,
+                  ),
                 ),
               ),
           ],
         ),
         if (airport.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.only(top: 3),
+            padding: const EdgeInsets.only(top: 2),
             child: Text(
               airport,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: context.textTheme.titleSmall
-                  ?.copyWith(fontSize: 12, color: secondary),
+              style: context.textTheme.bodySmall?.copyWith(
+                fontSize: 12.5,
+                height: 1.3,
+                color: muted,
+              ),
             ),
           ),
       ],
@@ -451,10 +412,7 @@ class _FlightTimeline extends StatelessWidget {
   }
 
   Widget _legInfo(BuildContext context, FlightSegment seg) {
-    final isDark = context.isDarkMode;
-    final brand = ProjectTheme.brandColor;
-    final secondary =
-        isDark ? ProjectTheme.secondaryTextDark : ProjectTheme.secondaryTextLight;
+    final muted = _tiMuted(context);
 
     final cls = seg.segmentClass.name.trim();
     final dur = ElementFormatter.formatDuration(seg.duration.flight.common);
@@ -483,8 +441,8 @@ class _FlightTimeline extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: context.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13.5,
                 ),
               ),
             ),
@@ -495,15 +453,15 @@ class _FlightTimeline extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                   decoration: BoxDecoration(
-                    color: brand.withAlpha(isDark ? 50 : 22),
-                    borderRadius: BorderRadius.circular(7),
+                    color: _tiTonal(context),
+                    borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     cls,
-                    style: TextStyle(
-                      color: brand,
-                      fontSize: 10,
+                    style: context.textTheme.bodySmall?.copyWith(
+                      fontSize: 11,
                       fontWeight: FontWeight.w700,
+                      color: muted,
                     ),
                   ),
                 ),
@@ -512,45 +470,36 @@ class _FlightTimeline extends StatelessWidget {
         ),
         if (detailParts.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.only(top: 3),
-            child: Row(
-              children: [
-                Icon(Icons.schedule_rounded, size: 12, color: secondary),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    detailParts.join("  •  "),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: context.textTheme.titleSmall
-                        ?.copyWith(fontSize: 11.5, color: secondary),
-                  ),
-                ),
-              ],
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              detailParts.join(' · '),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: context.textTheme.bodySmall?.copyWith(
+                fontSize: 12.5,
+                height: 1.3,
+                color: muted,
+              ),
             ),
           ),
       ],
     );
   }
 
+  /// Almashish bloki — neytral fon; faqat aeroport o'zgarsa ogohlantirish
+  /// rangida ajraladi (muhim ma'lumot).
   Widget _layover(BuildContext context, int mins, String changeText) {
-    final isDark = context.isDarkMode;
     final warn = ProjectTheme.warning;
-    final secondary =
-        isDark ? ProjectTheme.secondaryTextDark : ProjectTheme.secondaryTextLight;
-    final textColor =
-        isDark ? ProjectTheme.textColorDark : ProjectTheme.textColorLight;
     final dur = ElementFormatter.formatDuration(mins);
     final title = dur.isNotEmpty
-        ? "${"transfer_title".tr()}  •  $dur"
+        ? "${"transfer_title".tr()} · $dur"
         : "transfer_title".tr();
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: warn.withAlpha(isDark ? 38 : 22),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: warn.withAlpha(70)),
+        color: _tiTonal(context),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -558,15 +507,20 @@ class _FlightTimeline extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.timelapse_rounded, size: 15, color: warn),
-              const SizedBox(width: 6),
+              SvgPicture.asset(
+                Assets.iconsTicketTransferIcon,
+                width: 16,
+                height: 16,
+                colorFilter:
+                    ColorFilter.mode(_tiMuted(context), BlendMode.srcIn),
+              ),
+              const SizedBox(width: 8),
               Flexible(
                 child: Text(
                   title,
                   style: context.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                    color: textColor,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13.5,
                   ),
                 ),
               ),
@@ -578,13 +532,22 @@ class _FlightTimeline extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.info_outline_rounded, size: 13, color: warn),
-                  const SizedBox(width: 6),
+                  SvgPicture.asset(
+                    Assets.iconsBookingAlertIcon,
+                    width: 16,
+                    height: 16,
+                    colorFilter: ColorFilter.mode(warn, BlendMode.srcIn),
+                  ),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       changeText,
-                      style: context.textTheme.titleSmall
-                          ?.copyWith(fontSize: 11.5, color: secondary),
+                      style: context.textTheme.bodySmall?.copyWith(
+                        fontSize: 12.5,
+                        height: 1.3,
+                        fontWeight: FontWeight.w600,
+                        color: warn,
+                      ),
                     ),
                   ),
                 ],
@@ -601,11 +564,11 @@ class _FlightTimeline extends StatelessWidget {
     final term = (terminal ?? '').trim();
     final base = t.isNotEmpty ? (c.isNotEmpty && c != t ? "$t ($c)" : t) : c;
     if (base.isEmpty) return term.isNotEmpty ? "T$term" : '';
-    return term.isNotEmpty ? "$base  •  T$term" : base;
+    return term.isNotEmpty ? "$base · T$term" : base;
   }
 }
 
-/// Vertical dashed rail line drawn above and/or below the centered node.
+/// Tugun ustidan va/yoki ostidan o'tadigan ingichka vertikal chiziq.
 class _RailPainter extends CustomPainter {
   final Color color;
   final bool above;
@@ -619,21 +582,9 @@ class _RailPainter extends CustomPainter {
     final cy = size.height / 2;
     final paint = Paint()
       ..color = color
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round;
-    const dash = 4.0;
-    const gap = 5.0;
-
-    void drawSeg(double from, double to) {
-      double y = from;
-      while (y < to) {
-        canvas.drawLine(Offset(x, y), Offset(x, math.min(y + dash, to)), paint);
-        y += dash + gap;
-      }
-    }
-
-    if (above) drawSeg(0, cy);
-    if (below) drawSeg(cy, size.height);
+      ..strokeWidth = 1.5;
+    if (above) canvas.drawLine(Offset(x, 0), Offset(x, cy), paint);
+    if (below) canvas.drawLine(Offset(x, cy), Offset(x, size.height), paint);
   }
 
   @override
@@ -642,37 +593,3 @@ class _RailPainter extends CustomPainter {
       oldDelegate.above != above ||
       oldDelegate.below != below;
 }
-
-/// Horizontal dashed line used by the boarding-pass perforation.
-class _HDashedPainter extends CustomPainter {
-  final Color color;
-
-  _HDashedPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final y = size.height / 2;
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round;
-    const dash = 6.0;
-    const gap = 5.0;
-    double x = 0;
-    while (x < size.width) {
-      canvas.drawLine(Offset(x, y), Offset(math.min(x + dash, size.width), y),
-          paint);
-      x += dash + gap;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _HDashedPainter oldDelegate) =>
-      oldDelegate.color != color;
-}
-
-// ════════════════════════════════════════════════════════════════════
-//  MAP ROUTE BUTTON
-// ════════════════════════════════════════════════════════════════════
-
-/// Reys marshrutini 2D xaritada animatsiyada ko'rsatishga o'tish tugmasi.

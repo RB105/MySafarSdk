@@ -78,7 +78,8 @@ class MySafarEmbed extends StatefulWidget {
 
   /// Host user emaili. [phoneNumber] bilan birga berilsa, register'dan
   /// keyin profilga yoziladi (booking kontakt maydoni uchun). Telefon
-  /// bo'lmasa email yolg'iz ishlatilmaydi.
+  /// bo'lmasa email yolg'iz ishlatilmaydi. `null` bo'lsa
+  /// `MySafarSdk.init(userData: ...)` dagi email olinadi.
   final String? email;
 
   /// Host appning joriy tili. Berilsa SDK shu tilda ochiladi (masalan
@@ -176,7 +177,7 @@ class _MySafarEmbedState extends State<MySafarEmbed> with WidgetsBindingObserver
     if (phone == null) return;
     await MySafarSdk.ensureRegistered(
       phone,
-      email: widget.email,
+      email: widget.email ?? MySafarSdk.userData.email,
     ).timeout(const Duration(seconds: 10), onTimeout: () => false);
   }
 

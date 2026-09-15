@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:mysafar_sdk/src/core/config/dio_client.dart' show DioClient;
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/tools/lang_helper.dart';
@@ -13,13 +14,13 @@ import 'package:mysafar_sdk/src/core/styles/theme.dart';
 import 'package:mysafar_sdk/src/core/tools/formatters.dart';
 import 'package:mysafar_sdk/src/core/tools/project_assets.dart';
 import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart';
+import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/model/remote/booking/booking_create_model.dart';
 import 'package:mysafar_sdk/src/model/remote/profile/confirmed_ticket_models.dart';
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart'
     show AnalyticsService;
 import 'package:mysafar_sdk/src/view/booking/booking_confirm_page.dart';
-import 'package:mysafar_sdk/src/view/booking/widget/dashedline.dart';
 import 'package:mysafar_sdk/src/view/profile/src/expire_time_widget.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path/path.dart' as p;
@@ -28,10 +29,9 @@ import 'package:path_provider/path_provider.dart';
 import '../../../model/remote/avia/recommendation/get_recom_res_model.dart'
     show FlightPrice, FluffyUzs;
 
-/// Bitta buyurtma kartasi — "posadka taloni" (boarding pass) uslubida:
-/// yuqorida parvoz ma'lumoti (yirik vaqtlar + marshrut chizig'i), o'rtada
-/// ikki chetidan "kesilgan" perforatsiya, pastda esa stub — tarif,
-/// yo'lovchilar, narx va holatga mos amal tugmasi.
+/// Bitta buyurtma kartasi — qidiruv natijalari kartasi bilan bir xil uslub:
+/// tepada holat va buyurtma raqami, har bir parvoz uchun vaqt chizig'i,
+/// ostida tarif/yo'lovchilar/buyurtmachi, umumiy narx va holatga mos amal.
 
 part 'my_ticket_info_line.dart';
 
@@ -52,9 +52,6 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
   /// tugmani bosganda qolgan segmentlar ochiladi, qayta bosilganda yig'iladi.
   bool _segmentsExpanded = false;
 
-  /// Perforatsiya "kesik"larining radiusi.
-  static const double _notchRadius = 10;
-
   Future<void> downloadAndOpenFile(String url, String fileName) async {
     try {
       setState(() {
@@ -74,7 +71,6 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
 
       await OpenFilex.open(filePath);
     } catch (e) {
-
       AnalyticsService().trackApiError(
         endpoint: url,
         method: 'GET',
@@ -131,135 +127,155 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
     }
   }
 
-  /// Qorong'u temada brand ko'k kartada "cho'kib" ketadi — ochroq aksent
-  /// ishlatiladi.
-  Color get _accent => context.themeProvider.isDark
-      ? ProjectTheme.accentLight
-      : ProjectTheme.brandColor;
+  bool get _isDark => context.isDarkMode;
+
+  Color get _textColor =>
+      _isDark ? ProjectTheme.textColorDark : ProjectTheme.textColorLight;
+
+  Color get _muted =>
+      _isDark ? ProjectTheme.secondaryTextDark : const Color(0xFF7A849E);
+
+  Color get _line =>
+      _isDark ? Colors.white.withValues(alpha: 0.12) : const Color(0xFFE8ECF3);
+
+  Color get _tonal =>
+      _isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFF1F4F9);
+
+  /// Tarjimalardagi oxirgi ":" belgisini olib tashlaydi ("Tarif:" → "Tarif").
+  static String _plain(String text) =>
+      text.trim().replaceAll(RegExp(r'[:：]\s*$'), '');
 
   @override
   Widget build(BuildContext context) {
     ConfirmTicketResponseData responseData =
         widget.ticketsModel.response!.data!;
-    String callbackStatus = widget.ticketsModel.callbackStatus ?? "";
+    // callback_status bo'sh bo'lsa buyurtmaning o'z holati; yozuv farqlari
+    // ("ticketed", "canceled") kanonik kalitga keltirilgan.
+    final String callbackStatus = widget.ticketsModel.orderStatus;
     final displayStatus = _displayStatus(callbackStatus);
-    final isDark = context.themeProvider.isDark;
     final segments = responseData.book?.flight?.segments ?? [];
-    // Yig'ilgan holatda faqat birinchi parvoz ko'rinadi (bir segmentli oddiy
-    // biletda esa farq yo'q — u baribir bitta).
+    // Yig'ilgan holatda faqat birinchi parvoz ko'rinadi.
     final visibleSegments = (segments.length > 1 && !_segmentsExpanded)
         ? segments.sublist(0, 1)
         : segments;
     final Widget? action = _actionFor(callbackStatus, responseData);
+    final price =
+        "${ElementFormatter.formatNumberWithSpaces(responseData.book?.order?.price?.uzs?.amount ?? 0)} UZS";
 
     return Container(
       decoration: BoxDecoration(
         color: context.color.primaryContainer,
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withAlpha(80)
-                : const Color(0x80C6C7C9).withAlpha(110),
-            offset: const Offset(0, 4),
-            blurRadius: 14,
-          ),
-        ],
-        borderRadius: const BorderRadius.all(Radius.circular(22)),
-        border: Border.all(
-          color:
-              isDark ? Colors.white.withAlpha(15) : Colors.black.withAlpha(8),
-          width: 1,
-        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: _isDark
+            ? null
+            : const [
+                BoxShadow(
+                  color: Color(0x0F202A44),
+                  blurRadius: 14,
+                  offset: Offset(0, 4),
+                ),
+              ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── Parvoz qismi ──
+          // ── Holat va buyurtma raqami ──
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-            child: Column(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+            // Chip qolgan butun kenglikni oladi (avval Spacer bilan 50/50
+            // bo'linib, uzun holat nomlari qirqilib qolardi).
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Flexible(child: _statusChip(displayStatus)),
-                    const SizedBox(width: 8),
-                    _idChip(),
-                  ],
+                Expanded(
+                  child: displayStatus.isEmpty
+                      ? const SizedBox.shrink()
+                      : Align(
+                          alignment: Alignment.centerLeft,
+                          child: _statusChip(displayStatus),
+                        ),
                 ),
-                const SizedBox(height: 16),
-                AnimatedSize(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
-                  alignment: Alignment.topCenter,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      for (int i = 0; i < visibleSegments.length; i++) ...[
-                        if (i > 0) const SizedBox(height: 16),
-                        _segmentBlock(visibleSegments[i]),
-                      ],
-                    ],
-                  ),
-                ),
-                if (segments.length > 1) ...[
-                  const SizedBox(height: 12),
-                  _segmentsToggle(segments.length - 1),
-                ],
+                const SizedBox(width: 8),
+                _idChip(),
               ],
             ),
           ),
-          // ── Perforatsiya (yirtish chizig'i) ──
-          _perforation(context),
-          // ── Stub qismi ──
+          // ── Parvozlar ──
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+            child: AnimatedSize(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.topCenter,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (int i = 0; i < visibleSegments.length; i++) ...[
+                    if (i > 0)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Divider(height: 1, thickness: 1, color: _line),
+                      ),
+                    _segmentBlock(visibleSegments[i]),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          if (segments.length > 1)
+            _segmentsToggle(segments.length - 1)
+          else
+            const SizedBox(height: 14),
+          Divider(height: 1, thickness: 1, color: _line),
+          // ── Tafsilotlar ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _InfoLine(
-                  icon: Icons.airline_seat_recline_normal_rounded,
-                  label: "tarif".tr(),
+                  label: _plain("tarif".tr()),
                   value: ElementFormatter.getClassName(
                       _flightClassCode(responseData),
                       dataLang(context.locale.languageCode)),
-                  accent: _accent,
                 ),
-                const SizedBox(height: 10),
                 _InfoLine(
-                  icon: Icons.people_alt_rounded,
-                  label: "passengerss".tr(),
+                  label: _plain("passengerss".tr()),
                   value: ElementFormatter.getPassengerAgeSummary(
                       responseData.book!.passengers),
-                  accent: _accent,
                 ),
-                const SizedBox(height: 10),
                 _InfoLine(
-                  icon: Icons.verified_user_rounded,
-                  label: "order_confirmed".tr(),
+                  label: _plain("order_confirmed".tr()),
                   value: _firstPassengerName(responseData),
-                  accent: _accent,
-                  valueColor: _accent,
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 8),
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Expanded(
                       child: Text(
-                        "total_price".tr(),
+                        _plain("total_price".tr()),
                         style: context.textTheme.bodyMedium?.copyWith(
-                          fontSize: 13,
+                          fontSize: 13.5,
                           fontWeight: FontWeight.w600,
-                          color: _secondaryColor(context),
+                          color: _muted,
                         ),
                       ),
                     ),
-                    Text(
-                      "${ElementFormatter.formatNumberWithSpaces(responseData.book?.order?.price?.uzs?.amount ?? 0)} UZS",
-                      style: context.textTheme.bodyLarge?.copyWith(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        color: _accent,
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          price,
+                          maxLines: 1,
+                          style: context.textTheme.bodyLarge?.copyWith(
+                            fontSize: 19,
+                            fontWeight: FontWeight.w800,
+                            color: _textColor,
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -276,12 +292,8 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
     );
   }
 
-  Color _secondaryColor(BuildContext context) => context.themeProvider.isDark
-      ? ProjectTheme.secondaryTextDark
-      : ProjectTheme.secondaryTextLight;
-
   // ──────────────────────────────────────────────────────────────────
-  //  HEADER CHIPLARI
+  //  HOLAT VA RAQAM CHIPLARI
   // ──────────────────────────────────────────────────────────────────
 
   /// Booked bo'lsa-yu to'lov muddati o'tgan bo'lsa, chipda
@@ -318,40 +330,60 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
     }
   }
 
-  /// Rangli, lekin bosiq (tint) holat chipi. Matn rangi o'qilishi uchun
-  /// yorug' temada quyuqlashtiriladi, qorong'usida ochlashtiriladi.
+  /// Holat nomi: tarjima; kalit bo'lmasa serverning o'z nomi, u ham
+  /// bo'lmasa "RefundInProcess" → "Refund in process" (xom kalit emas).
+  String _statusLabel(String status) {
+    final serverTitle = widget.ticketsModel.orderStatusTitle;
+    final humanized = status
+        .replaceAll(RegExp(r'[_\-]+'), ' ')
+        .replaceAllMapped(
+            RegExp(r'(?<=[a-z])(?=[A-Z])'), (_) => ' ')
+        .trim();
+    final fallback = serverTitle.isNotEmpty
+        ? serverTitle
+        : (humanized.isEmpty
+            ? status
+            : humanized[0].toUpperCase() +
+                humanized.substring(1).toLowerCase());
+    return status.tr(defaultValue: fallback);
+  }
+
+  /// Yumshoq fonli holat chipi: rangli nuqta + matn (kontursiz). Uzun
+  /// nomlar ("Chipta berildi. Aviakompaniyadan PNR kutilyapti") qirqilmay
+  /// bir necha qatorga o'tadi.
   Widget _statusChip(String status) {
-    final isDark = context.themeProvider.isDark;
     final Color c = _statusColor(status);
-    final Color textColor = isDark
-        ? Color.lerp(c, Colors.white, 0.25)!
-        : Color.lerp(c, Colors.black, 0.30)!;
+    final Color textColor = _isDark
+        ? Color.lerp(c, Colors.white, 0.3)!
+        : Color.lerp(c, Colors.black, 0.3)!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: c.withAlpha(isDark ? 46 : 26),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: c.withAlpha(110), width: 1),
+        color: c.withValues(alpha: _isDark ? 0.18 : 0.10),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+          Padding(
+            padding: const EdgeInsets.only(top: 4.5),
+            child: Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+            ),
           ),
           const SizedBox(width: 6),
           Flexible(
             child: Text(
-              status.tr(),
-              maxLines: 1,
+              _statusLabel(status),
+              maxLines: 3,
               overflow: TextOverflow.ellipsis,
               style: context.textTheme.bodySmall?.copyWith(
                 fontWeight: FontWeight.w700,
-                fontSize: 11.5,
+                fontSize: 12,
                 color: textColor,
-                letterSpacing: 0.2,
               ),
             ),
           ),
@@ -362,41 +394,46 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
 
   /// Buyurtma raqami — bosilganda nusxalanadi.
   Widget _idChip() {
-    final isDark = context.themeProvider.isDark;
-    return GestureDetector(
-      onTap: () {
-        Clipboard.setData(
-          ClipboardData(text: "${widget.ticketsModel.billingId}"),
-        ).then(
-          (value) {
-            ProjectDialogs.showCustomToast(
-                // ignore: use_build_context_synchronously
-                context,
-                "id_copied".tr());
-          },
-        );
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: _accent.withAlpha(isDark ? 40 : 16),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: _accent.withAlpha(100), width: 1),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              "ID: ${widget.ticketsModel.billingId}",
-              style: context.textTheme.bodySmall?.copyWith(
-                fontWeight: FontWeight.w700,
-                fontSize: 11.5,
-                color: _accent,
+    return Material(
+      color: _tonal,
+      borderRadius: BorderRadius.circular(8),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          Clipboard.setData(
+            ClipboardData(text: "${widget.ticketsModel.billingId}"),
+          ).then(
+            (value) {
+              ProjectDialogs.showCustomToast(
+                  // ignore: use_build_context_synchronously
+                  context,
+                  "id_copied".tr());
+            },
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "№ ${widget.ticketsModel.billingId}",
+                style: context.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                  color: _textColor,
+                ),
               ),
-            ),
-            const SizedBox(width: 4),
-            Icon(Icons.copy_rounded, size: 12, color: _accent),
-          ],
+              const SizedBox(width: 6),
+              SvgPicture.asset(
+                Assets.iconsOrderCopyIcon,
+                width: 14,
+                height: 14,
+                colorFilter: ColorFilter.mode(_muted, BlendMode.srcIn),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -406,10 +443,8 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
   //  SEGMENT (MARSHRUT) BLOKI
   // ──────────────────────────────────────────────────────────────────
 
-  /// Bitta segment: aviakompaniya qatori + posadka taloni uslubidagi
-  /// marshrut qatori (yirik vaqtlar, punktir parvoz chizig'i, davomiylik).
+  /// Aviakompaniya + sana, so'ng vaqt chizig'i (vaqt, kod, shahar).
   Widget _segmentBlock(ConfirmedTicketSegment segment) {
-    final secondary = _secondaryColor(context);
     final date = _segmentDate(segment);
     final metaParts = <String>[
       if ((segment.carrier?.title ?? '').isNotEmpty) segment.carrier!.title!,
@@ -417,7 +452,7 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
     ];
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           children: [
@@ -425,13 +460,13 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                metaParts.join(' • '),
+                metaParts.join(' · '),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: context.textTheme.bodySmall?.copyWith(
-                  fontSize: 12,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: secondary,
+                  color: _textColor,
                 ),
               ),
             ),
@@ -440,21 +475,22 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
               Text(
                 date,
                 style: context.textTheme.bodySmall?.copyWith(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                  color: secondary,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w500,
+                  color: _muted,
                 ),
               ),
             ],
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _endpoint(
               time: segment.dep?.time ?? "",
               code: segment.dep?.airport?.code ?? "",
+              city: segment.dep?.city?.title ?? "",
               alignEnd: false,
             ),
             const SizedBox(width: 10),
@@ -468,6 +504,7 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
             _endpoint(
               time: segment.arr?.time ?? "",
               code: segment.arr?.airport?.code ?? "",
+              city: segment.arr?.city?.title ?? "",
               alignEnd: true,
             ),
           ],
@@ -476,27 +513,14 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
     );
   }
 
-  /// "Yana N ta ko'rsatish" / "Yashirish" tugmasi — ko'p segmentli biletda
-  /// qolgan parvozlarni ochib-yopadi. Butun qator bosiladi (kichik ikonaga
-  /// tegish shart emas).
+  /// "Yana N ta ko'rsatish" / "Yashirish" — butun qator bosiladi.
   Widget _segmentsToggle(int hiddenCount) {
-    final isDark = context.themeProvider.isDark;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+    final Color accent = _isDark ? Colors.white : ProjectTheme.brandColor;
+    return InkWell(
       onTap: () => setState(() => _segmentsExpanded = !_segmentsExpanded),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: _accent.withAlpha(isDark ? 30 : 14),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: _accent.withAlpha(isDark ? 70 : 45),
-            width: 1,
-          ),
-        ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Flexible(
@@ -508,9 +532,9 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: context.textTheme.bodySmall?.copyWith(
-                  fontSize: 12.5,
+                  fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: _accent,
+                  color: accent,
                 ),
               ),
             ),
@@ -519,10 +543,11 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
               turns: _segmentsExpanded ? 0.5 : 0,
               duration: const Duration(milliseconds: 200),
               curve: Curves.easeOutCubic,
-              child: Icon(
-                Icons.keyboard_arrow_down_rounded,
-                size: 18,
-                color: _accent,
+              child: SvgPicture.asset(
+                Assets.iconsFormChevronDownIcon,
+                width: 18,
+                height: 18,
+                colorFilter: ColorFilter.mode(accent, BlendMode.srcIn),
               ),
             ),
           ],
@@ -531,158 +556,134 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
     );
   }
 
-  /// Marshrut cheti: yirik vaqt + aeroport kodi.
+  /// Marshrut cheti: yirik vaqt, aeroport kodi va shahar.
   Widget _endpoint({
     required String time,
     required String code,
+    required String city,
     required bool alignEnd,
   }) {
-    return Column(
-      crossAxisAlignment:
-          alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-      children: [
-        Text(
-          ElementFormatter.formatTime(time),
-          style: context.textTheme.bodyLarge?.copyWith(
-            fontSize: 21,
-            fontWeight: FontWeight.w800,
-            height: 1.05,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          code,
-          style: context.textTheme.bodySmall?.copyWith(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.8,
-            color: _secondaryColor(context),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// Punktir "parvoz chizig'i": ○ ─ ─ ✈ ─ ─ ○ va ostida davomiylik.
-  Widget _routePath(String duration) {
-    final isDark = context.themeProvider.isDark;
-    final dashColor =
-        isDark ? Colors.white.withAlpha(45) : const Color(0xffCBD3DD);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          children: [
-            _pathDot(),
-            const SizedBox(width: 4),
-            Expanded(child: DashedLine(color: dashColor)),
-            const SizedBox(width: 6),
-            Transform.rotate(
-              angle: math.pi / 2,
-              child: Icon(Icons.flight_rounded, size: 16, color: _accent),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 60, maxWidth: 104),
+      child: Column(
+        crossAxisAlignment:
+            alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              ElementFormatter.formatTime(time),
+              style: context.textTheme.bodyLarge?.copyWith(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                height: 1.1,
+                color: _textColor,
+              ),
             ),
-            const SizedBox(width: 6),
-            Expanded(child: DashedLine(color: dashColor)),
-            const SizedBox(width: 4),
-            _pathDot(),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          duration,
-          style: context.textTheme.bodySmall?.copyWith(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: _secondaryColor(context),
           ),
-        ),
-      ],
+          const SizedBox(height: 3),
+          Text(
+            code,
+            style: context.textTheme.bodySmall?.copyWith(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: _textColor,
+            ),
+          ),
+          if (city.isNotEmpty)
+            Text(
+              city,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: alignEnd ? TextAlign.end : TextAlign.start,
+              style: context.textTheme.bodySmall?.copyWith(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: _muted,
+              ),
+            ),
+        ],
+      ),
     );
   }
 
-  Widget _pathDot() {
-    return Container(
-      width: 7,
-      height: 7,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: _accent, width: 1.5),
+  /// Davomiylik, ingichka chiziq va o'rtada samolyot.
+  Widget _routePath(String duration) {
+    final Color dot = _isDark ? Colors.white54 : const Color(0xFFB7C0D3);
+    Widget endDot() => Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: dot, width: 1.5),
+          ),
+        );
+    Widget line() => Expanded(child: Container(height: 1.5, color: _line));
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            duration,
+            maxLines: 1,
+            style: context.textTheme.bodySmall?.copyWith(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: _muted,
+            ),
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            height: 16,
+            child: Row(
+              children: [
+                endDot(),
+                line(),
+                Transform.rotate(
+                  angle: math.pi / 4,
+                  child: SvgPicture.asset(
+                    Assets.iconsPlaceAirportIcon,
+                    width: 16,
+                    height: 16,
+                    colorFilter: ColorFilter.mode(
+                        ProjectTheme.brandColor, BlendMode.srcIn),
+                  ),
+                ),
+                line(),
+                endDot(),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
   /// Aviakompaniya logosi — yuklanmasa parvoz belgisi ko'rsatiladi.
   Widget _carrierLogo(ConfirmedTicketSegment segment) {
-    final isDark = context.themeProvider.isDark;
     return Container(
-      width: 26,
-      height: 26,
-      padding: const EdgeInsets.all(2),
+      width: 28,
+      height: 28,
+      padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: isDark ? Colors.white.withAlpha(15) : _accent.withAlpha(16),
+        color: Colors.white,
         shape: BoxShape.circle,
-        border: Border.all(
-          color: isDark ? Colors.white.withAlpha(40) : _accent.withAlpha(50),
-          width: 1,
-        ),
+        border: Border.all(color: _line),
       ),
       child: ClipOval(
         child: Image.network(
           ProjectAssets.getSegmentProviderImg(
               segment.provider?.supplier?.code ?? ""),
           cacheWidth: 72,
-          fit: BoxFit.cover,
+          fit: BoxFit.contain,
           errorBuilder: (_, __, ___) => Icon(
-            Icons.flight_takeoff_rounded,
-            size: 13,
-            color: _accent,
+            Icons.flight_rounded,
+            size: 14,
+            color: ProjectTheme.brandColor,
           ),
         ),
-      ),
-    );
-  }
-
-  // ──────────────────────────────────────────────────────────────────
-  //  PERFORATSIYA
-  // ──────────────────────────────────────────────────────────────────
-
-  /// Chipta "yirtish" chizig'i: ikki chetda sahifa foni rangidagi yarim
-  /// doira "kesik"lar va o'rtada punktir. Kesiklar karta chetiga chiqib
-  /// turadi (Clip.none) — haqiqiy talon effekti.
-  Widget _perforation(BuildContext context) {
-    final isDark = context.themeProvider.isDark;
-    // Kartaning orqasidagi sahifa foni — notch "teshik" bo'lib ko'rinsin.
-    final Color bg = Theme.of(context).scaffoldBackgroundColor;
-    final Color rim =
-        isDark ? Colors.white.withAlpha(15) : Colors.black.withAlpha(8);
-    final dashColor =
-        isDark ? Colors.white.withAlpha(35) : const Color(0xffDBDCDF);
-    return SizedBox(
-      height: _notchRadius * 2,
-      width: double.infinity,
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.center,
-        children: [
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: _notchRadius + 8),
-            child: DashedLine(color: dashColor),
-          ),
-          Positioned(left: -_notchRadius, child: _notch(bg, rim)),
-          Positioned(right: -_notchRadius, child: _notch(bg, rim)),
-        ],
-      ),
-    );
-  }
-
-  Widget _notch(Color bg, Color rim) {
-    return Container(
-      width: _notchRadius * 2,
-      height: _notchRadius * 2,
-      decoration: BoxDecoration(
-        color: bg,
-        shape: BoxShape.circle,
-        border: Border.all(color: rim, width: 1),
       ),
     );
   }
@@ -692,8 +693,7 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
   // ──────────────────────────────────────────────────────────────────
 
   /// Holatga qarab tugma: Booked (muddati o'tmagan) — to'lovga o'tish,
-  /// Ticketed/Paid — chiptani yuklab olish, qolganlarida tugma yo'q
-  /// (holat chipi o'zi yetarli).
+  /// Ticketed/Paid — chiptani yuklab olish, qolganlarida tugma yo'q.
   Widget? _actionFor(String status, ConfirmTicketResponseData responseData) {
     switch (status) {
       case 'Booked':
@@ -709,96 +709,91 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
     }
   }
 
+  void _openPayment(ConfirmTicketResponseData responseData) {
+    final price = FlightPrice(
+        uzs: FluffyUzs(
+          amount: ElementFormatter.formatNumberWithSpaces(
+              responseData.book!.order!.price!.uzs!.amount ?? 0),
+        ),
+        rub: null,
+        usd: null);
+    Navigator.push(
+        context,
+        MaterialPageRoute(
+          settings: RouteSettings(name: BookingConfirmPage.routeName),
+          builder: (context) => BookingConfirmPage(
+              passengerNumber: responseData.book?.passengers?.length ?? 0,
+              bookingCreateModel: BookingCreateModel(
+                  billingId:
+                      responseData.book?.order?.billingNumber.toString() ?? "",
+                  trId: widget.ticketsModel.transaction?.trId ?? "",
+                  createdAt: widget.ticketsModel.createdAt),
+              price: price),
+        ));
+  }
+
+  /// To'lovga o'tish — to'liq brend tugma, o'ngda qolgan vaqt.
   Widget _buildPayButton(ConfirmTicketResponseData responseData) {
-    const radius = BorderRadius.all(Radius.circular(16));
-    return Container(
-      width: double.infinity,
-      height: 52,
+    final brand = ProjectTheme.brandColor;
+    return DecoratedBox(
       decoration: BoxDecoration(
-        borderRadius: radius,
+        borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: ProjectTheme.brandColor.withAlpha(100),
+            color: brand.withValues(alpha: 0.25),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Material(
-        color: Colors.transparent,
-        borderRadius: radius,
+        color: brand,
+        borderRadius: BorderRadius.circular(14),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          borderRadius: radius,
           onTap: () {
-            final price = FlightPrice(
-                uzs: FluffyUzs(
-                  amount: ElementFormatter.formatNumberWithSpaces(
-                      responseData.book!.order!.price!.uzs!.amount ?? 0),
-                ),
-                rub: null,
-                usd: null);
-            Navigator.push(
-                context,
-                MaterialPageRoute(
-                  settings: RouteSettings(name: BookingConfirmPage.routeName),
-                  builder: (context) => BookingConfirmPage(
-                      passengerNumber:
-                          responseData.book?.passengers?.length ?? 0,
-                      bookingCreateModel: BookingCreateModel(
-                          billingId: responseData.book?.order?.billingNumber
-                                  .toString() ??
-                              "",
-                          trId: widget.ticketsModel.transaction?.trId ?? "",
-                          createdAt: widget.ticketsModel.createdAt),
-                      price: price),
-                ));
+            HapticFeedback.lightImpact();
+            _openPayment(responseData);
           },
-          child: Ink(
-            decoration: BoxDecoration(
-              borderRadius: radius,
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [
-                  ProjectTheme.brandColor,
-                  ProjectTheme.blueBg,
-                ],
-              ),
-            ),
+          child: SizedBox(
+            height: 52,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
+              padding: const EdgeInsets.fromLTRB(16, 0, 8, 0),
               child: Row(
                 children: [
-                  Container(
-                    width: 30,
-                    height: 30,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withAlpha(55),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.credit_card_rounded,
-                      color: Colors.white,
-                      size: 16,
-                    ),
+                  SvgPicture.asset(
+                    Assets.iconsOrderCardIcon,
+                    width: 20,
+                    height: 20,
+                    colorFilter:
+                        const ColorFilter.mode(Colors.white, BlendMode.srcIn),
                   ),
                   const SizedBox(width: 10),
-                  Text(
-                    "proceed_to_payment".tr(),
-                    style: context.textTheme.bodyMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 15,
+                  Expanded(
+                    child: Text(
+                      "proceed_to_payment".tr(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.textTheme.bodyMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15.5,
+                      ),
                     ),
                   ),
-                  const Spacer(),
-                  ExpireTimeText(
-                    createdAt: widget.ticketsModel.createdAt ?? "",
-                    onExpired: () {
-                      if (mounted) setState(() {});
-                    },
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: ExpireTimeText(
+                      createdAt: widget.ticketsModel.createdAt ?? "",
+                      onExpired: () {
+                        if (mounted) setState(() {});
+                      },
+                    ),
                   ),
                 ],
               ),
@@ -809,107 +804,63 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
     );
   }
 
+  /// Elektron chiptani yuklab olish — yumshoq (tonal) brend tugma.
   Widget _buildDownloadButton(ConfirmTicketResponseData responseData) {
     final brand = ProjectTheme.brandColor;
-    final isDark = context.themeProvider.isDark;
-    return SizedBox(
-      width: double.infinity,
-      height: 52,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () {
-            if (!_isLoading) {
-              downloadAndOpenFile(_ticketReceiptUrl(responseData),
-                  widget.ticketsModel.billingId ?? "");
-            }
-          },
-          child: Ink(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: brand, width: 1.4),
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [
-                  brand.withAlpha(isDark ? 70 : 20),
-                  ProjectTheme.blueBg.withAlpha(isDark ? 70 : 20),
-                ],
-              ),
-              boxShadow: isDark
-                  ? [
-                      BoxShadow(
-                        color: brand.withAlpha(60),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 30,
-                    height: 30,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [brand, ProjectTheme.blueBg],
-                      ),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: brand.withAlpha(80),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
+    final Color fg = _isDark ? Colors.white : brand;
+    return Material(
+      color: _isDark
+          ? Colors.white.withValues(alpha: 0.10)
+          : brand.withValues(alpha: 0.10),
+      borderRadius: BorderRadius.circular(14),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () {
+          if (!_isLoading) {
+            HapticFeedback.lightImpact();
+            downloadAndOpenFile(_ticketReceiptUrl(responseData),
+                widget.ticketsModel.billingId ?? "");
+          }
+        },
+        child: SizedBox(
+          height: 52,
+          child: Center(
+            child: _isLoading
+                ? SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.4,
+                      color: fg,
                     ),
-                    child: const Icon(
-                      Icons.picture_as_pdf_rounded,
-                      color: Colors.white,
-                      size: 16,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  _isLoading
-                      ? SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.2,
-                            color: isDark ? Colors.white : brand,
-                          ),
-                        )
-                      : Text(
+                  )
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SvgPicture.asset(
+                        Assets.iconsOrderDownloadIcon,
+                        width: 20,
+                        height: 20,
+                        colorFilter: ColorFilter.mode(fg, BlendMode.srcIn),
+                      ),
+                      const SizedBox(width: 10),
+                      Flexible(
+                        child: Text(
                           "download_e_ticket".tr(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: context.textTheme.bodyMedium?.copyWith(
-                            color: isDark ? Colors.white : brand,
-                            fontWeight: FontWeight.w800,
+                            color: fg,
+                            fontWeight: FontWeight.w700,
                             fontSize: 15,
                           ),
                         ),
-                  const SizedBox(width: 8),
-                  if (!_isLoading)
-                    Icon(
-                      Icons.download_rounded,
-                      color: isDark ? Colors.white : brand,
-                      size: 18,
-                    ),
-                ],
-              ),
-            ),
+                      ),
+                    ],
+                  ),
           ),
         ),
       ),
     );
   }
 }
-
-/// Stub qatori: bosiq (tint) belgi kvadrati + tavsif + qiymat. Avvalgi
-/// gradient-glow uslubidan sokinroq — e'tibor marshrut va narxda qoladi.

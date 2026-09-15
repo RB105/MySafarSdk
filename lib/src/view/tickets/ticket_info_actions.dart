@@ -11,8 +11,7 @@ class _MapRouteButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = context.isDarkMode;
-    final brand =
-        isDark ? ProjectTheme.accentLight : ProjectTheme.brandColor;
+    final brand = isDark ? ProjectTheme.accentLight : ProjectTheme.brandColor;
     final secondary = isDark
         ? ProjectTheme.secondaryTextDark
         : ProjectTheme.secondaryTextLight;
@@ -83,173 +82,174 @@ class _MapRouteButton extends StatelessWidget {
 //  BOOK BUTTON
 // ════════════════════════════════════════════════════════════════════
 
-class _BookButton extends StatelessWidget {
+class _BookButton extends StatefulWidget {
   final String priceLabel;
   final VoidCallback onTap;
   final bool enabled;
   final bool isLoading;
+
+  /// Narx necha kishi uchunligi ("Umumiy narx 2 kishi uchun").
+  final int passengerCount;
 
   const _BookButton({
     required this.priceLabel,
     required this.onTap,
     this.enabled = true,
     this.isLoading = false,
+    this.passengerCount = 1,
   });
 
   @override
+  State<_BookButton> createState() => _BookButtonState();
+}
+
+/// Pastki panel: chapda umumiy narx, o'ngda katta "Buyurtma berish" tugmasi
+/// (54px, bosilganda biroz kichrayadi). Reys tekshirilayotganda — spinner,
+/// bron qilib bo'lmasa — kulrang.
+class _BookButtonState extends State<_BookButton> {
+  bool _pressed = false;
+
+  bool get _tappable => widget.enabled && !widget.isLoading;
+
+  void _setPressed(bool value) {
+    if (_pressed != value) setState(() => _pressed = value);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
     final brand = ProjectTheme.brandColor;
-    return Opacity(
-      opacity: enabled ? 1 : 0.5,
-      child: SizedBox(
-        width: double.infinity,
-        height: 64,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(20),
-            onTap: enabled ? onTap : null,
-            child: Ink(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [brand, ProjectTheme.blueBg],
+    final muted =
+        isDark ? ProjectTheme.secondaryTextDark : const Color(0xFF5B6475);
+    final priceColor =
+        isDark ? ProjectTheme.textColorDark : ProjectTheme.textColorLight;
+
+    final bool unavailable = !widget.enabled && !widget.isLoading;
+    final Color buttonColor = unavailable
+        ? (isDark
+            ? Colors.white.withValues(alpha: 0.10)
+            : const Color(0xFFE3E7F0))
+        : widget.isLoading
+            ? brand.withValues(alpha: 0.65)
+            : brand;
+    final Color contentColor = unavailable ? muted : Colors.white;
+
+    return Row(
+      children: [
+        Expanded(
+          flex: 5,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "total_price_label"
+                    .tr(namedArgs: {"count": "${widget.passengerCount}"}),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: context.textTheme.bodySmall?.copyWith(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w500,
+                  color: muted,
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: brand.withAlpha(30),
-                    blurRadius: 14,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
               ),
-              child: Stack(
-                children: [
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: Container(
-                      height: 28,
-                      decoration: BoxDecoration(
-                        borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(20)),
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.white.withAlpha(48),
-                            Colors.white.withAlpha(0),
+              const SizedBox(height: 2),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  widget.priceLabel,
+                  maxLines: 1,
+                  style: context.textTheme.bodyLarge?.copyWith(
+                    fontSize: 21,
+                    fontWeight: FontWeight.w800,
+                    height: 1.15,
+                    color: priceColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 6,
+          child: Semantics(
+            button: true,
+            enabled: _tappable,
+            label: "book_ticket".tr(),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapDown: _tappable ? (_) => _setPressed(true) : null,
+              onTapCancel: () => _setPressed(false),
+              onTapUp: _tappable
+                  ? (_) {
+                      _setPressed(false);
+                      widget.onTap();
+                    }
+                  : null,
+              child: AnimatedScale(
+                scale: _pressed ? 0.96 : 1,
+                duration: const Duration(milliseconds: 120),
+                curve: Curves.easeOut,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: buttonColor,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: unavailable || widget.isLoading
+                        ? null
+                        : [
+                            BoxShadow(
+                              color: brand.withValues(alpha: 0.28),
+                              blurRadius: 14,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  alignment: Alignment.center,
+                  child: widget.isLoading
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                "book_ticket".tr(),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: context.textTheme.bodyLarge?.copyWith(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: contentColor,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            SvgPicture.asset(
+                              Assets.iconsBookingArrowRightIcon,
+                              width: 20,
+                              height: 20,
+                              colorFilter: ColorFilter.mode(
+                                  contentColor, BlendMode.srcIn),
+                            ),
                           ],
                         ),
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(18, 8, 8, 8),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                "total_price".tr(),
-                                style: TextStyle(
-                                  color: Colors.white.withAlpha(215),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                  height: 1.1,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              FittedBox(
-                                fit: BoxFit.scaleDown,
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  priceLabel,
-                                  maxLines: 1,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w800,
-                                    height: 1.15,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Container(
-                          padding: const EdgeInsets.fromLTRB(16, 9, 9, 9),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(15),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withAlpha(20),
-                                blurRadius: 8,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                "book_ticket".tr(),
-                                style: TextStyle(
-                                  color: brand,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                width: 26,
-                                height: 26,
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [brand, ProjectTheme.blueBg],
-                                  ),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: isLoading
-                                    ? const SizedBox(
-                                        width: 14,
-                                        height: 14,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor: AlwaysStoppedAnimation(
-                                              Colors.white),
-                                        ),
-                                      )
-                                    : const Icon(
-                                        Icons.arrow_forward_rounded,
-                                        color: Colors.white,
-                                        size: 15,
-                                      ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
         ),
-      ),
+      ],
     );
   }
 }

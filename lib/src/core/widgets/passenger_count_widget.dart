@@ -1,17 +1,28 @@
-import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:flutter_svg/svg.dart';
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
+import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart' show ProjectTheme;
+import 'package:mysafar_sdk/src/generated/assets.dart';
 
-/// Yo'lovchilar soni va tarif (klass) tanlash sheet'i — zamonaviy karta
-/// uslubida: dumaloq +/- tugmalar, tanlangan klass brand hoshiya bilan
-/// ajratiladi. Natija `{"adt","chd","inf","klass"}` map ko'rinishida
-/// qaytariladi (eski shartnoma saqlangan).
+/// Yo'lovchilar soni va tarif (klass) tanlash sheet'i — joy qidirish va
+/// kalendar oynalari bilan bir xil uslub: markazlangan sarlavha, chapda
+/// yopish, tekis ro'yxat + ingichka ajratgichlar, pastda bitta brend tugma.
+/// Natija `{"adt","chd","inf","klass"}` map ko'rinishida qaytariladi (eski
+/// shartnoma saqlangan).
 class PassengerCountWidget extends StatefulWidget {
   final Map<String, dynamic> params;
 
-  const PassengerCountWidget({super.key, required this.params});
+  /// Sheet'ning `DraggableScrollableSheet` controller'i — ro'yxat eng tepada
+  /// bo'lganda pastga tortib yopish shu orqali ishlaydi.
+  final ScrollController? scrollController;
+
+  const PassengerCountWidget({
+    super.key,
+    required this.params,
+    this.scrollController,
+  });
 
   @override
   State<PassengerCountWidget> createState() => _PassengerCountWidgetState();
@@ -22,6 +33,20 @@ class _PassengerCountWidgetState extends State<PassengerCountWidget> {
   int chd = 0;
   int inf = 0;
   String klass = 'a';
+
+  /// Ro'yxat surilganda sarlavha ostida chiziq ko'rsatiladi.
+  final ValueNotifier<bool> _isScrolled = ValueNotifier(false);
+
+  static const double _hPadding = 16;
+  static const int _maxPassengers = 9;
+
+  static const _klassOptions = [
+    ('e', 'klass_e'),
+    ('b', 'klass_b'),
+    ('f', 'klass_f'),
+    ('w', 'klass_w'),
+    ('a', 'klass_a'),
+  ];
 
   @override
   void initState() {
@@ -34,7 +59,15 @@ class _PassengerCountWidgetState extends State<PassengerCountWidget> {
     }
   }
 
-  bool get isMax => adt + chd + inf == 9;
+  @override
+  void dispose() {
+    _isScrolled.dispose();
+    super.dispose();
+  }
+
+  bool get isMax => adt + chd + inf == _maxPassengers;
+
+  bool get _isDefault => adt == 1 && chd == 0 && inf == 0 && klass == 'a';
 
   void _apply() {
     HapticFeedback.mediumImpact();
@@ -43,7 +76,7 @@ class _PassengerCountWidgetState extends State<PassengerCountWidget> {
   }
 
   void _reset() {
-    HapticFeedback.lightImpact();
+    HapticFeedback.selectionClick();
     setState(() {
       adt = 1;
       chd = 0;
@@ -52,163 +85,172 @@ class _PassengerCountWidgetState extends State<PassengerCountWidget> {
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // Colors
+  // ---------------------------------------------------------------------------
+
+  Color get _sheetColor => context.isDarkMode
+      ? ProjectTheme.cardColorDark
+      : ProjectTheme.cardColorLight;
+
+  Color get _textColor => context.isDarkMode
+      ? ProjectTheme.textColorDark
+      : ProjectTheme.textColorLight;
+
+  Color get _secondaryColor => context.isDarkMode
+      ? ProjectTheme.secondaryTextDark
+      : ProjectTheme.secondaryTextLight;
+
+  Color get _borderColor =>
+      context.isDarkMode ? ProjectTheme.borderDark : ProjectTheme.borderLight;
+
+  TextStyle get _titleStyle => context.textTheme.bodyMedium!.copyWith(
+        color: _textColor,
+        fontSize: 16,
+        fontWeight: FontWeight.w400,
+        height: 1.25,
+      );
+
+  // ---------------------------------------------------------------------------
+  // Build
+  // ---------------------------------------------------------------------------
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: 10),
-            // Dastak.
-            Container(
-              width: 44,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.withAlpha(110),
-                borderRadius: BorderRadius.circular(2),
-              ),
+      backgroundColor: _sheetColor,
+      body: Column(
+        children: [
+          _buildHeader(context),
+          ValueListenableBuilder<bool>(
+            valueListenable: _isScrolled,
+            builder: (context, scrolled, _) => AnimatedOpacity(
+              opacity: scrolled ? 1 : 0,
+              duration: const Duration(milliseconds: 150),
+              child: Divider(height: 1, thickness: 1, color: _borderColor),
             ),
-            // Sarlavha + yopish.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 10, 4),
-              child: Row(
+          ),
+          Expanded(
+            child: NotificationListener<ScrollUpdateNotification>(
+              onNotification: (n) {
+                if (n.depth == 0) _isScrolled.value = n.metrics.pixels > 0;
+                return false;
+              },
+              child: ListView(
+                controller: widget.scrollController,
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(_hPadding, 4, _hPadding, 24),
                 children: [
-                  Expanded(
-                    child: Text(
-                      "passenger_count_title".tr(),
-                      style: context.textTheme.displayLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 19,
-                      ),
+                  _counterRow(
+                    title: "above_12".tr(),
+                    count: adt,
+                    canRemove: adt > 1,
+                    onRemove: () => setState(() => adt--),
+                    onAdd: () => setState(() => adt++),
+                  ),
+                  _divider(),
+                  _counterRow(
+                    title: "between_2_12".tr(),
+                    count: chd,
+                    canRemove: chd > 0,
+                    onRemove: () => setState(() => chd--),
+                    onAdd: () => setState(() => chd++),
+                  ),
+                  _divider(),
+                  _counterRow(
+                    title: "under_2".tr(),
+                    count: inf,
+                    canRemove: inf > 0,
+                    onRemove: () => setState(() => inf--),
+                    onAdd: () => setState(() => inf++),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    "show_age_feedback_subtitle".tr(),
+                    style: context.textTheme.bodyMedium?.copyWith(
+                      color: _secondaryColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w400,
+                      height: 1.35,
                     ),
                   ),
-                  Material(
-                    color: ProjectTheme.borderLight.withAlpha(120),
-                    shape: const CircleBorder(),
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      onTap: () => Navigator.pop(context),
-                      child: const SizedBox(
-                        width: 36,
-                        height: 36,
-                        child: Icon(Icons.close_rounded, size: 20),
-                      ),
-                    ),
-                  ),
+                  _sectionTitle("klass_tab".tr()),
+                  for (int i = 0; i < _klassOptions.length; i++) ...[
+                    if (i > 0) _divider(),
+                    _klassRow(_klassOptions[i].$1, _klassOptions[i].$2.tr()),
+                  ],
                 ],
               ),
             ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "passenger_count_header".tr(),
-                      style: context.textTheme.headlineSmall
-                          ?.copyWith(fontSize: 13),
-                    ),
-                    const SizedBox(height: 8),
-                    // Yo'lovchilar kartasi.
-                    Container(
-                      decoration: BoxDecoration(
-                        color: context.color.primaryContainer,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: context.shadowDown,
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 6),
-                      child: Column(
-                        children: [
-                          _counterRow(
-                            title: "above_12".tr(),
-                            count: adt,
-                            canRemove: adt > 1,
-                            onRemove: () => setState(() => adt--),
-                            onAdd: () => setState(() => adt++),
-                          ),
-                          _divider(),
-                          _counterRow(
-                            title: "between_2_12".tr(),
-                            count: chd,
-                            canRemove: chd > 0,
-                            onRemove: () => setState(() => chd--),
-                            onAdd: () => setState(() => chd++),
-                          ),
-                          _divider(),
-                          _counterRow(
-                            title: "under_2".tr(),
-                            count: inf,
-                            canRemove: inf > 0,
-                            onRemove: () => setState(() => inf--),
-                            onAdd: () => setState(() => inf++),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      "show_age_feedback_subtitle".tr(),
-                      style: context.textTheme.headlineSmall
-                          ?.copyWith(fontSize: 12, height: 1.4),
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      "klass_tab".tr(),
-                      style: context.textTheme.headlineSmall
-                          ?.copyWith(fontSize: 13),
-                    ),
-                    const SizedBox(height: 8),
-                    // Tarif (klass) tanlash — tanlangani brand hoshiya bilan.
-                    for (final entry in const [
-                      ('e', 'klass_e'),
-                      ('b', 'klass_b'),
-                      ('f', 'klass_f'),
-                      ('w', 'klass_w'),
-                      ('a', 'klass_a'),
-                    ]) ...[
-                      _klassRow(entry.$1, entry.$2.tr()),
-                      const SizedBox(height: 8),
-                    ],
-                  ],
+          ),
+          _buildBottomBar(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
+      child: SizedBox(
+        height: 48,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 92),
+              child: Text(
+                "passenger_count_header".tr(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: context.textTheme.labelMedium?.copyWith(
+                  color: _textColor,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
-            // Pastki tugmalar.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 52,
-                      child: ElevatedButton(
-                        style: context.filterCancelButtonStyle,
-                        onPressed: _reset,
-                        child: Text("reset".tr(),
-                            style: context.textTheme.bodyMedium),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: IconButton(
+                onPressed: () => Navigator.pop(context),
+                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                icon: SvgPicture.asset(
+                  Assets.iconsPlaceCloseIcon,
+                  width: 24,
+                  height: 24,
+                  colorFilter: ColorFilter.mode(_textColor, BlendMode.srcIn),
+                ),
+              ),
+            ),
+            // "Qayta" — faqat standart qiymatlardan farq qilganda ko'rinadi.
+            Align(
+              alignment: Alignment.centerRight,
+              child: AnimatedOpacity(
+                opacity: _isDefault ? 0 : 1,
+                duration: const Duration(milliseconds: 150),
+                child: IgnorePointer(
+                  ignoring: _isDefault,
+                  child: TextButton(
+                    onPressed: _reset,
+                    style: TextButton.styleFrom(
+                      foregroundColor: ProjectTheme.brandColor,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      minimumSize: const Size(48, 40),
+                    ),
+                    child: Text(
+                      "reset".tr(),
+                      maxLines: 1,
+                      style: context.textTheme.bodyMedium?.copyWith(
+                        color: context.isDarkMode
+                            ? ProjectTheme.linkDark
+                            : ProjectTheme.brandColor,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: SizedBox(
-                      height: 52,
-                      child: ElevatedButton(
-                        style: ProjectTheme.blueButtonStyle,
-                        onPressed: _apply,
-                        child: Text(
-                          "apply".tr(),
-                          style: context.textTheme.bodyMedium?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ],
@@ -217,10 +259,62 @@ class _PassengerCountWidgetState extends State<PassengerCountWidget> {
     );
   }
 
-  Widget _divider() =>
-      Divider(height: 1, thickness: 1, color: ProjectTheme.borderLight);
+  Widget _buildBottomBar() {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _sheetColor,
+        border: Border(top: BorderSide(color: _borderColor)),
+      ),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          _hPadding,
+          12,
+          _hPadding,
+          12 + context.bottomPadding,
+        ),
+        child: SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: ElevatedButton(
+            onPressed: _apply,
+            style: ProjectTheme.blueButtonStyle.copyWith(
+              elevation: const WidgetStatePropertyAll(0),
+            ),
+            child: Text(
+              "apply".tr(),
+              style: context.textTheme.bodyMedium?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
-  /// Bitta yo'lovchi turi qatori: nom + dumaloq -/soni/+ boshqaruvi.
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+
+  Widget _divider() => Divider(height: 1, thickness: 1, color: _borderColor);
+
+  Widget _sectionTitle(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 24, bottom: 4),
+      child: Text(
+        text,
+        style: context.textTheme.labelMedium?.copyWith(
+          color: _textColor,
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  /// Bitta yo'lovchi turi qatori: yosh oralig'i + -/soni/+ boshqaruvi.
   Widget _counterRow({
     required String title,
     required int count,
@@ -229,134 +323,102 @@ class _PassengerCountWidgetState extends State<PassengerCountWidget> {
     required VoidCallback onAdd,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
-          Expanded(
-            child: Text(
-              title,
-              style: context.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                fontSize: 15,
-              ),
-            ),
-          ),
-          _roundButton(
+          Expanded(child: Text(title.trim(), style: _titleStyle)),
+          _stepButton(
             icon: Icons.remove_rounded,
             enabled: canRemove,
-            filled: false,
-            onTap: () {
-              if (!canRemove) return;
-              HapticFeedback.lightImpact();
-              onRemove();
-            },
+            onTap: onRemove,
           ),
           SizedBox(
-            width: 40,
-            child: Center(
-              child: Text(
-                "$count",
-                style: context.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 16,
-                ),
+            width: 44,
+            child: Text(
+              "$count",
+              textAlign: TextAlign.center,
+              style: context.textTheme.labelMedium?.copyWith(
+                color: _textColor,
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
-          _roundButton(
+          _stepButton(
             icon: Icons.add_rounded,
             enabled: !isMax,
-            filled: true,
-            onTap: () {
-              if (isMax) return;
-              HapticFeedback.lightImpact();
-              onAdd();
-            },
+            onTap: onAdd,
           ),
         ],
       ),
     );
   }
 
-  /// Dumaloq +/- tugma: qo'shish — to'ldirilgan brand, ayirish — hoshiyali.
-  Widget _roundButton({
+  /// Hoshiyali dumaloq +/- tugma; o'chiq holatda xiralashadi.
+  Widget _stepButton({
     required IconData icon,
     required bool enabled,
-    required bool filled,
     required VoidCallback onTap,
   }) {
-    final Color brand = ProjectTheme.brandColor;
     return AnimatedOpacity(
-      duration: const Duration(milliseconds: 200),
-      opacity: enabled ? 1.0 : 0.35,
+      duration: const Duration(milliseconds: 150),
+      opacity: enabled ? 1 : 0.35,
       child: Material(
-        color: filled ? brand : Colors.transparent,
-        shape: filled
-            ? const CircleBorder()
-            : CircleBorder(side: BorderSide(color: brand, width: 1.4)),
+        color: Colors.transparent,
+        shape: CircleBorder(side: BorderSide(color: _borderColor, width: 1)),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: onTap,
-          child: SizedBox(
-            width: 38,
-            height: 38,
-            child: Icon(
-              icon,
-              size: 20,
-              color: filled ? Colors.white : brand,
-            ),
+          onTap: enabled
+              ? () {
+                  HapticFeedback.selectionClick();
+                  onTap();
+                }
+              : null,
+          child: SizedBox.square(
+            dimension: 36,
+            child: Icon(icon, size: 20, color: _textColor),
           ),
         ),
       ),
     );
   }
 
-  /// Klass qatori: tanlangani brand hoshiya + och fon + belgili radio.
+  /// Klass qatori: nom + o'ngda brend rangli radio halqa.
   Widget _klassRow(String type, String title) {
     final bool selected = klass == type;
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    return Material(
-      color: selected
-          ? ProjectTheme.brandColor.withAlpha(isDark ? 46 : 16)
-          : context.color.primaryContainer,
-      borderRadius: BorderRadius.circular(14),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () {
-          HapticFeedback.lightImpact();
-          setState(() => klass = type);
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: selected ? ProjectTheme.brandColor : ProjectTheme.borderLight,
-              width: selected ? 1.4 : 1,
-            ),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  title.trim(),
-                  style: context.textTheme.bodyMedium?.copyWith(
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    fontSize: 14.5,
-                  ),
+    return InkWell(
+      onTap: () {
+        if (selected) return;
+        HapticFeedback.selectionClick();
+        setState(() => klass = type);
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                title.trim(),
+                style: _titleStyle.copyWith(
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                 ),
               ),
-              Icon(
-                selected
-                    ? Icons.radio_button_checked_rounded
-                    : Icons.radio_button_off_rounded,
-                size: 22,
-                color: selected
-                    ? ProjectTheme.brandColor
-                    : Colors.grey.withAlpha(140),
+            ),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              curve: Curves.easeOut,
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected ? ProjectTheme.brandColor : _borderColor,
+                  width: selected ? 6.5 : 1.5,
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

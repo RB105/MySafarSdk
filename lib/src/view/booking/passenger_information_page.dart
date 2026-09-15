@@ -1,6 +1,7 @@
 // ignore_for_file: use_build_context_synchronously
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -9,13 +10,17 @@ import 'package:mysafar_sdk/src/core/styles/theme.dart';
 import 'package:mysafar_sdk/src/core/tools/formatters.dart'
     show ElementFormatter;
 import 'package:mysafar_sdk/src/core/tools/phone_format.dart';
+import 'package:mysafar_sdk/src/core/widgets/stable_keyboard_insets.dart';
 import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/cubit/booking/passenger/passenger_cubit.dart';
 import 'package:mysafar_sdk/src/cubit/booking/passenger/passenger_state.dart';
+import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_model.dart'
     show FlightElement;
 import 'package:mysafar_sdk/src/view/booking/booking_create_page.dart';
 import 'package:mysafar_sdk/src/view/booking/passenger_form_page.dart';
+import 'package:mysafar_sdk/src/view/booking/widget/booking_form_fields.dart'
+    show BookingFormStyle;
 import 'package:mysafar_sdk/src/view/booking/widget/contact_form_widget.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/next_button_widget.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/support_widget.dart';
@@ -116,6 +121,10 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
   bool _isContactControllersFilled = false;
   bool _formFieldFocused = false;
 
+  /// Klaviatura ustidagi "Keyingi" paneli. Sahifa yopilayotganda
+  /// ([StableKeyboardInsets.isLeaving]) oxirgi holatida qoladi.
+  bool _keyboardBarVisible = false;
+
   late final VoidCallback _focusListener;
 
   // Autocomplete tavsiyalari faqat saqlash xizmati orqali (saqlangan
@@ -190,62 +199,85 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
           });
         }
 
-        // Klavatura balandligi OS dan keladi — tugma aynan shu qiymatda
-        // joylashadi, orada bo'sh joy qolmaydi (har qanday qurilmada).
-        final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-        final showKeyboardBar = keyboardInset > 0;
-        const keyboardBarHeight = 44.0;
-
-        return Scaffold(
-          appBar: _buildAppBar(context),
-          // Scaffold o'zi insetni "yeb" qo'ymasligi kerak — aks holda
-          // Positioned(bottom: inset) ikki marta hisoblanib bo'shliq chiqadi
-          // yoki tugma klaviatura orqasida qoladi.
-          resizeToAvoidBottomInset: false,
-          body: Stack(
-            children: [
-              GestureDetector(
-                onTap: () => FocusScope.of(context).unfocus(),
-                child: SingleChildScrollView(
-                  controller: _scrollController,
-                  padding: EdgeInsets.fromLTRB(
-                    16,
-                    10,
-                    16,
-                    16 +
-                        (showKeyboardBar
-                            ? keyboardBarHeight + keyboardInset
-                            : 140),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildRouteSummary(context),
-                      const SizedBox(height: 12),
-                      const SupportWidget(),
-                      const SizedBox(height: 12),
-                      _buildContactForm(context, state),
-                      const SizedBox(height: 12),
-                      _buildPassengersList(context, state),
-                      const SizedBox(height: 8),
-                    ],
+        return StableKeyboardInsets(
+          child: Scaffold(
+            appBar: _buildAppBar(context),
+            // Klaviatura insetini o'zimiz beramiz (pastki panel shu balandlikda
+            // turadi) — Scaffold uni ikkinchi marta hisoblamasin.
+            resizeToAvoidBottomInset: false,
+            // Pastki panel kontent USTIGA emas, ostiga joylashadi — balandligi
+            // (narx + tugma + safe area) qanday bo'lmasin, oxirgi karta
+            // yashirinib qolmaydi.
+            body: Column(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: _dismissKeyboard,
+                    child: SingleChildScrollView(
+                      controller: _scrollController,
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildRouteSummary(context),
+                          const SizedBox(height: 12),
+                          const SupportWidget(),
+                          const SizedBox(height: 20),
+                          _SectionTitle("passenger_data_title".tr()),
+                          _buildPassengersList(context, state),
+                          const SizedBox(height: 20),
+                          _SectionTitle("your_contacts".tr()),
+                          _buildContactForm(context, state),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: showKeyboardBar ? keyboardInset : 0,
-                child: showKeyboardBar
-                    ? _buildKeyboardNextBar(context)
-                    : _buildBottomButton(context),
-              ),
-            ],
+                // Klaviatura har kadrda o'zgaradi — faqat pastki qism qayta
+                // quriladi, butun sahifa emas.
+                Builder(builder: _buildBottomArea),
+              ],
+            ),
           ),
         );
       },
     );
   }
+
+  /// Klaviatura ochiq va shu sahifadagi kontakt maydoni fokusda bo'lsa —
+  /// klaviatura ustida "Keyingi" paneli, aks holda narx + davom etish tugmasi.
+  ///
+  /// Fokus sharti muhim: yo'lovchi formasidan qaytishda (yoki ustidagi
+  /// sahifada yozilayotganda) klaviatura boshqa sahifaniki — panel bu yerda
+  /// chiqib, tugma bilan almashinib sakramasin.
+  Widget _buildBottomArea(BuildContext context) {
+    // Klavatura balandligi OS dan keladi — panel aynan shu qiymatda
+    // joylashadi, orada bo'sh joy qolmaydi (har qanday qurilmada).
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    if (!StableKeyboardInsets.isLeaving(ModalRoute.of(context))) {
+      _keyboardBarVisible =
+          keyboardInset > 0 && _allFormFocusNodes.any((node) => node.hasFocus);
+    }
+    if (!_keyboardBarVisible) return _buildBottomButton(context);
+
+    const keyboardBarHeight = 44.0;
+    return Padding(
+      padding: EdgeInsets.only(bottom: keyboardInset),
+      child: SizedBox(
+        height: keyboardBarHeight,
+        child: _buildKeyboardNextBar(context),
+      ),
+    );
+  }
+
+  /// `FocusScope.of(context).unfocus()` oxirgi maydonni route scope'ida eslab
+  /// qoladi — ustidagi sahifa yopilganda Flutter fokusni o'sha maydonga
+  /// qaytaradi va klaviatura kutilmaganda ochiladi. `primaryFocus.unfocus()`
+  /// bu xotirani tozalaydi.
+  static void _dismissKeyboard() =>
+      FocusManager.instance.primaryFocus?.unfocus();
 
   void _handleStateChanges(BuildContext context, PassengerState state) {
     if (state is PassengerLoaded) {
@@ -344,45 +376,84 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
       "passengers_count".tr(namedArgs: {"count": "$_totalPassengers"}),
     ];
 
+    final bool isRoundTrip = dir1.isNotEmpty;
+    final bool isDark = context.isDarkMode;
+    final brand = ProjectTheme.brandColor;
+
     return BookingCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
+      padding: const EdgeInsets.all(14),
+      child: Row(
         children: [
-          Row(
-            children: [
-              Flexible(
-                child: Text(
-                  origin,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: context.textTheme.bodyLarge
-                      ?.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
-                ),
+          Container(
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : brand.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(BookingFormStyle.radius),
+            ),
+            child: SvgPicture.asset(
+              Assets.iconsPlaceAirportIcon,
+              width: 22,
+              height: 22,
+              colorFilter: ColorFilter.mode(
+                isDark ? Colors.white : brand,
+                BlendMode.srcIn,
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Icon(Icons.swap_horiz_rounded,
-                    size: 18, color: ProjectTheme.brandColor),
-              ),
-              Flexible(
-                child: Text(
-                  dest,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: context.textTheme.bodyLarge
-                      ?.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
-                ),
-              ),
-            ],
+            ),
           ),
-          const SizedBox(height: 3),
-          Text(
-            parts.join(' · '),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: context.textTheme.headlineSmall?.copyWith(fontSize: 13),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        origin,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.textTheme.bodyLarge?.copyWith(
+                            fontSize: 16, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: Icon(
+                        isRoundTrip
+                            ? Icons.swap_horiz_rounded
+                            : Icons.arrow_forward_rounded,
+                        size: 17,
+                        color: BookingFormStyle.label(context),
+                      ),
+                    ),
+                    Flexible(
+                      child: Text(
+                        dest,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.textTheme.bodyLarge?.copyWith(
+                            fontSize: 16, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  parts.join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.textTheme.headlineSmall?.copyWith(
+                    fontSize: 13,
+                    color: BookingFormStyle.label(context),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -473,22 +544,23 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
     );
   }
 
-  /// Yo'lovchilar bitta kartada ixcham slotlar ko'rinishida: sarlavha
-  /// ("Yo'lovchi 1 (12 yoshdan katta)") va ostida bosiladigan maydon — bo'sh
-  /// bo'lsa "Ma'lumotlarni to'ldiring +", to'ldirilgan bo'lsa ism va tahrir
-  /// ikonkasi. Bosilganda alohida [PassengerFormPage] ochiladi.
+  /// Yo'lovchilar bitta kartada ro'yxat qatorlari ko'rinishida: holat
+  /// belgisi (bo'sh / to'ldirilgan / xato), ism yoki "N-yo'lovchi", yosh
+  /// toifasi va strelka. Bosilganda alohida [PassengerFormPage] ochiladi.
   Widget _buildPassengersList(BuildContext context, PassengerLoaded state) {
     return BookingCard(
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            "passenger_data_title".tr(),
-            style: context.textTheme.bodyLarge
-                ?.copyWith(fontSize: 17, fontWeight: FontWeight.w700),
-          ),
           for (int index = 0; index < _totalPassengers; index++) ...[
-            const SizedBox(height: 16),
+            if (index > 0)
+              Divider(
+                height: 1,
+                thickness: 1,
+                indent: 68,
+                endIndent: 16,
+                color: context.color.outline.withValues(alpha: 0.6),
+              ),
             _buildPassengerSlot(context, state, index),
           ],
         ],
@@ -496,13 +568,10 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
     );
   }
 
-  String _passengerSlotTitle(int index) {
-    final key = index < widget.adt
-        ? "passenger_adult"
-        : index < widget.adt + widget.chd
-            ? "passenger_child"
-            : "passenger_infant";
-    return key.tr(namedArgs: {"number": "${index + 1}"});
+  String _passengerAgeLabel(int index) {
+    if (index < widget.adt) return "above_12".tr();
+    if (index < widget.adt + widget.chd) return "between_2_12".tr();
+    return "under_2".tr();
   }
 
   Widget _buildPassengerSlot(
@@ -511,77 +580,110 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
     int index,
   ) {
     final passenger = state.passengers[index];
-    final filled = passenger.displayName.isNotEmpty;
-    final hasError = state.showErrors && !passenger.isValid;
-    final borderColor = hasError ? ProjectTheme.error : context.color.outline;
+    final bool filled = passenger.displayName.isNotEmpty;
+    final bool complete = passenger.isValid;
+    final bool hasError = state.showErrors && !complete;
+    final bool isDark = context.isDarkMode;
+    final brand = ProjectTheme.brandColor;
+    final Color muted = BookingFormStyle.label(context);
 
-    return Column(
+    final (String icon, Color iconColor, Color iconBg) = hasError
+        ? (
+            Assets.iconsBookingAlertIcon,
+            ProjectTheme.error,
+            ProjectTheme.error.withValues(alpha: isDark ? 0.18 : 0.10),
+          )
+        : complete
+            ? (
+                Assets.iconsBookingDoneIcon,
+                isDark ? Colors.white : brand,
+                isDark
+                    ? Colors.white.withValues(alpha: 0.10)
+                    : brand.withValues(alpha: 0.10),
+              )
+            : (
+                Assets.iconsBookingUserIcon,
+                muted,
+                isDark
+                    ? Colors.white.withValues(alpha: 0.06)
+                    : const Color(0xFFF1F4F9),
+              );
+
+    final String subtitle = hasError
+        ? "incomplete_passenger_data".tr()
+        : filled
+            ? _passengerAgeLabel(index)
+            : "${_passengerAgeLabel(index)} · ${"fill_passenger_data".tr()}";
+
+    return InkWell(
       key: _passengerSlotKeys[index],
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          _passengerSlotTitle(index),
-          style: context.textTheme.bodyMedium
-              ?.copyWith(fontSize: 15, fontWeight: FontWeight.w500),
-        ),
-        const SizedBox(height: 8),
-        Material(
-          color: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(width: 1.5, color: borderColor),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: () => _openPassengerForm(index),
-            child: SizedBox(
-              height: 56,
-              child: Padding(
-                padding: const EdgeInsets.only(left: 16, right: 12),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        filled
-                            ? passenger.displayName
-                            : "fill_passenger_data".tr(),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: filled
-                            ? context.textTheme.bodyMedium
-                                ?.copyWith(fontWeight: FontWeight.w600)
-                            : context.textTheme.headlineSmall?.copyWith(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                              ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Icon(
-                      filled ? Icons.edit_note_rounded : Icons.add_rounded,
-                      size: 26,
-                      color: ProjectTheme.brandColor,
-                    ),
-                  ],
-                ),
+      onTap: () => _openPassengerForm(index),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
+              child: SvgPicture.asset(
+                icon,
+                width: 22,
+                height: 22,
+                colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
               ),
             ),
-          ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    filled
+                        ? passenger.displayName
+                        : "passenger_number"
+                            .tr(namedArgs: {"number": "${index + 1}"}),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.textTheme.bodyMedium?.copyWith(
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.textTheme.bodySmall?.copyWith(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: hasError ? ProjectTheme.error : muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            SvgPicture.asset(
+              Assets.iconsBookingChevronRightIcon,
+              width: 20,
+              height: 20,
+              colorFilter: ColorFilter.mode(
+                BookingFormStyle.hint(context),
+                BlendMode.srcIn,
+              ),
+            ),
+          ],
         ),
-        if (hasError) ...[
-          const SizedBox(height: 6),
-          Text(
-            "incomplete_passenger_data".tr(),
-            style: context.textTheme.bodySmall
-                ?.copyWith(color: ProjectTheme.error, fontSize: 13),
-          ),
-        ],
-      ],
+      ),
     );
   }
 
   Future<void> _openPassengerForm(int index) async {
-    FocusScope.of(context).unfocus();
+    _dismissKeyboard();
     final cubit = context.read<PassengerCubit>();
     final current = cubit.state;
     if (current is! PassengerLoaded) return;
@@ -644,7 +746,7 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
   }
 
   Future<void> _scrollToContinueButton() async {
-    FocusScope.of(context).unfocus();
+    _dismissKeyboard();
     await _scrollToField(_continueButtonKey);
   }
 
@@ -731,7 +833,7 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
   }
 
   Future<void> _dismissKeyboardWhenComplete() async {
-    FocusScope.of(context).unfocus();
+    _dismissKeyboard();
     await _scrollToContinueButton();
   }
 
@@ -759,4 +861,22 @@ class _BookingFieldTarget {
     this.focusNode,
     this.validator,
   });
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 8),
+      child: Text(
+        text,
+        style: context.textTheme.bodyLarge
+            ?.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
 }

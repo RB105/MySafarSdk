@@ -62,6 +62,46 @@ class ConfirmedTicketsModel {
         : null;
   }
 
+  /// Tarjima kalitlaridagi (va rang/tugma mantiqidagi) kanonik holatlar.
+  static const List<String> knownStatuses = [
+    'Booked',
+    'Ticketed',
+    'Paid',
+    'AwaitPayment',
+    'PartiallyTicketed',
+    'TicketedWaitingPNR',
+    'Cancelled',
+    'Refunded',
+    'RefundInProcess',
+    'RefundAuthorized',
+    'PartiallyRefunded',
+  ];
+
+  static String _normalizeStatus(String s) =>
+      s.toLowerCase().replaceAll(RegExp(r'[\s_\-]'), '');
+
+  static final Map<String, String> _statusByKey = {
+    for (final s in knownStatuses) _normalizeStatus(s): s,
+    'canceled': 'Cancelled',
+    'awaitingpayment': 'AwaitPayment',
+  };
+
+  /// Buyurtma holati: `callback_status`, u bo'sh bo'lsa buyurtmaning o'z
+  /// `order.status.sign` qiymati. Server yozuvidagi farqlar ("ticketed",
+  /// "CANCELED", "refund_in_process") kanonik kalitga keltiriladi; noma'lum
+  /// qiymat o'zgarishsiz, ikkalasi ham bo'lmasa "" qaytadi.
+  String get orderStatus {
+    final callback = (callbackStatus ?? '').trim();
+    final source = callback.isNotEmpty
+        ? callback
+        : (response?.data?.book?.order?.status?.sign ?? '').trim();
+    return _statusByKey[_normalizeStatus(source)] ?? source;
+  }
+
+  /// Serverning o'zi bergan holat nomi (noma'lum holatlar uchun zaxira matn).
+  String get orderStatusTitle =>
+      (response?.data?.book?.order?.status?.title ?? '').trim();
+
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> data = <String, dynamic>{};
     data['id'] = id;

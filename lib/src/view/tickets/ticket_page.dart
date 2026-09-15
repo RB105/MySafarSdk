@@ -7,21 +7,26 @@ import 'package:flutter/services.dart'
 import 'package:mysafar_sdk/src/core/config/response_config.dart'
     show NetworkSuccessResponse;
 import 'package:mysafar_sdk/src/core/enum/currency.dart' show AppCurrency;
-import 'package:mysafar_sdk/src/core/extension/context_ext.dart' show SizeContext;
+import 'package:mysafar_sdk/src/core/extension/context_ext.dart'
+    show SizeContext;
 import 'package:mysafar_sdk/src/core/styles/theme.dart' show ProjectTheme;
 import 'package:mysafar_sdk/src/core/tools/currency_provider.dart'
     show CurrencyProvider;
 import 'package:mysafar_sdk/src/model/remote/avia/ticket_date_price_model.dart'
     show TicketDatePriceModel, DatePrice;
 import 'package:mysafar_sdk/src/service/avia_service.dart' show AviaService;
-import 'package:mysafar_sdk/src/core/tools/app_cache_manager.dart' show AppCacheManager;
+import 'package:mysafar_sdk/src/core/tools/app_cache_manager.dart'
+    show AppCacheManager;
 import 'package:mysafar_sdk/src/core/tools/formatters.dart';
-import 'package:mysafar_sdk/src/core/tools/project_assets.dart' show ProjectAssets;
+import 'package:mysafar_sdk/src/core/tools/project_assets.dart'
+    show ProjectAssets;
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart' show Assets;
 import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart'
     show ErrorDialogAction, ProjectDialogs;
 import 'package:mysafar_sdk/src/core/tools/sdk_sheets.dart';
+import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart'
+    show AppMessageType;
 import 'package:mysafar_sdk/src/cubit/tickets/tickets_cubit.dart';
 import 'package:mysafar_sdk/src/model/local/recom_req_model.dart'
     show RecommendationRequestBody;
@@ -34,13 +39,13 @@ import 'package:provider/provider.dart' show Provider;
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter/material.dart';
 
-import 'my_safar_ticket_shimmer.dart';
-
 part '_tickets_container_widgets.dart';
 
 part '_ticket_loading_widget.dart';
 
 part '_ticket_summary_widgets.dart';
+
+part '_ticket_filters_sheet.dart';
 
 class RecommendationsTicketPage extends StatefulWidget {
   final RecommendationRequestBody requestBody;
@@ -49,10 +54,30 @@ class RecommendationsTicketPage extends StatefulWidget {
 
   static const routeName = '/tickets';
 
+  /// Navigator stack'dagi eng yuqori chiptalar sahifasiga qaytadi (ustidagi
+  /// barcha ekranlar yopiladi) va xuddi shu parametrlar bilan qayta qidiradi.
+  /// Masalan to'lov vaqti tugaganda. Stack'da chiptalar sahifasi bo'lmasa
+  /// hech narsa qilmaydi va `false` qaytaradi.
+  static bool returnAndSearchAgain(BuildContext context, {String? message}) {
+    // Eng oxirgi ochilgani — stack'da eng yuqorida turgani.
+    final target = _RecommendationsTicketPageState._live.reversed
+        .where((state) => state.mounted && (state._route?.isActive ?? false))
+        .firstOrNull;
+    final route = target?._route;
+    if (target == null || route == null) return false;
+
+    Navigator.of(context).popUntil((r) => r == route || r.isFirst);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (target.mounted) target._searchAgain(message: message);
+    });
+    return true;
+  }
+
   @override
   State<RecommendationsTicketPage> createState() =>
       _RecommendationsTicketPageState();
 }
+
 
 /// Chiptalar sahifasi status bar — iOS'da SliverAppBar o'zi yetarli emas;
 /// Scaffold atrofida AnnotatedRegion bilan birga ishlatiladi.
@@ -69,6 +94,31 @@ SystemUiOverlayStyle _ticketPageOverlayStyle(bool isDark) => isDark
       );
 
 class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
+  /// Hozir mount bo'lgan (stack'dagi) sahifalar — ochilish tartibida.
+  static final List<_RecommendationsTicketPageState> _live = [];
+
+  ModalRoute<dynamic>? _route;
+  TicketCubit? _ticketCubit;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _route = ModalRoute.of(context);
+  }
+
+  /// [RecommendationsTicketPage.returnAndSearchAgain] dan chaqiriladi:
+  /// ro'yxat tepaga qaytadi va joriy parametrlar bilan yangi so'rov ketadi.
+  void _searchAgain({String? message}) {
+    final cubit = _ticketCubit;
+    if (cubit == null || cubit.isClosed) return;
+    final controller = _innerScroll;
+    if (controller != null && controller.hasClients) controller.jumpTo(0);
+    cubit.add(GetRecommendationsEvent(cubit.filterReqBody));
+    if (message != null && message.isNotEmpty) {
+      ProjectDialogs.showCustomToast(context, message,
+          type: AppMessageType.warning);
+    }
+  }
   // ── Yuklash indikatori holati ──────────────────────────────────────────
   // Yuklash boshlanganda indikator sekin to'ladi; natija kelganda tezda 100%
   // ga to'lib, so'ng o'chadi. `_finishing` — natija kelgandan keyin tugallanish
@@ -114,6 +164,7 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
   @override
   void initState() {
     super.initState();
+    _live.add(this);
     _loadMonthPrices();
   }
 
@@ -128,8 +179,7 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
       final response = await AviaService().getPriceByMonth(from, to);
       if (!mounted) return;
       if (response is NetworkSuccessResponse) {
-        setState(
-            () => _monthPrices = response.data as TicketDatePriceModel);
+        setState(() => _monthPrices = response.data as TicketDatePriceModel);
       }
     } catch (_) {
       // Narxlarsiz ham lenta ishlayveradi.
@@ -162,10 +212,10 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
 
   int get _viewSort => _viewFilters.sort;
 
-  void _clearViewFilters() {
+  void _clearViewFilters({String source = 'empty_view'}) {
     setState(() => _viewFilters.reset());
     AnalyticsService()
-        .trackButtonTap('filter_reset', extra: {'source': 'empty_view'});
+        .trackButtonTap('filter_reset', extra: {'source': source});
   }
 
   /// Reys barcha yo'nalishlarda almashishsizmi.
@@ -188,18 +238,13 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
     return h * 60 + m;
   }
 
-  static bool _inTimeRange(int? minutes, RangeValues range) {
-    if (range.start <= 0 && range.end >= _ViewFilterValues.dayMinutes) {
-      return true;
-    }
-    if (minutes == null) return true;
-    return minutes >= range.start && minutes <= range.end;
-  }
-
   /// Ko'rinish filtrlarini yuklangan ro'yxatga qo'llaydi (saralash emas —
   /// u [_AnimatedFlightList] ichida, FLIP animatsiyasi bilan bajariladi).
-  List<FlightElement> _applyViewFilters(List<FlightElement> src) {
-    final v = _viewFilters;
+  /// [values] berilmasa sahifaning joriy filtrlari ishlatiladi (sheet esa
+  /// qoralama qiymatlar bo'yicha natija sonini shu orqali hisoblaydi).
+  List<FlightElement> _applyViewFilters(List<FlightElement> src,
+      [_ViewFilterValues? values]) {
+    final v = values ?? _viewFilters;
     if (!v.hasAnyFilter) return src;
     return [
       for (final f in src)
@@ -216,25 +261,27 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
     final segs = f.getSegmentsByDirection(0);
     if (segs.isEmpty) return true;
     if (v.excludedAirlines.contains(segs.first.carrier.code)) return false;
-    return _inTimeRange(_minutesOfDay(segs.first.dep.time), v.depRange) &&
-        _inTimeRange(_minutesOfDay(segs.last.arr.time), v.arrRange);
+    return _ViewFilterValues.matchesPeriods(
+            v.depPeriods, _minutesOfDay(segs.first.dep.time)) &&
+        _ViewFilterValues.matchesPeriods(
+            v.arrPeriods, _minutesOfDay(segs.last.arr.time));
   }
 
-  /// Chip yoki appbar'dagi filter tugmasi bosilganda web'dagi kabi TO'LIQ
-  /// "Filtr" sheet'i ochiladi — chip bosilganda o'sha bo'lim ochiq holda,
-  /// filter tugmasida esa barcha bo'limlar yig'ilgan holda ([section] `null`).
+  /// Chip yoki appbar'dagi filter tugmasi bosilganda TO'LIQ "Filtr" sheet'i
+  /// ochiladi — chip bosilganda o'sha bo'limga surilgan holda, filter
+  /// tugmasida esa boshidan ([section] `null`).
   /// Qo'llash bosilgandagina qiymatlar ro'yxatga qo'llanadi.
   Future<void> _openViewFilters(
       TicketCubit cubit, _ViewFilterSection? section) async {
     HapticFeedback.lightImpact();
     AnalyticsService().trackButtonTap('ticket_view_filters');
-    final airlines = _groupFlightsByAirline(
-        cubit.overAllData?.recommedations?.flights ?? const []);
+    final flights = cubit.overAllData?.recommedations?.flights ?? const [];
     final result = await _showViewFiltersSheet(
       context,
       initial: _viewFilters,
       initialSection: section,
-      airlines: airlines,
+      airlines: _groupFlightsByAirline(flights),
+      countResults: (values) => _applyViewFilters(flights, values).length,
     );
     if (result != null && mounted) {
       setState(() => _viewFilters.copyFrom(result));
@@ -338,6 +385,7 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
 
   @override
   void dispose() {
+    _live.remove(this);
     _priceRefreshTimer?.cancel();
     super.dispose();
   }
@@ -375,8 +423,7 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-        create: (context) =>
-            TicketCubit(widget.requestBody, false),
+        create: (context) => TicketCubit(widget.requestBody, false),
         child: BlocConsumer<TicketCubit, TicketsState>(
           listener: (context, state) {
             // Yangi qidiruv boshlanganda taymerni to'xtatamiz; natija to'liq
@@ -404,6 +451,7 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
           },
           builder: (context, state) {
             final ticketCubit = BlocProvider.of<TicketCubit>(context);
+            _ticketCubit = ticketCubit;
 
             // Indikator holati: yuklash boshlanganda tugallanish bayrog'ini
             // o'chiramiz; loading→natija qirrasida esa indikator tezda to'lib
@@ -436,6 +484,7 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
                               values: _viewFilters,
                               onOpen: (section) =>
                                   _openViewFilters(ticketCubit, section),
+                              onClear: () => _clearViewFilters(source: 'chips'),
                             )
                           : null;
                       return [
@@ -454,7 +503,7 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
                           leading: Padding(
                             padding: const EdgeInsets.only(left: 4),
                             child: _RecHeroIconButton(
-                              icon: Icons.arrow_back_ios_new_rounded,
+                              asset: Assets.iconsScanBackIcon,
                               onTap: () => Navigator.of(context).maybePop(),
                             ),
                           ),
@@ -465,17 +514,17 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
                           ),
                           actions: [
                             _RecHeroIconButton(
-                              asset: Assets.ticketsUsdIcon,
+                              asset: Assets.iconsTicketsCurrencyIcon,
                               onTap: () =>
                                   ProjectDialogs.showCurrencyMenu(context),
                             ),
                             // Valyuta yonidagi filter tugmasi ham xuddi
-                            // chiplar kabi web-uslub to'liq "Filtr" sheet'ini
-                            // ochadi (hech bir bo'lim ochilmagan holda).
+                            // chiplar kabi to'liq "Filtr" sheet'ini ochadi;
+                            // belgida faol filtrlar soni.
                             _RecHeroIconButton(
-                              asset: Assets.ticketsFilterIcon,
-                              onTap: () =>
-                                  _openViewFilters(ticketCubit, null),
+                              asset: Assets.iconsTicketsFiltersIcon,
+                              badge: _viewFilters.activeCount,
+                              onTap: () => _openViewFilters(ticketCubit, null),
                             ),
                             const SizedBox(width: 4),
                           ],
@@ -490,7 +539,7 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
                                   // Sana-narx lentasi appbar tarkibida —
                                   // appbar pinned bo'lgani uchun scroll'da
                                   // KAFOLATLI qadalib turadi.
-                            dateStrip: _showDateStrip
+                                  dateStrip: _showDateStrip
                                       ? _DatePriceStrip(
                                           selected: _selectedStripDate()!,
                                           monthPrices: _monthPrices,
@@ -506,11 +555,11 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
                       _innerScroll = PrimaryScrollController.maybeOf(context);
                       // Chiplardagi ko'rinish filtrlari yuklangan ro'yxatga
                       // shu yerda qo'llanadi (web'dagi kabi — darhol).
-                      final List<FlightElement> viewFlights =
-                          state is TicketSuccessState
-                              ? _applyViewFilters(state
-                                  .recommendationRes.recommedations!.flights)
-                              : const [];
+                      final List<FlightElement> viewFlights = state
+                              is TicketSuccessState
+                          ? _applyViewFilters(
+                              state.recommendationRes.recommedations!.flights)
+                          : const [];
                       return CustomScrollView(
                         slivers: [
                           // "Aviakompaniyalar bo'yicha" jamlama kartasi.
@@ -543,33 +592,17 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
                                 padding: context.k16horizontalPadding,
                                 sliver: SliverToBoxAdapter(
                                   child: switch (state) {
-                                    TicketLoadingState() =>
-                                      MySafarTicketShimmer(
-                                        isReturn:
-                                            widget.requestBody.flight_Type == 1,
+                                    TicketLoadingState() => Padding(
+                                        padding: const EdgeInsets.only(top: 12),
+                                        child: _TicketCardSkeleton(
+                                          isReturn:
+                                              widget.requestBody.flight_Type ==
+                                                  1,
+                                        ),
                                       ),
-                                    TicketEmptyState() => Column(
-                                        children: [
-                                          context.szBoxHeight16,
-                                          SizedBox(
-                                              height: 48,
-                                              width: 48,
-                                              child: Image.asset(Assets
-                                                  .ticketsSearchEmptyIcon)),
-                                          Text(
-                                            "not_found_tickets".tr(),
-                                            style: context.textTheme.bodyMedium
-                                                ?.copyWith(
-                                                    fontWeight: FontWeight.w600,
-                                                    fontSize: 14),
-                                          ),
-                                          context.szBoxHeight12,
-                                          Text(
-                                            "found_other_tickets".tr(),
-                                            textAlign: TextAlign.center,
-                                            style: context.textTheme.bodyMedium,
-                                          )
-                                        ],
+                                    TicketEmptyState() => _TicketsEmptyView(
+                                        title: "not_found_tickets".tr(),
+                                        subtitle: "found_other_tickets".tr(),
                                       ),
                                     // Xato dialog orqali ko'rsatiladi —
                                     // sahifa tanasida takrorlanmasin.
@@ -596,18 +629,23 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
 
 /// App bar tugmasi — och fonda to'q rangli oddiy ikonka (doirasiz).
 class _RecHeroIconButton extends StatelessWidget {
-  final IconData? icon;
-  final String? asset;
+  final String asset;
   final VoidCallback onTap;
 
-  const _RecHeroIconButton({this.icon, this.asset, required this.onTap});
+  /// 0 dan katta bo'lsa o'ng yuqori burchakda son belgisi ko'rsatiladi.
+  final int badge;
+
+  const _RecHeroIconButton({
+    required this.asset,
+    required this.onTap,
+    this.badge = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final Color color = context.isDarkMode
-        ? Colors.white
-        : const Color(0xFF16244A);
-    return Material(
+    final Color color =
+        context.isDarkMode ? Colors.white : const Color(0xFF16244A);
+    final button = Material(
       color: Colors.transparent,
       shape: const CircleBorder(),
       clipBehavior: Clip.antiAlias,
@@ -617,17 +655,47 @@ class _RecHeroIconButton extends StatelessWidget {
           width: 42,
           height: 42,
           child: Center(
-            child: asset != null
-                ? SvgPicture.asset(
-                    asset!,
-                    width: 21,
-                    height: 21,
-                    colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-                  )
-                : Icon(icon, color: color, size: 19),
+            child: SvgPicture.asset(
+              asset,
+              width: 22,
+              height: 22,
+              colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+            ),
           ),
         ),
       ),
+    );
+    if (badge <= 0) return button;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        button,
+        Positioned(
+          top: 5,
+          right: 4,
+          child: IgnorePointer(
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 17),
+              height: 17,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: ProjectTheme.brandColor,
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(
+                  color: context.color.primaryContainer,
+                  width: 1.5,
+                ),
+              ),
+              child: Text(
+                "$badge",
+                style: _TixTheme.style(10.5, FontWeight.w800, Colors.white),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -709,115 +777,6 @@ class _RecHeroTitle extends StatelessWidget {
             ),
           ],
         ],
-      ),
-    );
-  }
-}
-
-/// Appbar ostidagi web-uslub filter chiplari qatori (mysafar.uz mobil):
-/// MySafar video chiplari: [⇅ Eng arzoni] [✈ Hammasi] [🧳 Aralash].
-/// Bosilganda mos filtr bo'limi ochiladi; to'liq filtr — appbar filter icon.
-class _RecViewFilterBar extends StatelessWidget implements PreferredSizeWidget {
-  final _ViewFilterValues values;
-  final void Function(_ViewFilterSection section) onOpen;
-
-  const _RecViewFilterBar({
-    required this.values,
-    required this.onOpen,
-  });
-
-  @override
-  Size get preferredSize => const Size.fromHeight(56);
-
-  @override
-  Widget build(BuildContext context) {
-    final v = values;
-    return SizedBox(
-      height: 56,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-        children: [
-          _RecFilterChip(
-            icon: Icons.swap_vert_rounded,
-            label: "price_order".tr(),
-            active: v.sort == 0,
-            onTap: () => onOpen(_ViewFilterSection.sort),
-          ),
-          const SizedBox(width: 8),
-          _RecFilterChip(
-            icon: Icons.flight_rounded,
-            label: "all".tr(),
-            active: !v.directOnly && !v.hasAnyFilter,
-            onTap: () => onOpen(_ViewFilterSection.transfer),
-          ),
-          const SizedBox(width: 8),
-          _RecFilterChip(
-            icon: Icons.luggage_rounded,
-            label: "filter_mixed".tr(),
-            active: !v.baggageOnly,
-            onTap: () => onOpen(_ViewFilterSection.baggage),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Bitta filter chipi: ikonka + joriy qiymat + pastga strelka (web'dagi kabi).
-class _RecFilterChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  const _RecFilterChip({
-    required this.icon,
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final bool isDark = context.isDarkMode;
-    final Color bg = active
-        ? ProjectTheme.brandColor.withAlpha(isDark ? 60 : 26)
-        : (isDark ? Colors.white.withAlpha(20) : const Color(0xFFF1F4F9));
-    final Color fg = active
-        ? (isDark ? Colors.white : ProjectTheme.brandColor)
-        : (isDark ? Colors.white : const Color(0xFF16244A));
-
-    return Material(
-      color: bg,
-      borderRadius: BorderRadius.circular(12),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () {
-          HapticFeedback.lightImpact();
-          onTap();
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 16, color: fg),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                maxLines: 1,
-                style: TextStyle(
-                  color: fg,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(width: 3),
-              Icon(Icons.keyboard_arrow_down_rounded, size: 17, color: fg),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -988,8 +947,7 @@ class _RecHeroLoadingBarState extends State<_RecHeroLoadingBar>
           child: AnimatedBuilder(
             animation: Listenable.merge([_progress, _opacity]),
             builder: (_, __) {
-              final int percent =
-                  (_progress.value * 100).clamp(0, 100).round();
+              final int percent = (_progress.value * 100).clamp(0, 100).round();
               return Opacity(
                 opacity: _opacity.value,
                 child: Row(
@@ -1371,10 +1329,10 @@ class _AnimatedFlightListState extends State<_AnimatedFlightList> {
     final flights = _display;
     final count = flights.length;
     return SliverPadding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       sliver: SliverList.separated(
         itemCount: count + (widget.isLoadingMore ? 1 : 0),
-        separatorBuilder: (context, index) => const SizedBox(height: 16),
+        separatorBuilder: (context, index) => const SizedBox(height: 12),
         itemBuilder: (context, index) {
           // Oxirgi element — qolgan manbalar kutilayotgani uchun loading.
           if (index >= count) {

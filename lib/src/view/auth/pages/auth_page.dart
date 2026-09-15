@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator;
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart'
     show MaskAutoCompletionType, MaskTextInputFormatter;
 import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart';
+import 'package:mysafar_sdk/src/core/widgets/sdk_dialog.dart';
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart';
 import 'package:mysafar_sdk/src/view/auth/logic/bloc/auth_cubit.dart';
 import 'package:mysafar_sdk/src/view/auth/widget/auth_custom_input.dart';
@@ -289,18 +290,12 @@ class _AuthPageState extends State<AuthPage> {
   }
 
   Future<void> _showErrorDialog(String message) async {
-    await showDialog(useRootNavigator: false, 
+    HapticFeedback.mediumImpact();
+    await showSdkAlert<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('error'.tr()),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('ok'.tr()),
-          ),
-        ],
-      ),
+      tone: SdkDialogTone.error,
+      message: message,
+      actions: [SdkDialogAction(label: 'understood'.tr())],
     );
   }
 

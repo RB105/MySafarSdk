@@ -1,7 +1,6 @@
 // ignore_for_file: unused_element
 
 import 'dart:async' show unawaited;
-import 'dart:math' as math;
 
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:mysafar_sdk/src/core/config/response_config.dart'
@@ -166,9 +165,7 @@ class _TicketInfoPageState extends State<TicketInfoPage> {
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                   child: Column(
                     children: [
-                      _PriceFeatureCard(
-                        priceLabel: currencyProvider
-                            .getElementPrice(flightElement.price),
+                      _FareRulesCard(
                         seatCount: flightElement.getSeatCount(),
                         withCBaggage: flightElement.withCBaggage(),
                         cBaggage: flightElement.withCBaggage()
@@ -178,121 +175,93 @@ class _TicketInfoPageState extends State<TicketInfoPage> {
                         isBaggage: flightElement.isBaggage ?? false,
                         baggageLabel: flightElement.getBaggage(),
                         isExchangeable: flightElement.isExchangeable(),
-                        tariffSection: SizedBox(
-                          width: double.infinity,
-                          child: BlocProvider(
-                            create: (context) =>
-                                TicketTariffCubit(flightElement.id),
-                            child: BlocConsumer<TicketTariffCubit,
-                                TicketTariffState>(
-                              listener: (context, state) {},
-                              builder: (context, state) {
-                                if (state is TicketTariffLoadingState) {
-                                  final isDark = context.isDarkMode;
-                                  return Padding(
-                                    key: const ValueKey('loadingState'),
-                                    padding: const EdgeInsets.only(top: 12.0),
-                                    child: Shimmer.fromColors(
-                                      baseColor: isDark
-                                          ? Colors.grey.shade800
-                                          : Colors.grey.shade300,
-                                      highlightColor: isDark
-                                          ? Colors.grey.shade700
-                                          : Colors.grey.shade100,
-                                      child: SizedBox(
+                        tariffSection: BlocProvider(
+                          create: (context) =>
+                              TicketTariffCubit(flightElement.id),
+                          child:
+                              BlocBuilder<TicketTariffCubit, TicketTariffState>(
+                            builder: (context, state) {
+                              if (state is TicketTariffLoadingState) {
+                                return const _TariffPickerSkeleton();
+                              }
+                              return AnimatedSize(
+                                duration: const Duration(milliseconds: 220),
+                                curve: Curves.easeOutCubic,
+                                alignment: Alignment.topCenter,
+                                child: state is TicketTariffSuccessState
+                                    ? _TariffPickerTile(
+                                        onTap: () async {
+                                          final result = await ProjectDialogs
+                                              .showTariffPicker(
+                                            context,
+                                            state.tariffs,
+                                            flightElement.id,
+                                          );
+                                          if (result != null) {
+                                            setState(() {
+                                              flightElement = result;
+                                            });
+                                          }
+                                        },
+                                      )
+                                    : const SizedBox(
                                         width: double.infinity,
-                                        child: DecoratedBox(
-                                          decoration: BoxDecoration(
-                                            color: context.inputColor,
-                                            borderRadius:
-                                                BorderRadius.circular(16.0),
-                                          ),
-                                          child: const SizedBox(height: 52),
-                                        ),
+                                        height: 4,
                                       ),
-                                    ),
-                                  );
-                                }
-                                return AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 400),
-                                  transitionBuilder: (child, animation) {
-                                    return ScaleTransition(
-                                      scale: animation,
-                                      child: FadeTransition(
-                                        opacity: animation,
-                                        child: child,
-                                      ),
-                                    );
-                                  },
-                                  child: state is TicketTariffSuccessState
-                                      ? Padding(
-                                          key: const ValueKey('successState'),
-                                          padding:
-                                              const EdgeInsets.only(top: 12.0),
-                                          child: _TariffPickerTile(
-                                            onTap: () async {
-                                              final result =
-                                                  await ProjectDialogs
-                                                      .showTariffPicker(
-                                                context,
-                                                state.tariffs,
-                                                flightElement.id,
-                                              );
-                                              if (result != null) {
-                                                setState(() {
-                                                  flightElement = result;
-                                                });
-                                              }
-                                            },
-                                          ),
-                                        )
-                                      : const SizedBox.shrink(
-                                          key: ValueKey('emptyState'),
-                                        ),
-                                );
-                              },
-                            ),
+                              );
+                            },
                           ),
                         ),
                       ),
-                      context.szBoxHeight16,
+                      const SizedBox(height: 12),
                       ..._buildDirections(context),
                       SizedBox(height: 8 + bottomInset),
                     ],
                   ),
                 ),
               ),
-              SafeArea(
-                top: false,
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(16, 8, 16, 12),
-                  child: _BookButton(
-                    enabled: _canBook,
-                    isLoading: _checking,
-                    priceLabel: currencyProvider
-                        .getElementPrice(flightElement.price),
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                      // Sheet ochiq qolsa uning ListenableBuilder eski parent
-                      // context bilan rebuild bo'lishi mumkin — avval sheetni
-                      // yopib, keyin yo'lovchi sahifasini push qilamiz.
-                      final navigator = Navigator.of(context);
-                      final element = flightElement;
-                      final adt = params.adt;
-                      final chd = params.chd;
-                      final inf = params.inf;
-                      navigator.pop();
-                      navigator.push(MaterialPageRoute(
-                        settings: RouteSettings(
-                            name: PassengerInformationPage.routeName),
-                        builder: (_) => PassengerInformationPage(
-                          adt: adt,
-                          chd: chd,
-                          inf: inf,
-                          element: element,
-                        ),
-                      ));
-                    },
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: context.color.primaryContainer,
+                  border: Border(
+                    top: BorderSide(
+                      color: context.color.outline.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                    child: _BookButton(
+                      enabled: _canBook,
+                      isLoading: _checking,
+                      passengerCount: params.adt + params.chd + params.inf,
+                      priceLabel:
+                          currencyProvider.getElementPrice(flightElement.price),
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        // Sheet ochiq qolsa uning ListenableBuilder eski parent
+                        // context bilan rebuild bo'lishi mumkin — avval sheetni
+                        // yopib, keyin yo'lovchi sahifasini push qilamiz.
+                        final navigator = Navigator.of(context);
+                        final element = flightElement;
+                        final adt = params.adt;
+                        final chd = params.chd;
+                        final inf = params.inf;
+                        navigator.pop();
+                        navigator.push(MaterialPageRoute(
+                          settings: RouteSettings(
+                              name: PassengerInformationPage.routeName),
+                          builder: (_) => PassengerInformationPage(
+                            adt: adt,
+                            chd: chd,
+                            inf: inf,
+                            element: element,
+                          ),
+                        ));
+                      },
+                    ),
                   ),
                 ),
               ),
@@ -333,8 +302,9 @@ class _TicketInfoPageState extends State<TicketInfoPage> {
         flightElement: flightElement,
         segments: segmentList[i],
         directionIndex: i,
+        showDirectionLabel: segmentList.length > 1,
       ));
-      if (i != segmentList.length - 1) widgets.add(context.szBoxHeight16);
+      if (i != segmentList.length - 1) widgets.add(const SizedBox(height: 12));
     }
     return widgets;
   }

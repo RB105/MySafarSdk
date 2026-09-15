@@ -1,8 +1,10 @@
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
 import 'package:mysafar_sdk/src/core/tools/currency_provider.dart';
+import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart';
 import 'package:provider/provider.dart' show Provider;
 
@@ -47,115 +49,125 @@ class NextButtonWidget extends StatelessWidget {
         : brand;
     final Color contentColor = disabled ? muted : Colors.white;
 
+    final Color priceColor =
+        isDark ? ProjectTheme.textColorDark : ProjectTheme.textColorLight;
+
     return Container(
       decoration: BoxDecoration(
-        boxShadow: context.shadowUp,
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(24),
-          topRight: Radius.circular(24),
-        ),
         color: context.color.primaryContainer,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.07),
+            blurRadius: 24,
+            offset: const Offset(0, -6),
+          ),
+        ],
       ),
       child: SafeArea(
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(
-                    "${"ticket_price".tr()}:",
-                    style: context.textTheme.bodyLarge?.copyWith(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      currencyProvider.getElementPrice(price!),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontFamily: "packages/mysafar_sdk/Gilroy",
-                        fontWeight: FontWeight.w800,
-                        fontSize: 18,
-                        color: brand,
-                        height: 1.1,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 3),
               Text(
                 "total_price_label".tr(namedArgs: {"count": "$passenger"}),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontFamily: "packages/mysafar_sdk/Gilroy",
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w400,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
                   color: muted,
+                ),
+              ),
+              const SizedBox(height: 2),
+              // Uzun summa (masalan so'mda) bir qatorga sig'masa kichrayadi.
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  currencyProvider.getElementPrice(price!),
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontFamily: "packages/mysafar_sdk/Gilroy",
+                    fontWeight: FontWeight.w800,
+                    fontSize: 22,
+                    color: priceColor,
+                    height: 1.15,
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
               SizedBox(
-                height: 56,
-                width: double.infinity,
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
-                    onTap: loading || onPressed == null
+                height: 52,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: disabled
                         ? null
-                        : () {
-                            AnalyticsService()
-                                .trackButtonTap(analyticsId ?? nextTittle);
-                            onPressed!.call();
-                          },
-                    child: Ink(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        color: buttonColor,
-                        boxShadow: disabled
-                            ? null
-                            : [
-                                BoxShadow(
-                                  color: brand.withAlpha(70),
-                                  blurRadius: 16,
-                                  offset: const Offset(0, 6),
-                                ),
-                              ],
-                      ),
+                        : [
+                            BoxShadow(
+                              color: brand.withValues(alpha: 0.25),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                  ),
+                  child: Material(
+                    color: buttonColor,
+                    borderRadius: BorderRadius.circular(14),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: loading || onPressed == null
+                          ? null
+                          : () {
+                              AnalyticsService()
+                                  .trackButtonTap(analyticsId ?? nextTittle);
+                              onPressed!.call();
+                            },
                       child: Center(
                         child: loading
                             ? const SizedBox(
-                                width: 24,
-                                height: 24,
+                                width: 22,
+                                height: 22,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2.5,
                                   color: Colors.white,
                                 ),
                               )
-                            : Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    nextTittle.tr(),
-                                    style: TextStyle(
-                                      fontFamily: "packages/mysafar_sdk/Gilroy",
-                                      fontSize: 16,
-                                      color: contentColor,
-                                      fontWeight: FontWeight.w700,
+                            : Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 16),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        nextTittle.tr(),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontFamily:
+                                              "packages/mysafar_sdk/Gilroy",
+                                          fontSize: 16,
+                                          color: contentColor,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Icon(Icons.arrow_forward_rounded,
-                                      color: contentColor, size: 19),
-                                ],
+                                    const SizedBox(width: 8),
+                                    SvgPicture.asset(
+                                      Assets.iconsBookingArrowRightIcon,
+                                      width: 20,
+                                      height: 20,
+                                      colorFilter: ColorFilter.mode(
+                                          contentColor, BlendMode.srcIn),
+                                    ),
+                                  ],
+                                ),
                               ),
                       ),
                     ),

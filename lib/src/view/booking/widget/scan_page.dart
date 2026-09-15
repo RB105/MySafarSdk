@@ -11,6 +11,8 @@ import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
 import 'package:mysafar_sdk/src/core/tools/sdk_sheets.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/model/remote/profile/users_model.dart';
 import 'package:mysafar_sdk/src/view/booking/support/mrz_text_extractor.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -26,7 +28,7 @@ Future<UsersModel?> showMrzScannerBottomSheet(BuildContext context) {
     isScrollControlled: true,
     useSafeArea: false,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
     builder: (_) => const _MrzScannerSheet(),
   );
@@ -40,7 +42,7 @@ class _MrzScannerSheet extends StatefulWidget {
 }
 
 class _MrzScannerSheetState extends State<_MrzScannerSheet>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   CameraController? _cameraController;
   final TextRecognizer _textRecognizer =
       TextRecognizer(script: TextRecognitionScript.latin);
@@ -54,6 +56,17 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet>
   String? _error;
   String? _scanError;
   int _cameraSession = 0;
+
+  /// Chiroq (torch) yoqilganmi.
+  bool _torchOn = false;
+
+  /// MRZ o'qildi — ramka yashil bo'lib, qisqa muddatdan so'ng yopiladi.
+  bool _found = false;
+
+  /// Ramka ichida yuradigan skaner chizig'i (initState'da yaratiladi —
+  /// `late` bo'lsa dispose'da birinchi marta yaratilib xato beradi). Faqat
+  /// kamera ko'rinib turganda aylanadi.
+  late final AnimationController _scanLine;
 
   final _accumulatedLines = <String>{};
   Timer? _scanTimeoutTimer;
@@ -72,12 +85,17 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet>
   @override
   void initState() {
     super.initState();
+    _scanLine = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    );
     WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _scanLine.dispose();
     _scanTimeoutTimer?.cancel();
     final controller = _cameraController;
     _cameraController = null;
@@ -121,6 +139,7 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet>
     if (controller == null) return;
 
     _cameraSession++;
+    _scanLine.stop();
     if (mounted) {
       setState(() => _cameraController = null);
       await WidgetsBinding.instance.endOfFrame;
@@ -135,6 +154,8 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet>
     final session = _cameraSession;
     setState(() {
       _docType = type;
+      _found = false;
+      _torchOn = false;
       _initializing = true;
       _error = null;
       _scanError = null;
@@ -164,6 +185,8 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet>
     if (!mounted) return;
     setState(() {
       _docType = null;
+      _found = false;
+      _torchOn = false;
       _initializing = false;
       _isBusy = false;
       _isParsed = false;
@@ -229,10 +252,12 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet>
 
       setState(() {
         _cameraController = controller;
+        _torchOn = false;
         _initializing = false;
         _error = null;
         _scanError = null;
       });
+      unawaited(_scanLine.repeat(reverse: true));
       _startScanTimeout();
     } catch (e) {
       if (!mounted || session != _cameraSession) return;
@@ -351,8 +376,29 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet>
     }
     if (!mounted) return;
 
-    final user = UsersModel.fromScan(mrz);
-    Navigator.of(context).pop(user);
+    await _finishWith(UsersModel.fromScan(mrz));
+  }
+
+  /// Muvaffaqiyat: ramka yashil, yengil tebranish, so'ng natija qaytadi.
+  Future<void> _finishWith(UsersModel user) async {
+    if (!mounted) return;
+    _scanLine.stop();
+    setState(() => _found = true);
+    unawaited(HapticFeedback.mediumImpact());
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+    if (mounted) Navigator.of(context).pop(user);
+  }
+
+  Future<void> _toggleTorch() async {
+    final controller = _cameraController;
+    if (controller == null || !controller.value.isInitialized) return;
+    final next = !_torchOn;
+    try {
+      await controller.setFlashMode(next ? FlashMode.torch : FlashMode.off);
+      if (mounted) setState(() => _torchOn = next);
+    } catch (_) {
+      // Qurilmada chiroq yo'q — jim o'tkazamiz.
+    }
   }
 
   /// Qo'lda suratga olish — live stream ishlamasa aniqroq o'qish uchun.
@@ -407,8 +453,7 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet>
       if (mrz != null && mounted && !_isParsed) {
         _scanTimeoutTimer?.cancel();
         _isParsed = true;
-        final user = UsersModel.fromScan(mrz);
-        Navigator.of(context).pop(user);
+        await _finishWith(UsersModel.fromScan(mrz));
         return;
       }
 
@@ -495,423 +540,514 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet>
   String get _hintKey =>
       _docType == _ScanDocType.passport ? 'scan_passport_hint' : 'scan_id_hint';
 
+  /// Ramka o'lchami butun kamera maydoniga nisbatan (MRZ zonasi — keng va
+  /// past to'rtburchak).
   _MrzOverlayConfig get _overlayConfig => _docType == _ScanDocType.passport
       ? const _MrzOverlayConfig(
-          widthFactor: 0.98,
-          heightFactor: 0.28,
-          centerYFactor: 0.62,
+          widthFactor: 0.9,
+          heightFactor: 0.2,
+          centerYFactor: 0.46,
         )
       : const _MrzOverlayConfig(
-          widthFactor: 0.94,
-          heightFactor: 0.32,
-          centerYFactor: 0.58,
+          widthFactor: 0.9,
+          heightFactor: 0.24,
+          centerYFactor: 0.46,
         );
 
   @override
   Widget build(BuildContext context) {
+    if (_docType == null) return _buildDocPickerSheet(context);
+
     final screenHeight = MediaQuery.sizeOf(context).height;
     final topInset = MediaQuery.paddingOf(context).top;
-    final scannerSheetHeight = screenHeight - topInset - 8;
-    final pickingDoc = _docType == null;
-    final isDark = context.isDarkMode;
-    final titleColor =
-        isDark ? ProjectTheme.textColorDark : ProjectTheme.textColorLight;
-    final secondaryColor = isDark
-        ? ProjectTheme.secondaryTextDark
-        : ProjectTheme.secondaryTextLight;
+    return SizedBox(
+      height: screenHeight - topInset - 8,
+      child: ColoredBox(
+        color: Colors.black,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _buildBody(context),
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              child: _buildScannerTopBar(context),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _buildScannerBottomBar(context),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-    final sheet = AnimatedSize(
-      duration: const Duration(milliseconds: 280),
-      curve: Curves.easeInOut,
-      alignment: Alignment.topCenter,
-      child: Column(
-        mainAxisSize: pickingDoc ? MainAxisSize.min : MainAxisSize.max,
-        children: [
-          const SizedBox(height: 8),
-          Container(
-            width: 40,
+  // ── Hujjat turini tanlash ───────────────────────────────────────────
+
+  Widget _buildDocPickerSheet(BuildContext context) {
+    final isDark = context.isDarkMode;
+    final muted =
+        isDark ? ProjectTheme.secondaryTextDark : const Color(0xFF5B6475);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 10),
+        Center(
+          child: Container(
+            width: 36,
             height: 4,
             decoration: BoxDecoration(
               color: context.color.outline,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
-            child: Row(
-              children: [
-                IconButton(
-                  onPressed: () {
-                    if (_docType != null) {
-                      _backToDocPicker();
-                    } else {
-                      Navigator.of(context).pop();
-                    }
-                  },
-                  icon: Icon(
-                    _docType != null
-                        ? Icons.arrow_back_rounded
-                        : Icons.close_rounded,
-                    color: titleColor,
-                  ),
-                ),
-                Expanded(
-                  child: Text(
-                    pickingDoc
-                        ? 'scan_choose_document'.tr()
-                        : 'document_scanner'.tr(),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: context.textTheme.bodyLarge?.copyWith(
-                      fontSize: pickingDoc ? 15 : 16,
-                      fontWeight: FontWeight.w700,
-                      color: titleColor,
-                      height: 1.25,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 48),
-              ],
-            ),
-          ),
-          if (pickingDoc) ...[
-            _buildDocTypePicker(context, isDark),
-            SizedBox(height: MediaQuery.paddingOf(context).bottom + 8),
-          ] else ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Text(
-                _instructionKey.tr(),
-                textAlign: TextAlign.center,
-                style: context.textTheme.headlineSmall?.copyWith(
-                  fontSize: 13.5,
-                  color: secondaryColor,
-                ),
-              ),
-            ),
-            Expanded(
-              child: ColoredBox(
-                color:
-                    isDark ? const Color(0xFF000000) : const Color(0xFF1A1A1A),
-                child: _buildBody(context),
-              ),
-            ),
-            SafeArea(
-              top: false,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color(0xFF141414)
-                      : const Color(0xFF1A1A1A),
-                  border: Border(
-                    top: BorderSide(
-                      color:
-                          Colors.white.withValues(alpha: isDark ? 0.08 : 0.06),
-                    ),
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                  child: _scanError != null
-                      ? _buildScanErrorBanner(context)
-                      : Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Icon(
-                                  Icons.crop_free_rounded,
-                                  size: 18,
-                                  color: Colors.white.withValues(alpha: 0.72),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    _hintKey.tr(),
-                                    style:
-                                        context.textTheme.bodyMedium?.copyWith(
-                                      fontSize: 13,
-                                      height: 1.35,
-                                      color:
-                                          Colors.white.withValues(alpha: 0.72),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: FilledButton.icon(
-                                onPressed: (_isCapturing ||
-                                        _isParsed ||
-                                        _cameraController == null)
-                                    ? null
-                                    : _captureAndProcess,
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: ProjectTheme.brandColor,
-                                  foregroundColor: Colors.white,
-                                  disabledBackgroundColor: ProjectTheme
-                                      .brandColor
-                                      .withValues(alpha: 0.35),
-                                  disabledForegroundColor:
-                                      Colors.white.withValues(alpha: 0.5),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 14,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  elevation: 0,
-                                ),
-                                icon: _isCapturing
-                                    ? SizedBox(
-                                        width: 18,
-                                        height: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white.withValues(
-                                            alpha: 0.9,
-                                          ),
-                                        ),
-                                      )
-                                    : Icon(
-                                        Icons.photo_camera_rounded,
-                                        size: 20,
-                                        color: Colors.white.withValues(
-                                          alpha: 0.95,
-                                        ),
-                                      ),
-                                label: Text(
-                                  'scan_capture'.tr(),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 15,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-
-    if (pickingDoc) {
-      return sheet;
-    }
-    return SizedBox(height: scannerSheetHeight, child: sheet);
-  }
-
-  Widget _buildScanErrorBanner(BuildContext context) {
-    final isDark = context.isDarkMode;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF3A2020) : const Color(0xFFFFF0F0),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: ProjectTheme.error.withValues(alpha: 0.4),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 8, 0),
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.error_outline_rounded,
-                  size: 20, color: ProjectTheme.error),
-              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'document_scanner'.tr(),
+                      style: context.textTheme.bodyLarge?.copyWith(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'scan_choose_document'.tr(),
+                      style: context.textTheme.bodySmall?.copyWith(
+                        fontSize: 13.5,
+                        height: 1.3,
+                        fontWeight: FontWeight.w500,
+                        color: muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                icon: SvgPicture.asset(
+                  Assets.iconsPlaceCloseIcon,
+                  width: 24,
+                  height: 24,
+                  colorFilter: ColorFilter.mode(muted, BlendMode.srcIn),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            children: [
+              _DocTypeScanTile(
+                iconAsset: Assets.iconsScanPassportIcon,
+                label: 'scan_passport_option'.tr(),
+                hint: 'scan_passport_picker_hint'.tr(),
+                onTap: () => _selectDocType(_ScanDocType.passport),
+              ),
+              const SizedBox(height: 10),
+              _DocTypeScanTile(
+                iconAsset: Assets.iconsScanIdCardIcon,
+                label: 'scan_id_card_option'.tr(),
+                hint: 'scan_id_picker_hint'.tr(),
+                onTap: () => _selectDocType(_ScanDocType.idCard),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 16, 22, 0),
+          child: Row(
+            children: [
+              SvgPicture.asset(
+                Assets.iconsBookingInfoIcon,
+                width: 16,
+                height: 16,
+                colorFilter: ColorFilter.mode(muted, BlendMode.srcIn),
+              ),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  _scanError!,
-                  style: context.textTheme.bodyMedium?.copyWith(
-                    fontSize: 13,
-                    color: isDark ? Colors.white : Colors.black87,
+                  'scan_tip'.tr(),
+                  style: context.textTheme.bodySmall?.copyWith(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                    color: muted,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              TextButton(
-                onPressed: _retryScan,
-                style: TextButton.styleFrom(
-                  foregroundColor: ProjectTheme.brandColor,
-                  padding: EdgeInsets.zero,
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                child: Text('scan_retry'.tr()),
+        ),
+        SizedBox(height: MediaQuery.paddingOf(context).bottom + 20),
+      ],
+    );
+  }
+
+  // ── Skaner: yuqori va pastki panellar ───────────────────────────────
+
+  Widget _buildScannerTopBar(BuildContext context) {
+    final controller = _cameraController;
+    final bool canTorch = controller != null && controller.value.isInitialized;
+
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xB3000000), Color(0x00000000)],
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 28),
+        child: Row(
+          children: [
+            _GlassIconButton(
+              iconAsset: Assets.iconsScanBackIcon,
+              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+              onTap: _backToDocPicker,
+            ),
+            Expanded(
+              child: Column(
+                children: [
+                  Text(
+                    'document_scanner'.tr(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.textTheme.bodyLarge?.copyWith(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    (_docType == _ScanDocType.passport
+                            ? 'scan_passport_option'
+                            : 'scan_id_card_option')
+                        .tr(),
+                    style: context.textTheme.bodySmall?.copyWith(
+                      color: Colors.white.withValues(alpha: 0.7),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 16),
-              TextButton.icon(
-                onPressed: (_isCapturing || _cameraController == null)
-                    ? null
-                    : _captureAndProcess,
-                style: TextButton.styleFrom(
-                  foregroundColor: ProjectTheme.brandColor,
-                  padding: EdgeInsets.zero,
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                icon: const Icon(Icons.document_scanner_outlined, size: 18),
-                label: Text('scan_capture'.tr()),
-              ),
-            ],
-          ),
-        ],
+            ),
+            if (canTorch)
+              _GlassIconButton(
+                iconAsset: _torchOn
+                    ? Assets.iconsScanFlashIcon
+                    : Assets.iconsScanFlashOffIcon,
+                active: _torchOn,
+                onTap: _toggleTorch,
+              )
+            else
+              const SizedBox(width: 44),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildDocTypePicker(BuildContext context, bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _DocTypeScanTile(
-            label: 'scan_passport_option'.tr(),
-            hint: 'scan_passport_picker_hint'.tr(),
-            isDark: isDark,
-            docShape: _DocShape.passport,
-            onTap: () => _selectDocType(_ScanDocType.passport),
-          ),
-          const SizedBox(height: 10),
-          _DocTypeScanTile(
-            label: 'scan_id_card_option'.tr(),
-            hint: 'scan_id_picker_hint'.tr(),
-            isDark: isDark,
-            docShape: _DocShape.idCard,
-            onTap: () => _selectDocType(_ScanDocType.idCard),
-          ),
-        ],
+  Widget _buildScannerBottomBar(BuildContext context) {
+    final controller = _cameraController;
+    final bool cameraReady = controller != null &&
+        controller.value.isInitialized &&
+        _hasPermission &&
+        _error == null;
+
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0x00000000), Color(0xCC000000)],
+        ),
       ),
-    );
-  }
-
-  Widget _buildBody(BuildContext context) {
-    if (_initializing) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (!_hasPermission) {
-      return Center(
+      child: SafeArea(
+        top: false,
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(20, 36, 20, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.camera_alt_outlined,
-                  size: 40, color: context.color.outline),
-              const SizedBox(height: 16),
-              Text(
-                'allow_camera'.tr(),
-                textAlign: TextAlign.center,
-                style: context.textTheme.bodyMedium?.copyWith(
-                  color: Colors.white,
+              if (_scanError != null)
+                _buildScanErrorBanner(context)
+              else if (cameraReady)
+                Text(
+                  _hintKey.tr(),
+                  textAlign: TextAlign.center,
+                  style: context.textTheme.bodyMedium?.copyWith(
+                    fontSize: 13.5,
+                    height: 1.35,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white.withValues(alpha: 0.78),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: ProjectTheme.brandColor,
+              if (cameraReady) ...[
+                const SizedBox(height: 18),
+                _ShutterButton(
+                  busy: _isCapturing,
+                  enabled: !_isCapturing && !_isParsed,
+                  onTap: _captureAndProcess,
                 ),
-                onPressed: () async {
-                  if (_docType == null) return;
-                  final status = await Permission.camera.request();
-                  if (status.isGranted) {
-                    setState(() {
-                      _hasPermission = true;
-                      _initializing = true;
-                    });
-                    await _initCamera(_cameraSession);
-                  } else {
-                    await openAppSettings();
-                  }
-                },
-                child: Text('allow_camera'.tr()),
-              ),
+                const SizedBox(height: 8),
+                Text(
+                  'scan_take_photo'.tr(),
+                  style: context.textTheme.bodySmall?.copyWith(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white.withValues(alpha: 0.8),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildScanErrorBanner(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: ProjectTheme.error.withValues(alpha: 0.22),
+                shape: BoxShape.circle,
+              ),
+              child: SvgPicture.asset(
+                Assets.iconsBookingAlertIcon,
+                width: 18,
+                height: 18,
+                colorFilter:
+                    const ColorFilter.mode(Color(0xFFFF8A80), BlendMode.srcIn),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                _scanError!,
+                style: context.textTheme.bodyMedium?.copyWith(
+                  fontSize: 13,
+                  height: 1.35,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: _retryScan,
+              style: TextButton.styleFrom(foregroundColor: Colors.white),
+              child: Text(
+                'scan_retry'.tr(),
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Kamera maydoni ──────────────────────────────────────────────────
+
+  Widget _buildBody(BuildContext context) {
+    if (_initializing) {
+      return const Center(
+        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+      );
+    }
+
+    if (!_hasPermission) {
+      return _buildCenteredState(
+        context,
+        iconAsset: Assets.iconsScanFrameIcon,
+        message: 'allow_camera'.tr(),
+        actionLabel: 'allow_camera'.tr(),
+        onAction: () async {
+          if (_docType == null) return;
+          final status = await Permission.camera.request();
+          if (status.isGranted) {
+            setState(() {
+              _hasPermission = true;
+              _initializing = true;
+            });
+            await _initCamera(_cameraSession);
+          } else {
+            await openAppSettings();
+          }
+        },
       );
     }
 
     if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.error_outline_rounded,
-                  size: 40, color: ProjectTheme.error),
-              const SizedBox(height: 16),
-              Text(
-                _error!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white),
-              ),
-              const SizedBox(height: 16),
-              FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: ProjectTheme.brandColor,
-                ),
-                onPressed: () async {
-                  if (_docType == null) return;
-                  setState(() {
-                    _error = null;
-                    _initializing = true;
-                  });
-                  await _initCamera(_cameraSession);
-                },
-                child: Text('scan_retry'.tr()),
-              ),
-            ],
-          ),
-        ),
+      return _buildCenteredState(
+        context,
+        iconAsset: Assets.iconsBookingAlertIcon,
+        message: _error!,
+        actionLabel: 'scan_retry'.tr(),
+        onAction: () async {
+          if (_docType == null) return;
+          setState(() {
+            _error = null;
+            _initializing = true;
+          });
+          await _initCamera(_cameraSession);
+        },
       );
     }
 
     final controller = _cameraController;
     if (controller == null || !controller.value.isInitialized) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+      );
     }
 
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        _buildFullScreenCameraPreview(controller),
-        IgnorePointer(
-          child: CustomPaint(
-            painter: _MrzOverlayPainter(
-              config: _overlayConfig,
-              color: ProjectTheme.brandColor.withValues(alpha: 0.95),
-            ),
-          ),
-        ),
-        if (_isParsed || _isCapturing)
-          ColoredBox(
-            color: const Color(0x66000000),
-            child: Center(
-              child: CircularProgressIndicator(
-                color: ProjectTheme.brandColor,
+    final config = _overlayConfig;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = constraints.biggest;
+        final frame = config.rectFor(size);
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            _buildFullScreenCameraPreview(controller),
+            IgnorePointer(
+              child: AnimatedBuilder(
+                animation: _scanLine,
+                builder: (context, _) => CustomPaint(
+                  painter: _MrzOverlayPainter(
+                    config: config,
+                    frameColor: _found ? ProjectTheme.success : Colors.white,
+                    lineColor: ProjectTheme.brandColor,
+                    scanProgress: _scanLine.value,
+                    showScanLine: !_found && _scanError == null,
+                  ),
+                ),
               ),
             ),
-          ),
-      ],
+            Positioned(
+              left: 28,
+              right: 28,
+              bottom: size.height - frame.top + 14,
+              child: Text(
+                _instructionKey.tr(),
+                textAlign: TextAlign.center,
+                maxLines: 3,
+                style: context.textTheme.bodyMedium?.copyWith(
+                  color: Colors.white,
+                  fontSize: 14.5,
+                  height: 1.35,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              top: frame.bottom + 14,
+              child: Center(child: _StatusPill(found: _found)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildCenteredState(
+    BuildContext context, {
+    required String iconAsset,
+    required String message,
+    required String actionLabel,
+    required Future<void> Function() onAction,
+  }) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: SvgPicture.asset(
+                iconAsset,
+                width: 32,
+                height: 32,
+                colorFilter:
+                    const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: context.textTheme.bodyMedium?.copyWith(
+                color: Colors.white,
+                fontSize: 15,
+                height: 1.4,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              height: 48,
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: ProjectTheme.brandColor,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                onPressed: onAction,
+                child: Text(
+                  actionLabel,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -954,80 +1090,90 @@ class _MrzScannerSheetState extends State<_MrzScannerSheet>
   }
 }
 
-enum _DocShape { passport, idCard }
-
+/// Hujjat turi kartasi — ikonka, nom, MRZ izohi va strelka.
 class _DocTypeScanTile extends StatelessWidget {
+  final String iconAsset;
   final String label;
   final String hint;
-  final bool isDark;
-  final _DocShape docShape;
   final VoidCallback onTap;
 
   const _DocTypeScanTile({
+    required this.iconAsset,
     required this.label,
     required this.hint,
-    required this.isDark,
-    required this.docShape,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final titleColor =
-        isDark ? ProjectTheme.textColorDark : ProjectTheme.textColorLight;
-    final subtitleColor = isDark
-        ? ProjectTheme.secondaryTextDark
-        : ProjectTheme.secondaryTextLight;
-    final borderColor =
-        isDark ? ProjectTheme.borderDark : ProjectTheme.borderLight;
+    final isDark = context.isDarkMode;
+    final brand = ProjectTheme.brandColor;
+    final muted =
+        isDark ? ProjectTheme.secondaryTextDark : const Color(0xFF5B6475);
 
     return Material(
-      color: Colors.transparent,
+      color: isDark
+          ? Colors.white.withValues(alpha: 0.06)
+          : const Color(0xFFF3F6FA),
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Ink(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: borderColor),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            child: Row(
-              children: [
-                _DocShapeIcon(shape: docShape, isDark: isDark),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        label,
-                        style: context.textTheme.bodyLarge?.copyWith(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: titleColor,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        hint,
-                        style: context.textTheme.bodySmall?.copyWith(
-                          fontSize: 12.5,
-                          color: subtitleColor,
-                          height: 1.3,
-                        ),
-                      ),
-                    ],
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : brand.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: SvgPicture.asset(
+                  iconAsset,
+                  width: 26,
+                  height: 26,
+                  colorFilter: ColorFilter.mode(
+                    isDark ? Colors.white : brand,
+                    BlendMode.srcIn,
                   ),
                 ),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  size: 22,
-                  color: subtitleColor,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: context.textTheme.bodyLarge?.copyWith(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      hint,
+                      style: context.textTheme.bodySmall?.copyWith(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: muted,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              SvgPicture.asset(
+                Assets.iconsBookingChevronRightIcon,
+                width: 20,
+                height: 20,
+                colorFilter: ColorFilter.mode(muted, BlendMode.srcIn),
+              ),
+            ],
           ),
         ),
       ),
@@ -1035,47 +1181,192 @@ class _DocTypeScanTile extends StatelessWidget {
   }
 }
 
-class _DocShapeIcon extends StatelessWidget {
-  final _DocShape shape;
-  final bool isDark;
+/// Kamera ustidagi yarim shaffof dumaloq tugma.
+class _GlassIconButton extends StatelessWidget {
+  final String iconAsset;
+  final VoidCallback onTap;
+  final bool active;
+  final String? tooltip;
 
-  const _DocShapeIcon({required this.shape, required this.isDark});
+  const _GlassIconButton({
+    required this.iconAsset,
+    required this.onTap,
+    this.active = false,
+    this.tooltip,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final isPassport = shape == _DocShape.passport;
-    final w = isPassport ? 28.0 : 36.0;
-    final h = isPassport ? 36.0 : 24.0;
-    final borderColor =
-        isDark ? ProjectTheme.borderDark : ProjectTheme.borderLight;
-
-    return Container(
-      width: 44,
-      height: 44,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: ProjectTheme.brandColor.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Container(
-        width: w,
-        height: h,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(isPassport ? 4 : 3),
-          border: Border.all(color: borderColor, width: 1.2),
-          color: isDark
-              ? ProjectTheme.cardColorDark
-              : Colors.white.withValues(alpha: 0.9),
+    final button = Material(
+      color: active
+          ? Colors.white.withValues(alpha: 0.92)
+          : Colors.white.withValues(alpha: 0.16),
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Center(
+            child: SvgPicture.asset(
+              iconAsset,
+              width: 22,
+              height: 22,
+              colorFilter: ColorFilter.mode(
+                active ? Colors.black : Colors.white,
+                BlendMode.srcIn,
+              ),
+            ),
+          ),
         ),
-        child: Align(
-          alignment: Alignment.bottomCenter,
+      ),
+    );
+    return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
+  }
+}
+
+/// Ramka ostidagi holat: "Kod qidirilmoqda…" (pulsatsiyali nuqta) yoki
+/// "Tayyor!" (yashil belgi).
+class _StatusPill extends StatefulWidget {
+  final bool found;
+
+  const _StatusPill({required this.found});
+
+  @override
+  State<_StatusPill> createState() => _StatusPillState();
+}
+
+class _StatusPillState extends State<_StatusPill>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool found = widget.found;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color:
+            found ? ProjectTheme.success : Colors.black.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: found ? 0 : 0.14),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (found)
+            SvgPicture.asset(
+              Assets.iconsScanTickIcon,
+              width: 16,
+              height: 16,
+              colorFilter:
+                  const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+            )
+          else
+            FadeTransition(
+              opacity: Tween<double>(begin: 0.35, end: 1).animate(_pulse),
+              child: Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: ProjectTheme.brandColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+          const SizedBox(width: 8),
+          Text(
+            (found ? 'scan_found' : 'scan_searching').tr(),
+            style: context.textTheme.bodySmall?.copyWith(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Katta dumaloq "suratga olish" tugmasi (kamera ilovalaridagidek).
+class _ShutterButton extends StatefulWidget {
+  final bool busy;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  const _ShutterButton({
+    required this.busy,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  State<_ShutterButton> createState() => _ShutterButtonState();
+}
+
+class _ShutterButtonState extends State<_ShutterButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      enabled: widget.enabled,
+      label: 'scan_take_photo'.tr(),
+      child: GestureDetector(
+        onTapDown:
+            widget.enabled ? (_) => setState(() => _pressed = true) : null,
+        onTapCancel: () => setState(() => _pressed = false),
+        onTapUp: widget.enabled
+            ? (_) {
+                setState(() => _pressed = false);
+                HapticFeedback.lightImpact();
+                widget.onTap();
+              }
+            : null,
+        child: AnimatedScale(
+          scale: _pressed ? 0.92 : 1,
+          duration: const Duration(milliseconds: 120),
           child: Container(
-            width: w * 0.85,
-            height: h * 0.22,
-            margin: const EdgeInsets.only(bottom: 3),
+            width: 74,
+            height: 74,
+            padding: const EdgeInsets.all(5),
             decoration: BoxDecoration(
-              color: ProjectTheme.brandColor.withValues(alpha: 0.35),
-              borderRadius: BorderRadius.circular(1),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 3.5),
+            ),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white
+                    .withValues(alpha: widget.enabled || widget.busy ? 1 : 0.4),
+              ),
+              alignment: Alignment.center,
+              child: widget.busy
+                  ? SizedBox(
+                      width: 26,
+                      height: 26,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: ProjectTheme.brandColor,
+                      ),
+                    )
+                  : null,
             ),
           ),
         ),
@@ -1094,72 +1385,121 @@ class _MrzOverlayConfig {
     required this.heightFactor,
     required this.centerYFactor,
   });
+
+  Rect rectFor(Size size) => Rect.fromCenter(
+        center: Offset(size.width / 2, size.height * centerYFactor),
+        width: size.width * widthFactor,
+        height: size.height * heightFactor,
+      );
 }
 
+/// Ramka tashqarisini xiralashtiradi, burchak qavslarini va ramka ichida
+/// yuradigan skaner chizig'ini chizadi.
 class _MrzOverlayPainter extends CustomPainter {
   final _MrzOverlayConfig config;
-  final Color color;
+  final Color frameColor;
+  final Color lineColor;
+  final double scanProgress;
+  final bool showScanLine;
 
-  _MrzOverlayPainter({required this.config, required this.color});
+  _MrzOverlayPainter({
+    required this.config,
+    required this.frameColor,
+    required this.lineColor,
+    required this.scanProgress,
+    required this.showScanLine,
+  });
+
+  static const double _radius = 18;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final rect = Rect.fromCenter(
-      center: Offset(size.width / 2, size.height * config.centerYFactor),
-      width: size.width * config.widthFactor,
-      height: size.height * config.heightFactor,
-    );
+    final rect = config.rectFor(size);
+    final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(_radius));
 
-    final path = Path()
+    final dim = Path()
       ..addRect(Offset.zero & size)
-      ..addRRect(RRect.fromRectAndRadius(rect, const Radius.circular(10)))
+      ..addRRect(rrect)
       ..fillType = PathFillType.evenOdd;
+    canvas.drawPath(dim, Paint()..color = const Color(0x9E000000));
 
-    canvas.drawPath(path, Paint()..color = const Color(0xAA000000));
-
+    // Ingichka ramka.
     canvas.drawRRect(
-      RRect.fromRectAndRadius(rect, const Radius.circular(10)),
+      rrect,
       Paint()
-        ..color = color
+        ..color = frameColor.withValues(alpha: 0.35)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 3,
+        ..strokeWidth = 1.2,
     );
 
-    _drawCorner(canvas, rect.topLeft, true, true);
-    _drawCorner(canvas, rect.topRight, false, true);
-    _drawCorner(canvas, rect.bottomLeft, true, false);
-    _drawCorner(canvas, rect.bottomRight, false, false);
-  }
-
-  void _drawCorner(
-    Canvas canvas,
-    Offset point,
-    bool left,
-    bool top,
-  ) {
-    const len = 22.0;
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 3.5
+    // Burchak qavslari.
+    final corner = Paint()
+      ..color = frameColor
       ..style = PaintingStyle.stroke
+      ..strokeWidth = 4
       ..strokeCap = StrokeCap.round;
-
-    if (left && top) {
-      canvas.drawLine(point, point + const Offset(len, 0), paint);
-      canvas.drawLine(point, point + const Offset(0, len), paint);
-    } else if (!left && top) {
-      canvas.drawLine(point, point + const Offset(-len, 0), paint);
-      canvas.drawLine(point, point + const Offset(0, len), paint);
-    } else if (left && !top) {
-      canvas.drawLine(point, point + const Offset(len, 0), paint);
-      canvas.drawLine(point, point + const Offset(0, -len), paint);
-    } else {
-      canvas.drawLine(point, point + const Offset(-len, 0), paint);
-      canvas.drawLine(point, point + const Offset(0, -len), paint);
+    const len = 26.0;
+    const r = _radius;
+    void bracket(Offset o, double sx, double sy) {
+      final path = Path()
+        ..moveTo(o.dx + sx * (r + len), o.dy)
+        ..lineTo(o.dx + sx * r, o.dy)
+        ..arcToPoint(
+          Offset(o.dx, o.dy + sy * r),
+          radius: const Radius.circular(r),
+          clockwise: sx * sy < 0,
+        )
+        ..lineTo(o.dx, o.dy + sy * (r + len));
+      canvas.drawPath(path, corner);
     }
+
+    bracket(rect.topLeft, 1, 1);
+    bracket(rect.topRight, -1, 1);
+    bracket(rect.bottomLeft, 1, -1);
+    bracket(rect.bottomRight, -1, -1);
+
+    if (!showScanLine) return;
+
+    // Yuradigan skaner chizig'i va uning ortidagi yumshoq nur.
+    final inset = rect.deflate(10);
+    final y = inset.top + inset.height * scanProgress;
+    canvas.save();
+    canvas.clipRRect(rrect);
+    final glowRect = Rect.fromLTRB(inset.left, y - 26, inset.right, y);
+    canvas.drawRect(
+      glowRect,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            lineColor.withValues(alpha: 0),
+            lineColor.withValues(alpha: 0.28),
+          ],
+        ).createShader(glowRect),
+    );
+    final lineRect = Rect.fromLTRB(inset.left, y - 1.5, inset.right, y + 1.5);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(lineRect, const Radius.circular(2)),
+      Paint()
+        ..shader = LinearGradient(
+          colors: [
+            lineColor.withValues(alpha: 0),
+            lineColor,
+            Colors.white,
+            lineColor,
+            lineColor.withValues(alpha: 0),
+          ],
+          stops: const [0, 0.2, 0.5, 0.8, 1],
+        ).createShader(lineRect),
+    );
+    canvas.restore();
   }
 
   @override
   bool shouldRepaint(covariant _MrzOverlayPainter oldDelegate) =>
-      oldDelegate.color != color || oldDelegate.config != config;
+      oldDelegate.frameColor != frameColor ||
+      oldDelegate.scanProgress != scanProgress ||
+      oldDelegate.showScanLine != showScanLine ||
+      oldDelegate.config != config;
 }

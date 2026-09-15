@@ -3,24 +3,22 @@ import 'package:mysafar_sdk/mysafar_sdk.dart';
 
 /// To'liq app rejimi: SDK o'zi MaterialApp quradi.
 ///
-/// Ishga tushirish:
-///   flutter run --dart-define=PARTNER_TOKEN=xxx
+/// Ishga tushirish (Unired konfiguratsiyasi local `env.json` dan):
+///   cp env.json.example env.json   # bir marta, MYSAFAR_* ni to'ldiring
+///   flutter run --dart-define-from-file=env.json
 ///
 /// Embed (host ichida) rejimini sinash uchun: lib/main_embed.dart
 Future<void> main() async {
   await MySafarSdk.init(
+    // Unired init'i bilan bir xil config. URL/token bo'sh — debug'da SDK
+    // ularni env.json dagi MYSAFAR_* qiymatlaridan to'ldiradi. Release'da
+    // hech narsa to'ldirilmaydi: host haqiqiy qiymatlarni shu yerga beradi.
+    // Firebase example'da init qilinmaydi — Firestore config, Google auth
+    // va MyID o'chiq holda ishlashi tekshiriladi.
     config: const MySafarConfig(
-      baseUrl: String.fromEnvironment(
-        'BASE_URL',
-        defaultValue: 'https://api.mysafar.ru',
-      ),
-      skoteBaseUrl: String.fromEnvironment(
-        'SKOTE_BASE_URL',
-        defaultValue: 'https://cms.mysafar.uz/api',
-      ),
-      partnerToken: String.fromEnvironment('PARTNER_TOKEN'),
-      // Firebase example'da init qilinmaydi — Firestore config, Google auth
-      // va MyID o'chiq holda ishlashi tekshiriladi.
+      baseUrl: '',
+      skoteBaseUrl: '',
+      enableServicesTab: false,
     ),
   );
 

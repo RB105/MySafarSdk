@@ -135,8 +135,7 @@ class _OfferCard extends StatelessWidget {
   }
 
   Widget _badgeRow(BuildContext context, bool isDark, Arr dep) {
-    final String carrierCode =
-        (_segments.first.carrier.code).toUpperCase();
+    final String carrierCode = (_segments.first.carrier.code).toUpperCase();
     return Row(
       children: [
         Flexible(child: _badge(context, isDark, dep)),
@@ -248,8 +247,7 @@ class _OfferCard extends StatelessWidget {
                 Text(
                   transfers == 0
                       ? "only_direct".tr()
-                      : "transfer_count"
-                          .tr(namedArgs: {"count": "$transfers"}),
+                      : "transfer_count".tr(namedArgs: {"count": "$transfers"}),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -345,8 +343,8 @@ class _OfferCard extends StatelessWidget {
                     isDark ? _Web.blue.withAlpha(50) : const Color(0xFFEEF2FF),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.arrow_forward_rounded,
+              child: const _SvgIcon(
+                Assets.iconsSearchArrowRightIcon,
                 size: 15,
                 color: _Web.blue,
               ),
@@ -370,13 +368,14 @@ class _CarrierLogo extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(4),
       child: Image.asset(
-        'assets/img/tickets/airlines/$code.png',
+        // `packages/` prefiksisiz host app ichida logo hech qachon topilmaydi.
+        'packages/mysafar_sdk/assets/img/tickets/airlines/$code.png',
         width: 18,
         height: 18,
         fit: BoxFit.contain,
-        errorBuilder: (_, __, ___) => const Icon(
-          Icons.flight_takeoff_rounded,
-          size: 15,
+        errorBuilder: (_, __, ___) => const _SvgIcon(
+          Assets.iconsSearchPlaneTakeoffIcon,
+          size: 16,
           color: Color(0xFF93A3C4),
         ),
       ),
@@ -402,7 +401,11 @@ class _FlightLine extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 3),
           child: Transform.rotate(
             angle: math.pi / 2,
-            child: const Icon(Icons.flight_rounded, size: 12, color: _Web.blue),
+            child: const _SvgIcon(
+              Assets.iconsSearchPlaneIcon,
+              size: 13,
+              color: _Web.blue,
+            ),
           ),
         ),
         Expanded(child: Container(height: 1, color: line)),

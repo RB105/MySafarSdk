@@ -56,35 +56,36 @@ class PaymentConstants {
           id: mysafarpay,
           imagePath: ProjectAssets.bookingHumologo,
           secondaryImagePath: ProjectAssets.bookingUzkardlogo,
-          cardName: 'HUMO / Uzcard',
-          subtitle: 'Barcha kartalar',
+          cardName: 'payment_type_humo_uzcard',
+          subtitle: 'payment_type_all_cards',
         );
       case payme:
         return const PaymentType(
           id: payme,
           imagePath: ProjectAssets.bookingPaymelogo,
-          subtitle: "Payme orqali to'lash",
+          cardName: 'Payme',
+          subtitle: 'payment_type_via_payme',
         );
       case paygine:
         return const PaymentType(
           id: paygine,
           imagePath: ProjectAssets.bookingRuflag,
-          cardName: 'Rossiya kartalari',
+          cardName: 'payment_type_ru_cards',
           subtitle: 'Mir, Visa, Mastercard',
         );
       case click:
         return const PaymentType(
           id: click,
           imagePath: ProjectAssets.bookingClicklogo,
-          cardName: '',
-          subtitle: "Click orqali to'lash",
+          cardName: 'Click',
+          subtitle: 'payment_type_via_click',
         );
       case visa:
         return const PaymentType(
           id: visa,
           imagePath: ProjectAssets.bookingVisa,
-          cardName: 'Visa kartalari',
-          subtitle: 'Xalqaro kartalar',
+          cardName: 'payment_type_visa_cards',
+          subtitle: 'payment_type_intl_cards',
         );
       default:
         return null;

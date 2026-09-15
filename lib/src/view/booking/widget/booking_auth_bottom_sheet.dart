@@ -4,12 +4,14 @@ import 'dart:io' show Platform;
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:mysafar_sdk/src/core/enum/status.dart';
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
 import 'package:mysafar_sdk/src/core/tools/sdk_sheets.dart';
+import 'package:mysafar_sdk/src/core/widgets/sdk_dialog.dart';
 import 'package:mysafar_sdk/src/view/auth/logic/bloc/auth_cubit.dart';
 import 'package:mysafar_sdk/src/view/auth/widget/auth_custom_input.dart';
 import 'package:pinput/pinput.dart';
@@ -97,18 +99,12 @@ class _BookingAuthBottomSheetState extends State<BookingAuthBottomSheet> {
   }
 
   Future<void> _showErrorDialog(String message) async {
-    await showDialog(useRootNavigator: false, 
+    HapticFeedback.mediumImpact();
+    await showSdkAlert<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('error'.tr()),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('ok'.tr()),
-          ),
-        ],
-      ),
+      tone: SdkDialogTone.error,
+      message: message,
+      actions: [SdkDialogAction(label: 'understood'.tr())],
     );
   }
 

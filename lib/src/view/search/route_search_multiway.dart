@@ -152,8 +152,7 @@ class _LegBlock extends StatelessWidget {
               Expanded(
                 child: Text(
                   "route_leg_index"
-                      .tr(namedArgs: {"index": "${index + 1}"})
-                      .toUpperCase(),
+                      .tr(namedArgs: {"index": "${index + 1}"}).toUpperCase(),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(

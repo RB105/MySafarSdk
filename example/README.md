@@ -18,7 +18,7 @@ flutter run -t lib/main_embed.dart --dart-define-from-file=env.json
 To'liq app rejimi uchun:
 
 ```bash
-flutter run --dart-define=PARTNER_TOKEN=xxx
+flutter run --dart-define-from-file=env.json
 ```
 
 ## Getting Started

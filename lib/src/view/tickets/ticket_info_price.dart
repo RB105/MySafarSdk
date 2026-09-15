@@ -3,8 +3,40 @@
 
 part of 'ticket_info_page.dart';
 
-class _PriceFeatureCard extends StatelessWidget {
-  final String priceLabel;
+/// Tafsilot sheet'i uchun umumiy sokin ranglar (bron sahifasi bilan bir xil).
+Color _tiMuted(BuildContext context) => context.isDarkMode
+    ? ProjectTheme.secondaryTextDark
+    : const Color(0xFF5B6475);
+
+Color _tiTonal(BuildContext context) => context.isDarkMode
+    ? Colors.white.withValues(alpha: 0.06)
+    : const Color(0xFFF1F4F9);
+
+Color _tiText(BuildContext context) => context.isDarkMode
+    ? ProjectTheme.textColorDark
+    : ProjectTheme.textColorLight;
+
+/// Oddiy oq karta — soyasiz, radius 20.
+class _TiCard extends StatelessWidget {
+  final Widget child;
+
+  const _TiCard({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: context.color.primaryContainer,
+      borderRadius: BorderRadius.circular(20),
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
+  }
+}
+
+/// "Tarif qoidalari": joylar, qo'l yuki, bagaj, qaytarish, almashtirish —
+/// ikki ustunli sokin ro'yxat. Narx bu yerda takrorlanmaydi (pastdagi
+/// tugmada bor). Ostida (bo'lsa) "Boshqa tarifni tanlash" qatori.
+class _FareRulesCard extends StatelessWidget {
   final int seatCount;
   final bool withCBaggage;
   final String? cBaggage;
@@ -14,8 +46,7 @@ class _PriceFeatureCard extends StatelessWidget {
   final bool isExchangeable;
   final Widget tariffSection;
 
-  const _PriceFeatureCard({
-    required this.priceLabel,
+  const _FareRulesCard({
     required this.seatCount,
     required this.withCBaggage,
     required this.cBaggage,
@@ -28,178 +59,121 @@ class _PriceFeatureCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.isDarkMode;
-    final brand = ProjectTheme.brandColor;
-    final secondaryColor = isDark
-        ? ProjectTheme.secondaryTextDark
-        : ProjectTheme.secondaryTextLight;
-    final dividerColor =
-        isDark ? Colors.white.withAlpha(20) : Colors.black.withAlpha(14);
+    final rules = <(String, String, bool)>[
+      (
+        Assets.ticketsSeatIcon,
+        "seat_count".tr(namedArgs: {"count": "$seatCount"}),
+        true,
+      ),
+      (
+        withCBaggage
+            ? Assets.ticketsLuggageIcon
+            : Assets.ticketsLuggageNegativeIcon,
+        withCBaggage
+            ? "luggage_size".tr(namedArgs: {"count": cBaggage ?? ""})
+            : "no_luggage".tr(),
+        withCBaggage,
+      ),
+      (
+        isBaggage
+            ? Assets.ticketsBaggagePositiveIcon
+            : Assets.ticketsBaggageNegativeIcon,
+        baggageLabel,
+        isBaggage,
+      ),
+      (
+        isRefund ? Assets.ticketsReturnSuccessIcon : Assets.ticketsReturnIcon,
+        isRefund ? "refundable".tr() : "unrefundable".tr(),
+        isRefund,
+      ),
+      (
+        isExchangeable
+            ? Assets.ticketsReplaceGreenIcon
+            : Assets.ticketsReplaceRedIcon,
+        isExchangeable ? "exchangeable".tr() : "unexchangeable".tr(),
+        isExchangeable,
+      ),
+    ];
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(22),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: context.color.primaryContainer,
-          borderRadius: BorderRadius.circular(22),
-          boxShadow: context.shadowDown,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Price hero
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [brand, ProjectTheme.blueBg],
-                      ),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(Icons.confirmation_number_outlined,
-                        color: Colors.white, size: 24),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "total_price".tr(),
-                          style: context.textTheme.bodySmall?.copyWith(
-                            color: secondaryColor,
-                            fontSize: 12,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            priceLabel,
-                            style: context.textTheme.displayMedium?.copyWith(
-                              color: brand,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Container(height: 1, color: dividerColor),
-              const SizedBox(height: 14),
-              // Feature pills
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _FeaturePill(
-                    assetPath: Assets.ticketsSeatIcon,
-                    label:
-                        "seat_count".tr(namedArgs: {"count": "$seatCount"}),
-                    accent: ProjectTheme.success,
-                    isDark: isDark,
-                  ),
-                  _FeaturePill(
-                    assetPath: withCBaggage
-                        ? Assets.ticketsLuggageIcon
-                        : Assets.ticketsLuggageNegativeIcon,
-                    label: withCBaggage
-                        ? "luggage_size".tr(namedArgs: {"count": cBaggage ?? ""})
-                        : "no_luggage".tr(),
-                    accent:
-                        withCBaggage ? ProjectTheme.success : ProjectTheme.error,
-                    isDark: isDark,
-                  ),
-                  _FeaturePill(
-                    assetPath: isBaggage
-                        ? Assets.ticketsBaggagePositiveIcon
-                        : Assets.ticketsBaggageNegativeIcon,
-                    label: baggageLabel,
-                    accent:
-                        isBaggage ? ProjectTheme.success : ProjectTheme.error,
-                    isDark: isDark,
-                  ),
-                  _FeaturePill(
-                    assetPath: isRefund
-                        ? Assets.ticketsReturnSuccessIcon
-                        : Assets.ticketsReturnIcon,
-                    label: isRefund ? "refundable".tr() : "unrefundable".tr(),
-                    accent: isRefund ? ProjectTheme.success : ProjectTheme.error,
-                    isDark: isDark,
-                  ),
-                  _FeaturePill(
-                    assetPath: isExchangeable
-                        ? Assets.ticketsReplaceGreenIcon
-                        : Assets.ticketsReplaceRedIcon,
-                    label: isExchangeable
-                        ? "exchangeable".tr()
-                        : "unexchangeable".tr(),
-                    accent: isExchangeable
-                        ? ProjectTheme.success
-                        : ProjectTheme.error,
-                    isDark: isDark,
-                  ),
-                ],
-              ),
-              tariffSection,
-            ],
+    return _TiCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+            child: Text(
+              "filter_tariff_title".tr(),
+              style: context.textTheme.bodyLarge
+                  ?.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
           ),
-        ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                const gap = 12.0;
+                final itemWidth = (constraints.maxWidth - gap) / 2;
+                return Wrap(
+                  spacing: gap,
+                  children: [
+                    for (final (icon, label, positive) in rules)
+                      SizedBox(
+                        width: itemWidth,
+                        child: _FareRuleItem(
+                          iconAsset: icon,
+                          label: label,
+                          positive: positive,
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+          tariffSection,
+        ],
       ),
     );
   }
 }
 
-class _FeaturePill extends StatelessWidget {
-  final String assetPath;
+class _FareRuleItem extends StatelessWidget {
+  final String iconAsset;
   final String label;
-  final Color accent;
-  final bool isDark;
+  final bool positive;
 
-  const _FeaturePill({
-    required this.assetPath,
+  const _FareRuleItem({
+    required this.iconAsset,
     required this.label,
-    required this.accent,
-    required this.isDark,
+    required this.positive,
   });
 
   @override
   Widget build(BuildContext context) {
-    final bg = isDark ? accent.withAlpha(45) : accent.withAlpha(22);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(12),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 18,
-            height: 18,
-            child: SvgPicture.asset(assetPath),
+            width: 20,
+            height: 20,
+            child: SvgPicture.asset(iconAsset),
           ),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: context.textTheme.bodySmall?.copyWith(
-              color: accent,
-              fontWeight: FontWeight.w700,
-              fontSize: 12,
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: context.textTheme.bodyMedium?.copyWith(
+                fontSize: 13.5,
+                height: 1.3,
+                fontWeight: FontWeight.w600,
+                // Salbiy shart ham o'qiladi, lekin e'tiborni tortmaydi —
+                // rang ma'nosini ikonka beradi.
+                color: positive ? _tiText(context) : _tiMuted(context),
+              ),
             ),
           ),
         ],
@@ -208,6 +182,7 @@ class _FeaturePill extends StatelessWidget {
   }
 }
 
+/// Kartaning pastki qatori — "Boshqa tarifni tanlash" ›.
 class _TariffPickerTile extends StatelessWidget {
   final VoidCallback onTap;
 
@@ -216,52 +191,71 @@ class _TariffPickerTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = context.isDarkMode;
-    final brand =
-        isDark ? ProjectTheme.accentLight : ProjectTheme.brandColor;
-    final bg = isDark ? brand.withAlpha(38) : brand.withAlpha(22);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: brand.withAlpha(isDark ? 80 : 45),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(Icons.style_outlined, color: brand, size: 18),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  "choose_other_tariff".tr(),
-                  style: context.textTheme.bodyMedium?.copyWith(
-                    color: brand,
-                    fontWeight: FontWeight.w700,
+    final Color accent = isDark ? Colors.white : ProjectTheme.brandColor;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Divider(
+          height: 1,
+          thickness: 1,
+          indent: 16,
+          endIndent: 16,
+          color: context.color.outline.withValues(alpha: 0.6),
+        ),
+        InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    "choose_other_tariff".tr(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.textTheme.bodyMedium?.copyWith(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: accent,
+                    ),
                   ),
                 ),
-              ),
-              Icon(Icons.arrow_forward_rounded, color: brand, size: 18),
-            ],
+                SvgPicture.asset(
+                  Assets.iconsBookingChevronRightIcon,
+                  width: 20,
+                  height: 20,
+                  colorFilter: ColorFilter.mode(accent, BlendMode.srcIn),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Tariflar yuklanayotganda karta ostidagi ixcham shimmer qator.
+class _TariffPickerSkeleton extends StatelessWidget {
+  const _TariffPickerSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      child: Shimmer.fromColors(
+        baseColor: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+        highlightColor: isDark ? Colors.grey.shade700 : Colors.grey.shade100,
+        child: Container(
+          height: 20,
+          margin: const EdgeInsets.only(right: 140),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(6),
           ),
         ),
       ),
     );
   }
 }
-
-// ════════════════════════════════════════════════════════════════════
-//  FLIGHT DIRECTION — BOARDING-PASS CARD + VERTICAL TIMELINE
-// ════════════════════════════════════════════════════════════════════
-

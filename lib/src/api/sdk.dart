@@ -2,8 +2,7 @@ import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:appmetrica_plugin/appmetrica_plugin.dart';
 import 'package:flutter/foundation.dart'
     show VoidCallback, debugPrint, kDebugMode;
-import 'package:flutter/services.dart'
-    show DeviceOrientation, SystemChrome;
+import 'package:flutter/services.dart' show DeviceOrientation, SystemChrome;
 import 'package:flutter/widgets.dart' show WidgetsFlutterBinding;
 import 'package:get_storage/get_storage.dart' show GetStorage;
 import 'package:mysafar_sdk/src/core/config/response_config.dart'
@@ -23,7 +22,10 @@ import 'package:mysafar_sdk/src/api/analytics.dart';
 import 'package:mysafar_sdk/src/api/callbacks.dart';
 import 'package:mysafar_sdk/src/api/config.dart';
 import 'package:mysafar_sdk/src/api/token_store.dart';
+import 'package:mysafar_sdk/src/api/user_data.dart';
 import 'package:mysafar_sdk/src/core/config/app_config.dart' show AppConfig;
+import 'package:mysafar_sdk/src/core/config/debug_config_defaults.dart'
+    show DebugConfigDefaults;
 import 'package:mysafar_sdk/src/service/cache/hive_service.dart'
     show HiveService;
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart'
@@ -43,6 +45,7 @@ class MySafarSdk {
   static MySafarTokenStore _tokens = GetStorageTokenStore();
   static MySafarAnalytics _analytics = const NoopAnalytics();
   static MySafarCallbacks _callbacks = const MySafarCallbacks();
+  static MySafarUserData _userData = const MySafarUserData();
 
   static bool get isInitialized => _config != null;
 
@@ -67,6 +70,30 @@ class MySafarSdk {
   static MySafarAnalytics get analytics => _analytics;
   static MySafarCallbacks get callbacks => _callbacks;
 
+  /// Host bergan foydalanuvchi ma'lumotlari (email, kartalar). Berilmagan
+  /// bo'lsa bo'sh [MySafarUserData] — `null` tekshiruvi kerak emas.
+  static MySafarUserData get userData => _userData;
+
+  /// Kartalar/email o'zgarganda (yangi karta qo'shildi, balans yangilandi,
+  /// boshqa user kirdi) host chaqiradi — oldingi qiymat to'liq almashtiriladi.
+  /// Yaroqsiz kartalar (16 raqamsiz / `YYMM` bo'lmagan muddat / bo'sh token)
+  /// jim tashlab yuboriladi.
+  static void updateUserData(MySafarUserData userData) {
+    _userData = userData.sanitized();
+    if (kDebugMode) {
+      final dropped = userData.uzsCards.length +
+          userData.foreignCards.length -
+          _userData.uzsCards.length -
+          _userData.foreignCards.length;
+      if (dropped > 0) {
+        debugPrint('MySafarSdk: $dropped ta yaroqsiz karta tashlab yuborildi.');
+      }
+    }
+  }
+
+  /// Host user chiqib ketganda karta/email ma'lumotlarini xotiradan o'chiradi.
+  static void clearUserData() => _userData = const MySafarUserData();
+
   /// SDK'ni ishga tayyorlaydi. `runApp`dan oldin chaqirilishi shart.
   ///
   /// Firebase'ga bog'liq funksiyalar (Firestore remote config, Google auth)
@@ -88,10 +115,16 @@ class MySafarSdk {
     MySafarTokenStore? tokenStore,
     MySafarAnalytics? analytics,
     MySafarCallbacks callbacks = const MySafarCallbacks(),
+    MySafarUserData? userData,
   }) async {
     WidgetsFlutterBinding.ensureInitialized();
     await lockPortrait();
 
+    if (userData != null) updateUserData(userData);
+
+    // Debug'da bo'sh maydonlar env.json (`MYSAFAR_*`) dan to'ldiriladi;
+    // release'da config host bergan holicha qoladi.
+    config = DebugConfigDefaults.apply(config);
     _config = config;
     if (tokenStore != null) _tokens = tokenStore;
     if (analytics != null) {
@@ -108,6 +141,13 @@ class MySafarSdk {
     _callbacks = callbacks;
 
     AppConfig.apply(config);
+    if (kDebugMode && !AppConfig.hasValidPartnerToken) {
+      debugPrint(
+        'MySafarSdk: partnerToken yo\'q yoki yaroqsiz. Debug uchun '
+        'env.json ga ${DebugConfigDefaults.partnerTokenKey} yozib '
+        '`--dart-define-from-file=env.json` bilan ishga tushiring.',
+      );
+    }
 
     // SDK o'z alohida konteynerida ishlaydi — host storage'iga tegilmaydi.
     await Future.wait([

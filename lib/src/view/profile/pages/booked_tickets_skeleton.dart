@@ -1,54 +1,86 @@
 part of 'booked_tickets_page.dart';
 
+/// Buyurtma kartasi (MyTicketWidget) siluetidagi skelet: holat va raqam
+/// chiplari, aviakompaniya qatori, vaqt chizig'i, tafsilotlar va tugma.
 class _TicketSkeleton extends StatelessWidget {
   const _TicketSkeleton();
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return const Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Row(
+        Row(
           children: [
-            _SkeletonCircle(36),
-            SizedBox(width: 10),
-            _SkeletonBox(width: 76, height: 22, radius: 20),
+            _SkeletonBox(width: 92, height: 22, radius: 8),
             Spacer(),
-            _SkeletonBox(width: 88, height: 22, radius: 20),
+            _SkeletonBox(width: 96, height: 22, radius: 8),
           ],
         ),
-        const SizedBox(height: 18),
-        const Row(
+        SizedBox(height: 16),
+        Row(
           children: [
-            _SkeletonCircle(38),
-            SizedBox(width: 10),
+            _SkeletonCircle(28),
+            SizedBox(width: 8),
+            _SkeletonBox(width: 130, height: 12),
+            Spacer(),
+            _SkeletonBox(width: 70, height: 12),
+          ],
+        ),
+        SizedBox(height: 14),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _SkeletonBox(width: 118, height: 14),
+                _SkeletonBox(width: 58, height: 20),
                 SizedBox(height: 6),
-                _SkeletonBox(width: 70, height: 10),
+                _SkeletonBox(width: 36, height: 12),
               ],
             ),
-            Spacer(),
-            _SkeletonBox(width: 64, height: 22, radius: 20),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                children: [
+                  _SkeletonBox(width: 50, height: 10),
+                  SizedBox(height: 10),
+                  _SkeletonBox(width: double.infinity, height: 2),
+                ],
+              ),
+            ),
+            SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                _SkeletonBox(width: 58, height: 20),
+                SizedBox(height: 6),
+                _SkeletonBox(width: 36, height: 12),
+              ],
+            ),
           ],
         ),
-        const SizedBox(height: 18),
-        for (int i = 0; i < 2; i++) ...[
-          const Row(
-            children: [
-              _SkeletonBox(width: 32, height: 32, radius: 10),
-              SizedBox(width: 10),
-              _SkeletonBox(width: 92, height: 12),
-              Spacer(),
-              _SkeletonBox(width: 110, height: 12),
-            ],
-          ),
-          const SizedBox(height: 10),
-        ],
-        const SizedBox(height: 6),
-        const _SkeletonBox(width: double.infinity, height: 48, radius: 14),
+        SizedBox(height: 20),
+        _SkeletonLine(),
+        SizedBox(height: 10),
+        _SkeletonLine(),
+        SizedBox(height: 16),
+        _SkeletonBox(width: double.infinity, height: 50, radius: 14),
+      ],
+    );
+  }
+}
+
+class _SkeletonLine extends StatelessWidget {
+  const _SkeletonLine();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      children: [
+        _SkeletonBox(width: 80, height: 12),
+        Spacer(),
+        _SkeletonBox(width: 110, height: 12),
       ],
     );
   }

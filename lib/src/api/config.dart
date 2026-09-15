@@ -115,8 +115,7 @@ class MySafarConfig {
 
   /// Support Telegram URL. Host bermasa default.
   String get supportTelegramUrl {
-    return partnerSupportTelegramUrl ??
-        MySafarSupportConfig.defaultTelegramUrl;
+    return partnerSupportTelegramUrl ?? MySafarSupportConfig.defaultTelegramUrl;
   }
 
   /// Partner initda aniq bergan telefon (default emas). Bo'sh → `null`.
@@ -141,6 +140,50 @@ class MySafarConfig {
   /// bermagan bo'lsa kartani yashirish.
   bool get hasPartnerSupport =>
       partnerSupportPhone != null || partnerSupportTelegramUrl != null;
+
+  MySafarConfig copyWith({
+    String? baseUrl,
+    String? skoteBaseUrl,
+    String? partnerToken,
+    String? appMetricaApiKey,
+    String? appName,
+    MySafarMyIdConfig? myId,
+    MySafarSocialAuthConfig? socialAuth,
+    bool? enableVersionGate,
+    bool? enableServicesTab,
+    bool? enableShowcaseTour,
+    bool? enableFullProfile,
+    bool? enableMultiSearch,
+    Locale? startLocale,
+    bool? saveLocale,
+    ThemeMode? themeMode,
+    Color? brandColor,
+    MySafarBottomBarStyle? bottomBarStyle,
+    MySafarHomeHeaderStyle? homeHeaderStyle,
+    MySafarSupportConfig? support,
+  }) {
+    return MySafarConfig(
+      baseUrl: baseUrl ?? this.baseUrl,
+      skoteBaseUrl: skoteBaseUrl ?? this.skoteBaseUrl,
+      partnerToken: partnerToken ?? this.partnerToken,
+      appMetricaApiKey: appMetricaApiKey ?? this.appMetricaApiKey,
+      appName: appName ?? this.appName,
+      myId: myId ?? this.myId,
+      socialAuth: socialAuth ?? this.socialAuth,
+      enableVersionGate: enableVersionGate ?? this.enableVersionGate,
+      enableServicesTab: enableServicesTab ?? this.enableServicesTab,
+      enableShowcaseTour: enableShowcaseTour ?? this.enableShowcaseTour,
+      enableFullProfile: enableFullProfile ?? this.enableFullProfile,
+      enableMultiSearch: enableMultiSearch ?? this.enableMultiSearch,
+      startLocale: startLocale ?? this.startLocale,
+      saveLocale: saveLocale ?? this.saveLocale,
+      themeMode: themeMode ?? this.themeMode,
+      brandColor: brandColor ?? this.brandColor,
+      bottomBarStyle: bottomBarStyle ?? this.bottomBarStyle,
+      homeHeaderStyle: homeHeaderStyle ?? this.homeHeaderStyle,
+      support: support ?? this.support,
+    );
+  }
 }
 
 /// Qo'llab-quvvatlash kontaktlari — host `MySafarConfig.support` orqali beradi.

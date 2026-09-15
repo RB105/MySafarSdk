@@ -1,12 +1,13 @@
 part of 'ticket_page.dart';
 
 /// ═══════════════════════════════════════════════════════════════════
-///  FIGMA TICKET CARDS
+///  CHIPTA KARTALARI (qidiruv natijalari)
 ///  ─────────────────────────────────────────────────────────────────
-///  • _FigmaTicketCard — toza oq karta: tepada aviakompaniya logolari +
-///    narx; har bir yo'nalish uchun vaqtlar, davomiylik, sana (kelish
-///    boshqa kunda bo'lsa — orange) va marshrut. Barcha kartalar (one-way,
-///    return, multiway) bir xil shu ko'rinishda — maxsus birinchi karta yo'q.
+///  • Tepada: aviakompaniya logosi/nomi va belgilar (eng arzon, ekonom,
+///    loukoster).
+///  • Har bir yo'nalish uchun vaqt chizig'i: jo'nash vaqti + kod ←
+///    davomiylik, chiziq, almashish → qo'nish vaqti (+1 kun) + kod.
+///  • Pastda: bagaj/qo'l yuki/joylar va narx.
 /// ═══════════════════════════════════════════════════════════════════
 
 /// Karta ranglari — light/dark temaga moslashadi.
@@ -15,6 +16,7 @@ class _TixTheme {
   final Color hi; // asosiy matn (navy/oq)
   final Color mid; // ikkilamchi kulrang matn
   final Color line; // ajratkich
+  final Color tonal; // neytral yumshoq fon (teglar, chiplar)
   final bool dark;
 
   const _TixTheme({
@@ -22,16 +24,19 @@ class _TixTheme {
     required this.hi,
     required this.mid,
     required this.line,
+    required this.tonal,
     required this.dark,
   });
 
   static const Color rose = Color(0xFFF43F5E);
+  static const Color amber = Color(0xFFD97706);
 
   static const _light = _TixTheme(
     card: Colors.white,
     hi: Color(0xFF16244A),
-    mid: Color(0xFF8E99B5),
-    line: Color(0xFFEDF0F6),
+    mid: Color(0xFF7A849E),
+    line: Color(0xFFE8ECF3),
+    tonal: Color(0xFFF1F4F9),
     dark: false,
   );
 
@@ -40,6 +45,7 @@ class _TixTheme {
     hi: Colors.white,
     mid: Color(0xFF9BA3B5),
     line: Color(0x22FFFFFF),
+    tonal: Color(0x14FFFFFF),
     dark: true,
   );
 
@@ -51,7 +57,8 @@ class _TixTheme {
   static TextStyle style(double size, FontWeight weight, Color color,
           {double? height}) =>
       TextStyle(
-        fontFamily: "Gilroy",
+        // Paket shrifti — host app ichida ham Gilroy topilsin.
+        fontFamily: "packages/mysafar_sdk/Gilroy",
         fontSize: size,
         fontWeight: weight,
         color: color,
@@ -62,9 +69,9 @@ class _TixTheme {
       ? const []
       : const [
           BoxShadow(
-            color: Color(0x14202A44),
-            blurRadius: 16,
-            offset: Offset(0, 6),
+            color: Color(0x0F202A44),
+            blurRadius: 14,
+            offset: Offset(0, 4),
           ),
         ];
 }
@@ -79,8 +86,29 @@ String _tixDateWithWeekday(String? date) {
   }
 }
 
+/// Ikki sana orasidagi kunlar farqi (qo'nish ertasi kuni bo'lsa +1).
+int _tixDayDiff(String? from, String? to) {
+  DateTime? parse(String? raw) {
+    final s = (raw ?? '').trim();
+    if (s.isEmpty) return null;
+    final parts = s.contains('-') ? s.split('-') : s.split('.');
+    if (parts.length != 3) return null;
+    final bool yearFirst = parts[0].length == 4;
+    final d = int.tryParse(yearFirst ? parts[2] : parts[0]);
+    final m = int.tryParse(parts[1]);
+    final y = int.tryParse(yearFirst ? parts[0] : parts[2]);
+    if (d == null || m == null || y == null) return null;
+    return DateTime(y, m, d);
+  }
+
+  final a = parse(from);
+  final b = parse(to);
+  if (a == null || b == null) return 0;
+  return b.difference(a).inDays;
+}
+
 /// ═══════════════════════════════════════════════════════════════════
-///  ASOSIY CHIPTA KARTASI (Figma)
+///  ASOSIY CHIPTA KARTASI
 /// ═══════════════════════════════════════════════════════════════════
 class _FigmaTicketCard extends StatefulWidget {
   final FlightElement flightElement;
@@ -88,11 +116,10 @@ class _FigmaTicketCard extends StatefulWidget {
   /// 0 → one-way, 1 → round-trip, 2 → multi-city
   final int tripType;
 
-  /// Ro'yxatdagi eng arzon reys — logo yonida yashil "Eng arzon" belgisi
-  /// ko'rsatiladi (web mobil dizayni).
+  /// Ro'yxatdagi eng arzon reys — "Eng arzon" belgisi.
   final bool isCheapest;
 
-  /// Eng arzon (1- va 2-) kartalarda karta tepasida "Ekonom" belgisi.
+  /// Eng arzon (1- va 2-) kartalarda "Ekonom" belgisi.
   final bool showEconomBadge;
 
   const _FigmaTicketCard({
@@ -117,29 +144,25 @@ class _FigmaTicketCardState extends State<_FigmaTicketCard> {
   Widget build(BuildContext context) {
     final t = _TixTheme.of(context);
     final f = widget.flightElement;
-    final directions = f.getSegmentList();
+    final segmentList = f.getSegmentList();
+    final directions = [
+      for (int i = 0; i < segmentList.length; i++)
+        if (segmentList[i].isNotEmpty) (i, segmentList[i]),
+    ];
     final price =
         Provider.of<CurrencyProvider>(context).getElementPrice(f.price);
-
-    // Narx faqat birinchi (borish) yo'nalishda ko'rsatiladi — shu yo'nalish
-    // indeksini topamiz (odatda 0, lekin bo'sh bo'lsa keyingisiga o'tadi).
-    int firstIdx = -1;
-    for (int i = 0; i < directions.length; i++) {
-      if (directions[i].isNotEmpty) {
-        firstIdx = i;
-        break;
-      }
-    }
+    final allSegments = [for (final d in directions) ...d.$2];
+    final bool labelLegs = widget.tripType != 0 || directions.length > 1;
 
     return AnimatedScale(
-      scale: _pressed ? 0.977 : 1.0,
+      scale: _pressed ? 0.98 : 1.0,
       duration: const Duration(milliseconds: 140),
       curve: Curves.easeOut,
       child: Container(
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: t.card,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(20),
           boxShadow: t.cardShadow,
         ),
         child: Material(
@@ -153,72 +176,116 @@ class _FigmaTicketCardState extends State<_FigmaTicketCard> {
             onTapDown: (_) => _setPressed(true),
             onTapUp: (_) => _setPressed(false),
             onTapCancel: () => _setPressed(false),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (widget.showEconomBadge) ...[
-                    const _EconomBadge(),
-                    const SizedBox(height: 10),
-                  ],
-                  // Har bir yo'nalish o'z logo+nomi bilan; narx faqat birinchi
-                  // (borish) yo'nalishda, logo yonida ko'rsatiladi. Borish va
-                  // qaytish orasi divider bilan ajratiladi.
-                  for (int i = 0; i < directions.length; i++)
-                    if (directions[i].isNotEmpty) ...[
-                      if (i > firstIdx)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          child: Divider(
-                              height: 1, thickness: 1, color: t.line),
-                        ),
-                      _LegBlock(
-                        flight: f,
-                        dirIndex: i,
-                        segments: directions[i],
-                        price: i == firstIdx ? price : null,
-                        showCheapestBadge:
-                            widget.isCheapest && i == firstIdx,
-                      ),
-                    ],
-                  if (f.isVtrip == true) ...[
-                    const SizedBox(height: 12),
-                    _LowcostPill(flightElement: f),
-                  ],
-                  const SizedBox(height: 12),
-                  _TicketAmenityPills(flight: f),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                  child: _CardHeader(
+                    segments: allSegments,
+                    flight: f,
+                    isCheapest: widget.isCheapest,
+                    showEconom: widget.showEconomBadge,
+                  ),
+                ),
+                for (int k = 0; k < directions.length; k++) ...[
+                  if (k > 0)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Divider(height: 1, thickness: 1, color: t.line),
+                    ),
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(16, k == 0 ? 14 : 12, 16, 12),
+                    child: _LegBlock(
+                      flight: f,
+                      dirIndex: directions[k].$1,
+                      segments: directions[k].$2,
+                      label: labelLegs
+                          ? _legLabel(widget.tripType, k, directions[k].$2)
+                          : null,
+                    ),
+                  ),
                 ],
-              ),
+                _CardFooter(flight: f, price: price),
+              ],
             ),
           ),
         ),
       ),
     );
   }
+
+  /// "Borish · 24 iyul, pay" / "Qaytish · ..." / "2-reys · ...".
+  static String _legLabel(int tripType, int index, List<FlightSegment> segs) {
+    final String name;
+    if (tripType == 1) {
+      name = (index == 0 ? "when" : "return").tr();
+    } else {
+      final raw = "race_number".tr(namedArgs: {"num": "${index + 1}"});
+      name = raw.isEmpty ? raw : raw[0].toUpperCase() + raw.substring(1);
+    }
+    final date = _tixDateWithWeekday(segs.first.dep.date);
+    return date.isEmpty ? name : "$name · $date";
+  }
 }
 
-/// Bitta yo'nalish (leg) bloki: vaqtlar+davomiylik, sana(lar)+almashish,
-/// marshrut.
+/// Karta tepasi: aviakompaniya(lar) va belgilar.
+class _CardHeader extends StatelessWidget {
+  final List<FlightSegment> segments;
+  final FlightElement flight;
+  final bool isCheapest;
+  final bool showEconom;
+
+  const _CardHeader({
+    required this.segments,
+    required this.flight,
+    required this.isCheapest,
+    required this.showEconom,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final badges = <Widget>[
+      if (flight.isVtrip == true) _LowcostPill(flightElement: flight),
+      if (showEconom) const _EconomBadge(),
+      if (isCheapest) const _CheapestBadge(),
+    ];
+    if (badges.isEmpty) return _LogoStack(segments: segments);
+
+    // Belgilar sig'masa keyingi qatorga o'tadi (uzun tarjimalar, kichik ekran).
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: _LogoStack(segments: segments)),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Wrap(
+            alignment: WrapAlignment.end,
+            spacing: 6,
+            runSpacing: 4,
+            children: badges,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Bitta yo'nalish (leg): ixtiyoriy sarlavha va vaqt chizig'i.
 class _LegBlock extends StatelessWidget {
   final FlightElement flight;
   final int dirIndex;
   final List<FlightSegment> segments;
 
-  /// Faqat birinchi (borish) yo'nalishda beriladi — logo yonida narx
-  /// ko'rsatiladi. Qaytish yo'nalishida `null` (narx ko'rsatilmaydi).
-  final String? price;
-
-  /// Logo yonida yashil "Eng arzon" belgisi (faqat birinchi yo'nalishda).
-  final bool showCheapestBadge;
+  /// Borish-kelish / murakkab marshrutda: "Borish · 24 iyul, pay".
+  final String? label;
 
   const _LegBlock({
     required this.flight,
     required this.dirIndex,
     required this.segments,
-    this.price,
-    this.showCheapestBadge = false,
+    this.label,
   });
 
   /// Yo'nalishdagi almashishlar (layover) umumiy davomiyligi, daqiqada.
@@ -230,6 +297,11 @@ class _LegBlock extends StatelessWidget {
     return sum;
   }
 
+  static String _code(String? airport, String? city) {
+    final a = (airport ?? '').trim();
+    return a.isNotEmpty ? a : (city ?? '').trim();
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = _TixTheme.of(context);
@@ -239,11 +311,13 @@ class _LegBlock extends StatelessWidget {
     final transfers = flight.getTransferCount(dirIndex);
     final duration =
         ElementFormatter.formatDuration(flight.getDirDuration(dirIndex));
+    final dayDiff = _tixDayDiff(first.dep.date, last.arr.date);
 
-    final depDate = first.dep.date ?? '';
-    final arrDate = last.arr.date ?? '';
-    // Kelish boshqa kunda bo'lsa — sanasi qizil rangda qo'shiladi (web).
-    final bool arrivesAnotherDay = arrDate.isNotEmpty && arrDate != depDate;
+    // Almashish aeroportlari kodlari (masalan "SVO").
+    final stops = [
+      for (int i = 0; i < segments.length - 1; i++)
+        _code(segments[i].arr.airport?.code, segments[i].arr.city?.code),
+    ].where((c) => c.isNotEmpty).toList();
 
     final String transferText = transfers == 0
         ? "ticket_chip_direct".tr()
@@ -254,114 +328,255 @@ class _LegBlock extends StatelessWidget {
 
     return Column(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Shu yo'nalishning aviakompaniya logosi + nomi (vaqtlar tepasida);
-        // narx faqat birinchi yo'nalishda, o'ng tomonda.
-        Row(
-          children: [
-            Expanded(
-              child: Row(
-                children: [
-                  Flexible(child: _LogoStack(segments: segments)),
-                  if (showCheapestBadge) ...[
-                    const SizedBox(width: 8),
-                    const _CheapestBadge(),
-                  ],
-                ],
-              ),
-            ),
-            if (price != null) ...[
-              const SizedBox(width: 8),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  price!,
-                  maxLines: 1,
-                  style: _TixTheme.style(17.5, FontWeight.w800, t.hi),
-                ),
-              ),
-            ],
-          ],
-        ),
-        const SizedBox(height: 10),
-        // Vaqtlar va davomiylik.
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                '${ElementFormatter.formatTime(first.dep.time ?? '')} - ${ElementFormatter.formatTime(last.arr.time ?? '')}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: _TixTheme.style(16.5, FontWeight.w800, t.hi),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              duration,
-              style: _TixTheme.style(14.5, FontWeight.w600, t.hi),
-            ),
-          ],
-        ),
-        const SizedBox(height: 5),
-        // Sana(lar) va almashish ma'lumoti.
+        if (label != null) ...[
+          Text(
+            label!,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: _TixTheme.style(12.5, FontWeight.w600, t.mid),
+          ),
+          const SizedBox(height: 8),
+        ],
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _TimeColumn(
+              time: ElementFormatter.formatTime(first.dep.time ?? ''),
+              code: _code(first.dep.airport?.code, first.dep.city?.code),
+              city: first.dep.city?.title ?? '',
+              alignEnd: false,
+            ),
+            const SizedBox(width: 10),
             Expanded(
-              child: Text.rich(
-                TextSpan(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Column(
                   children: [
-                    TextSpan(
-                      text: _tixDateWithWeekday(depDate),
-                      style: _TixTheme.style(13, FontWeight.w500, t.mid),
+                    Text(
+                      duration,
+                      maxLines: 1,
+                      style: _TixTheme.style(12, FontWeight.w600, t.mid),
                     ),
-                    if (arrivesAnotherDay)
-                      TextSpan(
-                        text: ' - ${_tixDateWithWeekday(arrDate)}',
-                        style: _TixTheme.style(
-                            13, FontWeight.w600, _TixTheme.rose),
+                    const SizedBox(height: 4),
+                    _RouteLine(stops: transfers, color: t.line, dark: t.dark),
+                    const SizedBox(height: 4),
+                    Text(
+                      stops.isNotEmpty && transfers > 0
+                          ? "$transferText · ${stops.take(2).join(', ')}"
+                          : transferText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: _TixTheme.style(
+                        12,
+                        FontWeight.w600,
+                        transfers == 0 ? _kTixGreen : _TixTheme.amber,
                       ),
+                    ),
                   ],
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
               ),
             ),
-            const SizedBox(width: 8),
-            // Web dizayni: to'g'ri reys — yashil, almashishli — qizil.
-            Text(
-              transferText,
-              style: _TixTheme.style(13, FontWeight.w600,
-                  transfers == 0 ? _kTixGreen : _TixTheme.rose),
+            const SizedBox(width: 10),
+            _TimeColumn(
+              time: ElementFormatter.formatTime(last.arr.time ?? ''),
+              code: _code(last.arr.airport?.code, last.arr.city?.code),
+              city: last.arr.city?.title ?? '',
+              alignEnd: true,
+              dayDiff: dayDiff,
             ),
           ],
-        ),
-        const SizedBox(height: 4),
-        // Marshrut.
-        Text(
-          '${first.dep.city?.title ?? ''} - ${last.arr.city?.title ?? ''}',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: _TixTheme.style(13, FontWeight.w500, t.mid),
         ),
       ],
     );
   }
 }
 
-/// Yashil "Eng arzon" belgisi — ro'yxatdagi eng arzon kartada, logo yonida
-/// ko'rsatiladi (web mobil dizayni).
+/// Vaqt (katta), aeroport kodi va shahar.
+class _TimeColumn extends StatelessWidget {
+  final String time;
+  final String code;
+  final String city;
+  final bool alignEnd;
+  final int dayDiff;
+
+  const _TimeColumn({
+    required this.time,
+    required this.code,
+    required this.city,
+    required this.alignEnd,
+    this.dayDiff = 0,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = _TixTheme.of(context);
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 64, maxWidth: 104),
+      child: Column(
+        crossAxisAlignment:
+            alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  time,
+                  maxLines: 1,
+                  style:
+                      _TixTheme.style(19, FontWeight.w800, t.hi, height: 1.1),
+                ),
+                if (dayDiff > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 2),
+                    child: Text(
+                      "+$dayDiff",
+                      style:
+                          _TixTheme.style(11, FontWeight.w800, _TixTheme.rose),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            code,
+            maxLines: 1,
+            style: _TixTheme.style(13, FontWeight.w700, t.hi),
+          ),
+          if (city.isNotEmpty)
+            Text(
+              city,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: alignEnd ? TextAlign.end : TextAlign.start,
+              style: _TixTheme.style(12, FontWeight.w500, t.mid),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Jo'nash va qo'nish orasidagi chiziq: uchlarida nuqtalar, o'rtada samolyot,
+/// almashishlar soniga qarab kichik nuqtalar.
+class _RouteLine extends StatelessWidget {
+  final int stops;
+  final Color color;
+  final bool dark;
+
+  const _RouteLine({
+    required this.stops,
+    required this.color,
+    required this.dark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final Color dot = dark ? Colors.white54 : const Color(0xFFB7C0D3);
+    Widget endDot() => Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: dot, width: 1.5),
+          ),
+        );
+    Widget line() => Expanded(child: Container(height: 1.5, color: color));
+    Widget stopDot() => Container(
+          width: 6,
+          height: 6,
+          decoration: const BoxDecoration(
+            color: _TixTheme.amber,
+            shape: BoxShape.circle,
+          ),
+        );
+
+    return SizedBox(
+      height: 16,
+      child: Row(
+        children: [
+          endDot(),
+          line(),
+          if (stops > 0) ...[
+            for (int i = 0; i < stops.clamp(0, 2); i++) ...[
+              stopDot(),
+              line(),
+            ],
+          ],
+          Transform.rotate(
+            angle: 0.785398, // 45° — og'ma samolyot o'ngga qaraydi
+            child: SvgPicture.asset(
+              Assets.iconsPlaceAirportIcon,
+              width: 16,
+              height: 16,
+              colorFilter: ColorFilter.mode(
+                ProjectTheme.brandColor,
+                BlendMode.srcIn,
+              ),
+            ),
+          ),
+          line(),
+          endDot(),
+        ],
+      ),
+    );
+  }
+}
+
+/// Karta pasti: joylar / qo'l yuki / bagaj va narx.
+class _CardFooter extends StatelessWidget {
+  final FlightElement flight;
+  final String price;
+
+  const _CardFooter({required this.flight, required this.price});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = _TixTheme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: t.line)),
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+      child: Row(
+        children: [
+          Expanded(child: _TicketAmenityPills(flight: flight)),
+          const SizedBox(width: 10),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                price,
+                maxLines: 1,
+                style: _TixTheme.style(19, FontWeight.w800, t.hi),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Yashil "Eng arzon" belgisi.
 class _CheapestBadge extends StatelessWidget {
   const _CheapestBadge();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: _kTixGreen.withAlpha(26),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         "ticket_chip_cheapest".tr(),
@@ -372,12 +587,10 @@ class _CheapestBadge extends StatelessWidget {
   }
 }
 
-/// Aviakompaniya sarlavhasi (Figma standarti):
-///  • Reysdagi barcha bo'laklar (segment) BITTA aviakompaniyaga tegishli bo'lsa
-///    (to'g'ri yoki transferli, bir yoki ikki tomonlama — farqi yo'q) →
-///    yakka logo + aviakompaniya NOMI ko'rsatiladi.
-///  • Bir nechta har xil aviakompaniya bo'lsa → faqat ustma-ust logolar
-///    (noyob, max 3), nom yozilmaydi.
+/// Aviakompaniya sarlavhasi:
+///  • Barcha segmentlar BITTA aviakompaniyaniki bo'lsa — logo + nom.
+///  • Bir nechta bo'lsa — ustma-ust logolar (max 3) va birinchisining nomi
+///    "+N" bilan.
 class _LogoStack extends StatelessWidget {
   final List<FlightSegment> segments;
 
@@ -387,7 +600,6 @@ class _LogoStack extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = _TixTheme.of(context);
 
-    // Noyob aviakompaniyalarni (kod → nom) kelish tartibida yig'amiz.
     final seen = <String>{};
     final codes = <String>[];
     String firstTitle = '';
@@ -399,42 +611,37 @@ class _LogoStack extends StatelessWidget {
     }
     if (codes.isEmpty) return const SizedBox.shrink();
 
-    const double size = 30;
-
-    // Bitta aviakompaniya — logo + nom.
-    if (codes.length == 1) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _AirlineCircle(code: codes.first, size: size),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              firstTitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: _TixTheme.style(14, FontWeight.w700, t.hi),
-            ),
-          ),
-        ],
-      );
-    }
-
-    // Bir nechta aviakompaniya — faqat ustma-ust logolar.
-    const double step = 20;
+    const double size = 28;
+    const double step = 18;
     final shown = codes.take(3).toList();
-    return SizedBox(
-      height: size,
-      width: size + (shown.length - 1) * step,
-      child: Stack(
-        children: [
-          for (int i = 0; i < shown.length; i++)
-            Positioned(
-              left: i * step,
-              child: _AirlineCircle(code: shown[i], size: size),
-            ),
-        ],
-      ),
+    final String title =
+        codes.length == 1 ? firstTitle : "$firstTitle +${codes.length - 1}";
+
+    return Row(
+      children: [
+        SizedBox(
+          height: size,
+          width: size + (shown.length - 1) * step,
+          child: Stack(
+            children: [
+              for (int i = 0; i < shown.length; i++)
+                Positioned(
+                  left: i * step,
+                  child: _AirlineCircle(code: shown[i], size: size),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: _TixTheme.style(14, FontWeight.w700, t.hi),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -444,7 +651,7 @@ class _AirlineCircle extends StatelessWidget {
   final String code;
   final double size;
 
-  const _AirlineCircle({required this.code, this.size = 30});
+  const _AirlineCircle({required this.code, this.size = 28});
 
   @override
   Widget build(BuildContext context) {
@@ -479,28 +686,30 @@ class _AirlineCircle extends StatelessWidget {
   }
 }
 
-/// "Ekonom" belgisi — narx bo'yicha saralangan ro'yxatning eng arzon
-/// kartalarida (1- va 2-o'rin) karta tepasida ko'rsatiladigan yashil pill.
+/// Neytral "Ekonom" tegi.
 class _EconomBadge extends StatelessWidget {
   const _EconomBadge();
 
   @override
   Widget build(BuildContext context) {
+    final t = _TixTheme.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
       decoration: BoxDecoration(
-        color: _kTixGreen.withAlpha(26),
-        borderRadius: BorderRadius.circular(10),
+        color: t.tonal,
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         "klass_e".tr().trim(),
-        style: _TixTheme.style(12, FontWeight.w700, _kTixGreen),
+        maxLines: 1,
+        style: _TixTheme.style(11.5, FontWeight.w700, t.mid),
       ),
     );
   }
 }
 
-/// MySafar video: karta pastidagi joy / qo'l yuki / bagaj pill'lari.
+/// Karta pastidagi joy / qo'l yuki / bagaj — ikonka (rangli ma'no) va
+/// sokin yozuv.
 class _TicketAmenityPills extends StatelessWidget {
   final FlightElement flight;
 
@@ -515,15 +724,10 @@ class _TicketAmenityPills extends StatelessWidget {
     final bagLabel = flight.getBaggage();
 
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: 12,
+      runSpacing: 6,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        if (seats > 0)
-          _AmenityPill(
-            iconAsset: Assets.ticketsSeatIcon,
-            label: "$seats",
-            positive: true,
-          ),
         _AmenityPill(
           iconAsset: withHand
               ? Assets.ticketsLuggageIcon
@@ -538,6 +742,12 @@ class _TicketAmenityPills extends StatelessWidget {
           label: bagLabel,
           positive: isBag,
         ),
+        if (seats > 0)
+          _AmenityPill(
+            iconAsset: Assets.ticketsSeatIcon,
+            label: "$seats",
+            positive: true,
+          ),
       ],
     );
   }
@@ -556,34 +766,29 @@ class _AmenityPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = _TixTheme.of(context);
     final Color accent = positive ? _kTixGreen : _TixTheme.rose;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: accent.withAlpha(22),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SvgPicture.asset(
-            iconAsset,
-            width: 14,
-            height: 14,
-            colorFilter: ColorFilter.mode(accent, BlendMode.srcIn),
-          ),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: _TixTheme.style(12, FontWeight.w600, accent),
-          ),
-        ],
-      ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SvgPicture.asset(
+          iconAsset,
+          width: 15,
+          height: 15,
+          colorFilter: ColorFilter.mode(accent, BlendMode.srcIn),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          maxLines: 1,
+          style: _TixTheme.style(12.5, FontWeight.w600, t.mid),
+        ),
+      ],
     );
   }
 }
 
-/// Lowcost ogohlantirish pill'i — bosilganda tafsilot sheet ochiladi.
+/// Loukoster tegi — bosilganda tafsilot sheet ochiladi.
 class _LowcostPill extends StatelessWidget {
   final FlightElement flightElement;
 
@@ -592,38 +797,130 @@ class _LowcostPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.transparent,
+      color: _TixTheme.rose.withAlpha(24),
+      borderRadius: BorderRadius.circular(8),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => ProjectDialogs.showLowcostSheet(context, flightElement),
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
-          decoration: BoxDecoration(
-            color: _TixTheme.rose.withAlpha(24),
-            borderRadius: BorderRadius.circular(12),
-          ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 "lowcost".tr(),
-                style:
-                    _TixTheme.style(12, FontWeight.w700, _TixTheme.rose),
+                maxLines: 1,
+                style: _TixTheme.style(11.5, FontWeight.w700, _TixTheme.rose),
               ),
-              const SizedBox(width: 5),
+              const SizedBox(width: 4),
               SizedBox(
-                width: 13,
-                height: 13,
+                width: 12,
+                height: 12,
                 child: SvgPicture.asset(
                   Assets.ticketsExclamationIcon,
-                  colorFilter: const ColorFilter.mode(
-                      _TixTheme.rose, BlendMode.srcIn),
+                  colorFilter:
+                      const ColorFilter.mode(_TixTheme.rose, BlendMode.srcIn),
                 ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Natijalar yuklanayotgan paytdagi skelet — yangi karta shaklida.
+class _TicketCardSkeleton extends StatelessWidget {
+  final bool isReturn;
+
+  const _TicketCardSkeleton({required this.isReturn});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = _TixTheme.of(context);
+    Widget bar(double w, double h) => Container(
+          width: w,
+          height: h,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(6),
+          ),
+        );
+    Widget leg() => Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [bar(56, 18), const SizedBox(height: 6), bar(36, 12)],
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                children: [
+                  bar(48, 10),
+                  const SizedBox(height: 8),
+                  bar(double.infinity, 2),
+                  const SizedBox(height: 8),
+                  bar(64, 10),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [bar(56, 18), const SizedBox(height: 6), bar(36, 12)],
+            ),
+          ],
+        );
+
+    return Column(
+      children: [
+        for (int i = 0; i < 3; i++)
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: t.card,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: t.cardShadow,
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Shimmer.fromColors(
+              baseColor: t.dark ? Colors.white12 : const Color(0xFFE9EDF3),
+              highlightColor: t.dark ? Colors.white24 : const Color(0xFFF7F9FC),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 28,
+                        height: 28,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      bar(120, 14),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  leg(),
+                  if (isReturn) ...[const SizedBox(height: 18), leg()],
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      bar(110, 12),
+                      const Spacer(),
+                      bar(96, 18),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

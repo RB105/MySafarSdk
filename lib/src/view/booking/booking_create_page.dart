@@ -20,13 +20,22 @@ import 'package:mysafar_sdk/src/core/widgets/booking_create_loading_widget.dart'
 import 'package:mysafar_sdk/src/core/widgets/response_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:mysafar_sdk/src/cubit/booking/create/booking_create_states.dart';
+import 'package:mysafar_sdk/src/generated/assets.dart';
+import 'package:mysafar_sdk/src/model/local/passenger_model.dart'
+    show PassengerConstants;
 import 'package:mysafar_sdk/src/model/remote/booking/booking_create_model.dart';
 
 import 'package:mysafar_sdk/src/view/booking/booking_confirm_page.dart';
 import 'package:mysafar_sdk/src/view/booking/webview_page.dart';
-import 'package:mysafar_sdk/src/view/booking/widget/dashedline.dart';
+import 'package:mysafar_sdk/src/view/booking/widget/booking_form_fields.dart'
+    show BookingFormStyle;
 import 'package:mysafar_sdk/src/view/booking/widget/next_button_widget.dart';
+import 'package:mysafar_sdk/src/view/booking/widget/passenger_card_widget.dart'
+    show BookingCountryFlag;
+import 'package:mysafar_sdk/src/view/booking/widget/support_widget.dart'
+    show BookingCard;
 import 'package:mysafar_sdk/src/view/booking/support/country_name_list.dart';
 
 import '../../model/remote/avia/recommendation/get_recom_res_model.dart'
@@ -54,11 +63,6 @@ class BookingCreatePage extends StatefulWidget {
 }
 
 class _BookingCreatePageState extends State<BookingCreatePage> {
-  // Kirishda oferta roziligi allaqachon belgilangan — foydalanuvchi xaridni
-  // davom ettirish orqali shartlarga rozilik bildiradi (checkbox bosishi shart
-  // emas), shu sabab tugma darhol faol bo'ladi.
-  bool isChek = true;
-
   /// Booking yaratilgach kiritilgan yo'lovchilarni backend'dagi saqlangan
   /// yo'lovchilar ro'yxatiga (`/create-user-data`) fonda qo'shadi —
   /// AddPassengerPage'dagi bilan bir xil API. Dublikat bo'lmasligi uchun
@@ -137,6 +141,7 @@ class _BookingCreatePageState extends State<BookingCreatePage> {
     }
     return null;
   }
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
@@ -164,38 +169,48 @@ class _BookingCreatePageState extends State<BookingCreatePage> {
         }
       }, builder: (context, state) {
         return Scaffold(
-            appBar: _modernAppBar(context, title: "data_confirmation".tr()),
+            appBar: _buildAppBar(context),
             body: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
               children: [
-                _contactInfoCard(context),
-                _buildSectionHeader(context, "passenger_data_title"),
-                _passengersCard(context),
-                const SizedBox(height: 12),
-                _agreementRow(context),
-                const SizedBox(height: 8),
+                const _CheckDataNotice(),
+                const SizedBox(height: 20),
+                _SectionHeader(
+                  title: "passenger_data_title".tr(),
+                  onChange: () => Navigator.of(context).maybePop(),
+                ),
+                for (int i = 0; i < widget.passenger.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 12),
+                  PassengerContainer(passenger: widget.passenger[i]),
+                ],
+                const SizedBox(height: 20),
+                _SectionHeader(
+                  title: "your_contacts".tr(),
+                  onChange: () => Navigator.of(context).maybePop(),
+                ),
+                _buildContactsCard(context),
+                const SizedBox(height: 20),
+                _buildOfferCard(context),
               ],
             ),
             bottomNavigationBar: NextButtonWidget(
               nextTittle: "continue_purchase",
               analyticsId: 'booking_create_continue',
               isLoading: false,
-              onPressed: isChek
-                  ? () {
-                      if (state is! BookingcreateLoadingState) {
-                        context.read<BookingcreateCubit>().createBooking(
-                            context: context,
-                            email: widget.passenger[0]["email"],
-                            tid: widget.trId,
-                            firstName: "${widget.passenger[0]["firstname"]}",
-                            passenger: widget.passenger,
-                            // Backend +siz (998...) kutadi; profil/UI da
-                            // bo'lishi mumkin bo'lgan "+" ni olib tashlaymiz.
-                            phoneNumber: normalizePhoneDigits(
-                                "${widget.passenger[0]["phone"] ?? ''}"));
-                      }
-                    }
-                  : null,
+              onPressed: () {
+                if (state is! BookingcreateLoadingState) {
+                  context.read<BookingcreateCubit>().createBooking(
+                      context: context,
+                      email: widget.passenger[0]["email"],
+                      tid: widget.trId,
+                      firstName: "${widget.passenger[0]["firstname"]}",
+                      passenger: widget.passenger,
+                      // Backend +siz (998...) kutadi; profil/UI da
+                      // bo'lishi mumkin bo'lgan "+" ni olib tashlaymiz.
+                      phoneNumber: normalizePhoneDigits(
+                          "${widget.passenger[0]["phone"] ?? ''}"));
+                }
+              },
               showButton: true,
               passenger: widget.passenger.length,
               price: widget.price,
@@ -208,7 +223,6 @@ class _BookingCreatePageState extends State<BookingCreatePage> {
       BuildContext context, BookingCreateModel data) async {
     final double? oldPrice = _oldPriceForCurrency(data.currency);
     final double? newPrice = _parseAmount(data.amount);
-
 
     final bool priceIncreased = oldPrice != null &&
         oldPrice > 0 &&
@@ -265,265 +279,107 @@ class _BookingCreatePageState extends State<BookingCreatePage> {
     return double.tryParse(str) ?? double.tryParse(str.replaceAll(',', ''));
   }
 
-  PreferredSizeWidget _modernAppBar(BuildContext context,
-      {required String title, VoidCallback? onBack}) {
-    final isDark = context.themeProvider.isDark;
+  PreferredSizeWidget _buildAppBar(BuildContext context) {
     return AppBar(
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: true,
-      backgroundColor: context.color.primaryContainer,
-      leadingWidth: 56,
-      leading: Center(
-        child: Material(
-          color:
-              isDark ? Colors.white.withAlpha(20) : Colors.black.withAlpha(10),
-          shape: const CircleBorder(),
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onBack ?? () => Navigator.of(context).maybePop(),
-            child: const SizedBox(
-              width: 38,
-              height: 38,
-              child: Icon(Icons.arrow_back_ios_new_rounded, size: 17),
-            ),
-          ),
-        ),
+      backgroundColor: Colors.transparent,
+      leading: IconButton(
+        onPressed: () => Navigator.of(context).maybePop(),
+        icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 19),
       ),
       title: Text(
-        title,
+        "data_confirmation".tr(),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: context.textTheme.bodyLarge
-            ?.copyWith(fontSize: 16, fontWeight: FontWeight.w800),
-      ),
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(1),
-        child: Container(
-          height: 1,
-          color: isDark ? const Color(0xff3A3A3A) : const Color(0xffEAEBEE),
-        ),
+            ?.copyWith(fontSize: 17, fontWeight: FontWeight.w800),
       ),
     );
   }
 
-  Widget _buildSectionHeader(BuildContext context, String key) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 20, bottom: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 4,
-            height: 18,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [ProjectTheme.brandColor, ProjectTheme.accentLight],
-              ),
-              borderRadius: BorderRadius.circular(4),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            key.tr(),
-            style: context.textTheme.bodyLarge
-                ?.copyWith(fontSize: 16, fontWeight: FontWeight.w800),
-          ),
-        ],
-      ),
-    );
-  }
-
-  BoxDecoration _cardDecoration(BuildContext context) => BoxDecoration(
-        color: context.color.primaryContainer,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: context.themeProvider.isDark
-                ? Colors.black.withAlpha(40)
-                : const Color(0x80C6C7C9),
-            offset: const Offset(0, 2),
-            blurRadius: 8,
-          ),
-        ],
-      );
-
-  Widget _avatarChip(IconData icon) => Container(
-        width: 30,
-        height: 30,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [ProjectTheme.brandColor, ProjectTheme.accentLight],
-          ),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Icon(icon, color: Colors.white, size: 17),
-      );
-
-  Widget _contactInfoCard(BuildContext context) {
-    final muted = context.themeProvider.isDark
-        ? const Color(0xffCCCFD3)
-        : const Color(0xff8E8E92);
-    return Container(
-      width: double.infinity,
-      decoration: _cardDecoration(context),
-      padding: const EdgeInsets.all(16),
+  /// Kontaktlar — email va telefon, ikonkali qatorlar ko'rinishida.
+  Widget _buildContactsCard(BuildContext context) {
+    final contact = widget.passenger[0];
+    return BookingCard(
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              _avatarChip(Icons.contacts_rounded),
-              const SizedBox(width: 10),
-              Text(
-                "contact_info_title".tr(),
-                style: context.textTheme.bodyLarge
-                    ?.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
-              ),
-            ],
+          _ContactRow(
+            iconAsset: Assets.iconsProfileMailIcon,
+            label: "email".tr(),
+            value: "${contact["email"] ?? ''}",
           ),
-          const SizedBox(height: 16),
-          _contactRow(context, Icons.alternate_email_rounded, "email".tr(),
-              "${widget.passenger[0]["email"]}", muted),
-          const SizedBox(height: 14),
-          _contactRow(
-              context,
-              Icons.phone_rounded,
-              "phone_number_label".tr(),
-              formatInternationalPhone(
-                  "${widget.passenger[0]["phone"] ?? ''}"),
-              muted),
+          Divider(
+            height: 1,
+            thickness: 1,
+            indent: 68,
+            endIndent: 16,
+            color: context.color.outline.withValues(alpha: 0.6),
+          ),
+          _ContactRow(
+            iconAsset: Assets.iconsBookingCallIcon,
+            label: "phone".tr(),
+            value: formatInternationalPhone("${contact["phone"] ?? ''}"),
+          ),
         ],
       ),
     );
   }
 
-  Widget _contactRow(BuildContext context, IconData icon, String label,
-      String value, Color muted) {
-    final brand = ProjectTheme.brandColor;
-    return Row(
-      children: [
-        Container(
-          width: 36,
-          height: 36,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: brand.withAlpha(context.themeProvider.isDark ? 45 : 20),
-            borderRadius: BorderRadius.circular(11),
-          ),
-          child: Icon(icon, color: brand, size: 18),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(label,
-                  style: TextStyle(
-                      fontFamily: "packages/mysafar_sdk/Gilroy", fontSize: 12, color: muted)),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: context.textTheme.bodyMedium
-                    ?.copyWith(fontSize: 16, fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _passengersCard(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      decoration: _cardDecoration(context),
-      child: ListView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        padding: EdgeInsets.zero,
-        itemCount: widget.passenger.length,
-        itemBuilder: (context, index) {
-          return Column(
-            children: [
-              PassengerContainer(passenger: widget.passenger[index]),
-              if (index != widget.passenger.length - 1)
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16),
-                  child: DashedLine(color: Color(0xffDBDCDF)),
-                ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _agreementRow(BuildContext context) {
-    final isDark = context.themeProvider.isDark;
-    final brand = ProjectTheme.brandColor;
-    return Material(
-      color: Colors.transparent,
+  /// Oferta — xaridni davom ettirish shartlarga rozilik hisoblanadi; karta
+  /// bosilganda oferta matni ochiladi.
+  Widget _buildOfferCard(BuildContext context) {
+    return BookingCard(
+      padding: EdgeInsets.zero,
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => setState(() => isChek = !isChek),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          decoration: BoxDecoration(
-            color: isChek
-                ? brand.withAlpha(isDark ? 38 : 16)
-                : context.color.primaryContainer,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isChek
-                  ? brand.withAlpha(120)
-                  : context.color.outline.withAlpha(120),
-            ),
-          ),
+        onTap: () => Navigator.pushNamed(context, WebViewScreen.routName,
+            arguments: "https://mysafar.uz/privacy"),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                width: 24,
-                height: 24,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  gradient: isChek
-                      ? LinearGradient(
-                          colors: [brand, ProjectTheme.accentLight])
-                      : null,
-                  borderRadius: BorderRadius.circular(8),
-                  border: isChek
-                      ? null
-                      : Border.all(color: context.color.outline, width: 2),
-                ),
-                child: isChek
-                    ? const Icon(Icons.check_rounded,
-                        color: Colors.white, size: 16)
-                    : null,
+              const _IconChip(
+                asset: Assets.iconsProfileDocumentIcon,
+                shape: BoxShape.rectangle,
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    Navigator.pushNamed(context, WebViewScreen.routName,
-                        arguments: "https://mysafar.uz/privacy");
-                  },
-                  child: Text(
-                    "offer_accept_by_continue".tr(),
-                    softWrap: true,
-                    style: context.textTheme.bodyMedium?.copyWith(
-                      fontSize: 14,
-                      decoration: TextDecoration.underline,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      "offer_title".tr(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.textTheme.bodyMedium?.copyWith(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 2),
+                    Text(
+                      "offer_accept_by_continue".tr(),
+                      style: context.textTheme.bodySmall?.copyWith(
+                        fontSize: 12.5,
+                        height: 1.3,
+                        fontWeight: FontWeight.w500,
+                        color: BookingFormStyle.label(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              SvgPicture.asset(
+                Assets.iconsBookingChevronRightIcon,
+                width: 20,
+                height: 20,
+                colorFilter: ColorFilter.mode(
+                  BookingFormStyle.hint(context),
+                  BlendMode.srcIn,
                 ),
               ),
             ],
@@ -534,6 +390,189 @@ class _BookingCreatePageState extends State<BookingCreatePage> {
   }
 }
 
+/// Bo'lim sarlavhasi; [onChange] berilsa o'ngda "O'zgartirish" havolasi
+/// (oldingi — ma'lumot kiritish sahifasiga qaytaradi).
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.title, this.onChange});
+
+  final String title;
+  final VoidCallback? onChange;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color link =
+        context.isDarkMode ? ProjectTheme.accentLight : ProjectTheme.brandColor;
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: context.textTheme.bodyLarge
+                  ?.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+          ),
+          if (onChange != null)
+            InkWell(
+              onTap: onChange,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                child: Text(
+                  "change".tr(),
+                  style: context.textTheme.bodyMedium?.copyWith(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: link,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Sahifa tepasidagi eslatma: chipta hujjatdagi ma'lumotlar bo'yicha
+/// rasmiylashtiriladi — to'lovdan oldin tekshirib chiqish kerak.
+class _CheckDataNotice extends StatelessWidget {
+  const _CheckDataNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isDark = context.isDarkMode;
+    final Color brand = ProjectTheme.brandColor;
+    final Color accent = isDark ? ProjectTheme.accentLight : brand;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.06)
+            : brand.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: SvgPicture.asset(
+              Assets.iconsBookingInfoIcon,
+              width: 20,
+              height: 20,
+              colorFilter: ColorFilter.mode(accent, BlendMode.srcIn),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              "confirm_data_hint".tr(),
+              style: context.textTheme.bodyMedium?.copyWith(
+                fontSize: 13.5,
+                height: 1.35,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Kichik tonli ikonka konteyneri (yangi bron UI'dagi bilan bir xil).
+class _IconChip extends StatelessWidget {
+  const _IconChip({required this.asset, this.shape = BoxShape.circle});
+
+  final String asset;
+  final BoxShape shape;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isDark = context.isDarkMode;
+    final Color brand = ProjectTheme.brandColor;
+    return Container(
+      width: 40,
+      height: 40,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.08)
+            : brand.withValues(alpha: 0.08),
+        shape: shape,
+        borderRadius:
+            shape == BoxShape.rectangle ? BorderRadius.circular(12) : null,
+      ),
+      child: SvgPicture.asset(
+        asset,
+        width: 22,
+        height: 22,
+        colorFilter:
+            ColorFilter.mode(isDark ? Colors.white : brand, BlendMode.srcIn),
+      ),
+    );
+  }
+}
+
+class _ContactRow extends StatelessWidget {
+  const _ContactRow({
+    required this.iconAsset,
+    required this.label,
+    required this.value,
+  });
+
+  final String iconAsset;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          _IconChip(asset: iconAsset),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.textTheme.bodySmall?.copyWith(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: BookingFormStyle.label(context),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value.trim().isEmpty ? '-' : value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.textTheme.bodyMedium?.copyWith(
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Bitta yo'lovchining tasdiqlash kartasi: ism (pasportdagidek), yosh
+/// toifasi va jinsi, pastda hujjat ma'lumotlari "yorliq — qiymat" qatorlarida.
 class PassengerContainer extends StatelessWidget {
   final Map<String, dynamic> passenger;
 
@@ -542,97 +581,159 @@ class PassengerContainer extends StatelessWidget {
     required this.passenger,
   });
 
+  String _field(String key) => (passenger[key] ?? '').toString().trim();
+
+  String get _fullName => [
+        _field("lastname"),
+        _field("firstname"),
+        _field("middlename"),
+      ].where((part) => part.isNotEmpty).join(' ');
+
+  String get _ageLabel => switch (_field("age")) {
+        'chd' => "between_2_12".tr(),
+        'inf' => "under_2".tr(),
+        _ => "above_12".tr(),
+      };
+
+  String get _genderLabel => _field("gender") == PassengerConstants.genderFemale
+      ? "female".tr()
+      : "male".tr();
+
   @override
   Widget build(BuildContext context) {
-    Brightness brightness = Theme.of(context).brightness;
-    TextStyle labelStyle;
-    if (brightness == Brightness.dark) {
-      labelStyle = TextStyle(
-        fontSize: 12,
-        overflow: TextOverflow.ellipsis,
-        color: Color(0xffCCCFD3),
-      );
-    } else {
-      labelStyle = const TextStyle(
-        fontSize: 12,
-        overflow: TextOverflow.ellipsis,
-        color: Color(0xff8E8E92),
-      );
-    }
+    final String citizenCode = _field("citizen");
+    final String citizenName = citizenCode.isEmpty
+        ? ''
+        : (getCountry(citizenCode)["name"][dataLang()] ?? '').toString();
 
-    TextStyle? valueStyle = context.textTheme.bodyLarge
-        ?.copyWith(fontSize: 16, fontWeight: FontWeight.w600);
-
-    return SizedBox(
-      width: double.infinity,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+    return BookingCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            child: Row(
               children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        ProjectTheme.brandColor,
-                        ProjectTheme.accentLight,
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(11),
-                  ),
-                  child: const Icon(Icons.person_rounded,
-                      color: Colors.white, size: 18),
-                ),
-                const SizedBox(width: 10),
+                const _IconChip(asset: Assets.iconsBookingUserIcon),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    "${passenger["firstname"] ?? ''} ${passenger["lastname"] ?? ''}",
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: context.textTheme.bodyMedium
-                        ?.copyWith(fontSize: 17, fontWeight: FontWeight.w700),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _fullName.isEmpty ? '-' : _fullName.toUpperCase(),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.textTheme.bodyMedium?.copyWith(
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        "$_ageLabel · $_genderLabel",
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.textTheme.bodySmall?.copyWith(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: BookingFormStyle.label(context),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          ),
+          Divider(
+            height: 1,
+            thickness: 1,
+            indent: 16,
+            endIndent: 16,
+            color: context.color.outline.withValues(alpha: 0.6),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+            child: Column(
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("${"citizenship".tr()}:", style: labelStyle),
-                    Text(
-                        getCountry(passenger["citizen"] ?? "")["name"][dataLang()],
-                        style: valueStyle),
-                    const SizedBox(height: 12),
-                    Text("${"birth_date".tr()}:", style: labelStyle),
-                    Text(passenger["birthdate"] ?? '-', style: valueStyle),
-                  ],
+                _InfoRow(
+                  label: "citizenship".tr(),
+                  value: citizenName,
+                  leading: citizenCode.isEmpty
+                      ? null
+                      : BookingCountryFlag(code: citizenCode),
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("${"passport_number".tr()}:", style: labelStyle),
-                    Text(passenger["docnum"] ?? '-', style: valueStyle),
-                    const SizedBox(height: 12),
-                    Text("${"passport_validity".tr()}:", style: labelStyle),
-                    Text(passenger["docexp"] ?? '-', style: valueStyle),
-                  ],
+                _InfoRow(label: "birth_date".tr(), value: _field("birthdate")),
+                _InfoRow(
+                    label: "document_number".tr(), value: _field("docnum")),
+                _InfoRow(
+                  label: "passport_validity".tr(),
+                  value: _field("docexp"),
+                  isLast: true,
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "Yorliq — qiymat" qatori: yorliq chapda (xira), qiymat o'ngda (qalin).
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({
+    required this.label,
+    required this.value,
+    this.leading,
+    this.isLast = false,
+  });
+
+  final String label;
+  final String value;
+  final Widget? leading;
+  final bool isLast;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: context.textTheme.bodySmall?.copyWith(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w500,
+                color: BookingFormStyle.label(context),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          if (leading != null && value.isNotEmpty) ...[
+            leading!,
+            const SizedBox(width: 8),
           ],
-        ),
+          Flexible(
+            child: Text(
+              value.isEmpty ? '-' : value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.end,
+              style: context.textTheme.bodyMedium?.copyWith(
+                fontSize: 14.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

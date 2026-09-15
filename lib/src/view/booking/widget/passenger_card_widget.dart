@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:mysafar_sdk/src/core/tools/project_assets.dart';
-import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
-import 'package:mysafar_sdk/src/core/tools/lang_helper.dart';
+import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
+import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
+import 'package:mysafar_sdk/src/core/tools/lang_helper.dart';
+import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/model/local/passenger_model.dart';
 import 'package:mysafar_sdk/src/model/remote/profile/users_model.dart';
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart'
     show AnalyticsService;
 import 'package:mysafar_sdk/src/view/booking/support/country_name_list.dart';
-import 'package:mysafar_sdk/src/view/booking/widget/custom_autocompleteInput_field.dart';
+import 'package:mysafar_sdk/src/view/booking/widget/booking_form_fields.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/passenger_controller.dart';
-import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/save_passenger_information.dart';
+import 'package:mysafar_sdk/src/view/booking/widget/support_widget.dart'
+    show BookingCard;
 
 /// Ism/familiya/otasini ismi maydonlarida raqam va bo'sh joy kiritilishini
 /// bloklaydi (aviabilet hujjatidagi yozuvga mos).
@@ -36,11 +38,15 @@ String? _validateBookingDate(String? value, {required String emptyMessage}) {
   return null;
 }
 
-/// Yo'lovchi kartasi widgeti
+String? _validateRequired(String value, String message) =>
+    value.trim().isEmpty ? message : null;
+
+/// Bitta yo'lovchi formasi: tezkor to'ldirish (skaner / saqlangan
+/// yo'lovchi), "Shaxsiy ma'lumotlar" va "Hujjat" kartalari.
+///
+/// Maydonlar pasportdagi tartibda, yorliqlar doim tepada; xatolar faqat
+/// "Davom etish" bosilgandan keyin ko'rsatiladi.
 class PassengerCardWidget extends StatelessWidget {
-  final int index;
-  final int adultCount;
-  final int childCount;
   final PassengerModel passenger;
   final PassengerController controller;
   final bool showErrors;
@@ -68,9 +74,6 @@ class PassengerCardWidget extends StatelessWidget {
 
   const PassengerCardWidget({
     super.key,
-    required this.index,
-    required this.adultCount,
-    required this.childCount,
     required this.passenger,
     required this.controller,
     required this.showErrors,
@@ -95,490 +98,384 @@ class PassengerCardWidget extends StatelessWidget {
     required this.genderKey,
   });
 
-  /// "1-yo'lovchi" — maketdagi tartib raqamli sarlavha.
-  String get _passengerTitle =>
-      "passenger_number".tr(namedArgs: {"number": "${index + 1}"});
-
-  /// Sarlavha ostidagi yosh chegarasi izohi.
-  String get _passengerAgeNote {
-    if (adultCount > index) return "above_12".tr();
-    if ((adultCount + childCount) > index && childCount != 0) {
-      return "between_2_12".tr();
-    }
-    return "under_2".tr();
-  }
+  static const double _fieldGap = 16;
 
   @override
   Widget build(BuildContext context) {
-    // Karta o'rami tashqarida (yo'lovchilar ro'yxati bitta kartaga
-    // joylashtiradi) — bu widget faqat bitta yo'lovchi blokini chizadi.
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          _passengerTitle,
-          style: context.textTheme.bodyLarge
-              ?.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
+        _buildQuickFill(context),
+        const SizedBox(height: 20),
+        _SectionTitle("personal_info".tr()),
+        BookingCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _nameField(
+                key: lastnameKey,
+                field: 'lastname',
+                label: "last_name".tr(),
+                textController: controller.lastnameController,
+                focusNode: controller.lastnameFocus,
+                error: "surname_not_entered".tr(),
+              ),
+              const SizedBox(height: _fieldGap),
+              _nameField(
+                key: firstnameKey,
+                field: 'firstname',
+                label: "first_name".tr(),
+                textController: controller.firstnameController,
+                focusNode: controller.firstnameFocus,
+                error: "name_not_entered".tr(),
+              ),
+              const SizedBox(height: _fieldGap),
+              _nameField(
+                key: middlenameKey,
+                field: 'middlename',
+                label: "father".tr(),
+                textController: controller.middlenameController,
+                focusNode: controller.middlenameFocus,
+                optional: true,
+              ),
+              const SizedBox(height: _fieldGap),
+              _dateField(
+                context,
+                key: birthdateKey,
+                field: 'birthdate',
+                label: "birth_date".tr(),
+                textController: controller.birthdateController,
+                focusNode: controller.birthdateFocus,
+                formatter: birthdateFormatter,
+                emptyMessage: 'birthdate_required'.tr(),
+                onCalendarTap: onBirthdateCalendarTap,
+              ),
+              const SizedBox(height: _fieldGap),
+              BookingChoiceField<String>(
+                key: genderKey,
+                label: "gender".tr(),
+                value: passenger.gender,
+                options: [
+                  (PassengerConstants.genderMale, "male".tr()),
+                  (PassengerConstants.genderFemale, "female".tr()),
+                ],
+                onChanged: (value) {
+                  AnalyticsService()
+                      .trackButtonTap('gender_select', extra: {'value': value});
+                  onFieldChanged('gender', value);
+                },
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 2),
-        Text(
-          _passengerAgeNote,
-          style: context.textTheme.headlineSmall?.copyWith(fontSize: 13.5),
+        const SizedBox(height: 20),
+        _SectionTitle("passenger_document".tr()),
+        BookingCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildCitizenField(context),
+              const SizedBox(height: _fieldGap),
+              BookingTextField(
+                key: docnumKey,
+                label: "document_number".tr(),
+                hintText: 'AA1234567',
+                controller: controller.docnumController,
+                focusNode: controller.docnumFocus,
+                showError: showErrors,
+                textCapitalization: TextCapitalization.characters,
+                inputFormatters: [
+                  FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                ],
+                validator: (v) =>
+                    _validateRequired(v, "passport_data_not_entered".tr()),
+                onChanged: (value) => onFieldChanged('docnum', value),
+                onSubmitted: onNextField,
+                suggestions: getSuggestions('docnum'),
+              ),
+              const SizedBox(height: _fieldGap),
+              _dateField(
+                context,
+                key: docexpKey,
+                field: 'docexp',
+                label: "passport_validity".tr(),
+                textController: controller.docexpController,
+                focusNode: controller.docexpFocus,
+                formatter: docexpFormatter,
+                emptyMessage: 'passport_expiry_required'.tr(),
+                onCalendarTap: onDocexpCalendarTap,
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 14),
-        _buildActionButtons(context),
-        const SizedBox(height: 16),
-
-        // Maketdagi tartib: familiya → ism → otasining ismi →
-        // (tug'ilgan sana + jins) → fuqarolik → hujjat raqami → muddati.
-        _buildLastnameField(context),
-        const SizedBox(height: 16),
-        _buildFirstnameField(context),
-        const SizedBox(height: 16),
-        _buildMiddlenameField(context),
-        const SizedBox(height: 16),
-        _buildBirthdateAndGenderRow(context),
-        const SizedBox(height: 16),
-        _buildCitizenField(context),
-        const SizedBox(height: 16),
-        _buildDocnumField(context),
-        const SizedBox(height: 16),
-        _buildDocexpField(context),
       ],
     );
   }
 
-  /// Chapda scanner, o'ngda (bo'lsa) "Yo'lovchi tanlash".
-  Widget _buildActionButtons(BuildContext context) {
+  /// Tezkor to'ldirish: hujjatni skanerlash va (bo'lsa) saqlangan
+  /// yo'lovchini tanlash — ikonka, sarlavha va izohli kartalar.
+  Widget _buildQuickFill(BuildContext context) {
     final hasSavedPassengers = cachedUsers.isNotEmpty;
-    return Row(
-      children: [
-        Expanded(
-          child: _ActionPill(
-            svgAsset: ProjectAssets.bookingScanIcon,
-            label: "scan_short".tr(),
-            onTap: onScanTap,
-          ),
-        ),
-        if (hasSavedPassengers) ...[
+    final scan = _QuickFillCard(
+      iconAsset: Assets.iconsScanFrameIcon,
+      title: "scan_short".tr(),
+      subtitle: "quick_scan_subtitle".tr(),
+      compact: hasSavedPassengers,
+      onTap: onScanTap,
+    );
+    if (!hasSavedPassengers) return scan;
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: scan),
           const SizedBox(width: 10),
           Expanded(
-            child: _ActionPill(
-              svgAsset: ProjectAssets.bookingPeopleIcon,
-              label: "select_passenger_short".tr(),
-              trailing: Icons.keyboard_arrow_down_rounded,
-              onTap: () => showPassengerPickerBottomSheet(
-                context: context,
-                onSelected: onUserSelected,
-              ),
+            child: _QuickFillCard(
+              iconAsset: Assets.iconsScanSavedPassengersIcon,
+              title: "select_passenger_short".tr(),
+              subtitle: "quick_saved_subtitle".tr(),
+              compact: true,
+              onTap: () {
+                // Sheet yopilganda klaviatura oxirgi maydonga qaytib
+                // ochilmasin.
+                FocusManager.instance.primaryFocus?.unfocus();
+                showPassengerPickerBottomSheet(
+                  context: context,
+                  onSelected: onUserSelected,
+                );
+              },
             ),
           ),
         ],
-      ],
+      ),
     );
   }
 
-  /// Tug'ilgan sana va jins bitta qatorda (maketdagidek).
-  ///
-  /// Tepaga tekislanadi: sana ostida xato matni chiqqanda jins tanlagich
-  /// cho'zilmasin — balandligi input maydoni bilan bir xil (58) qoladi.
-  Widget _buildBirthdateAndGenderRow(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(flex: 3, child: _buildBirthdateField(context)),
-        const SizedBox(width: 10),
-        Expanded(flex: 2, child: _buildGenderField(context)),
-      ],
+  Widget _nameField({
+    required GlobalKey key,
+    required String field,
+    required String label,
+    required TextEditingController textController,
+    required FocusNode focusNode,
+    String? error,
+    bool optional = false,
+  }) {
+    return BookingTextField(
+      key: key,
+      label: label,
+      optional: optional,
+      controller: textController,
+      focusNode: focusNode,
+      showError: showErrors,
+      textCapitalization: TextCapitalization.characters,
+      inputFormatters: passengerNameInputFormatters,
+      validator: error == null ? null : (v) => _validateRequired(v, error),
+      onChanged: (value) => onFieldChanged(field, value),
+      onSubmitted: onNextField,
+      suggestions: getSuggestions(field),
+    );
+  }
+
+  Widget _dateField(
+    BuildContext context, {
+    required GlobalKey key,
+    required String field,
+    required String label,
+    required TextEditingController textController,
+    required FocusNode focusNode,
+    required MaskTextInputFormatter formatter,
+    required String emptyMessage,
+    required VoidCallback onCalendarTap,
+  }) {
+    return BookingTextField(
+      key: key,
+      label: label,
+      hintText: "date_format".tr(),
+      controller: textController,
+      focusNode: focusNode,
+      showError: showErrors,
+      keyboardType: TextInputType.number,
+      inputFormatters: [formatter],
+      validator: (v) => _validateBookingDate(v, emptyMessage: emptyMessage),
+      onChanged: (value) => onFieldChanged(field, value),
+      onSubmitted: onNextField,
+      suggestions: getSuggestions(field),
+      suffix: IconButton(
+        onPressed: onCalendarTap,
+        tooltip: label,
+        icon: SvgPicture.asset(
+          Assets.iconsFormCalendarIcon,
+          width: 22,
+          height: 22,
+          colorFilter: ColorFilter.mode(
+            BookingFormStyle.label(context),
+            BlendMode.srcIn,
+          ),
+        ),
+      ),
     );
   }
 
   Widget _buildCitizenField(BuildContext context) {
-    final citizenName = passenger.citizen.isNotEmpty
-        ? getCountry(passenger.citizen)["name"][dataLang()] ?? ''
+    final String code = passenger.citizen;
+    final String citizenName = code.isNotEmpty
+        ? (getCountry(code)["name"][dataLang()] ?? '').toString()
         : '';
 
-    return Focus(
+    return BookingPickerField(
+      key: citizenKey,
+      label: "citizenship".tr(),
+      placeholder: "citizenship".tr(),
+      value: citizenName,
       focusNode: controller.citizenFocus,
-      child: InkWell(
-        key: citizenKey,
-        onTap: onCitizenTap,
-        child: SizedBox(
-          width: double.infinity,
-          height: 56,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              border: Border.all(width: 1.5, color: context.color.outline),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    citizenName.isNotEmpty ? citizenName : "citizenship".tr(),
-                    style: citizenName.isNotEmpty
-                        ? context.textTheme.bodyMedium
-                        : context.textTheme.headlineSmall?.copyWith(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                          ),
-                  ),
-                  Flexible(
-                    child: Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      size: 28,
-                      color: context.color.outline,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDocnumField(BuildContext context) {
-    return CustomAutocompleteInputField(
-      key: docnumKey,
-      showError: showErrors,
-      textInputAction: TextInputAction.next,
-      textCapitalization: TextCapitalization.characters,
-      keyboardType: TextInputType.text,
-      controller: controller.docnumController,
-      focusNode: controller.docnumFocus,
-      onFieldSubmitted: (_) => onNextField(),
-      label: "passport_data".tr(),
-      onChanged: (value) => onFieldChanged('docnum', value),
-      validator: (value) {
-        if (value?.trim().isEmpty ?? true) {
-          return "passport_data_not_entered".tr();
-        }
-        return null;
-      },
-      suggestions: getSuggestions('docnum'),
-    );
-  }
-
-  Widget _buildDocexpField(BuildContext context) {
-    return CustomAutocompleteInputField(
-      key: docexpKey,
-      showError: showErrors,
-      textInputAction: TextInputAction.next,
-      textCapitalization: TextCapitalization.characters,
-      keyboardType: TextInputType.number,
-      controller: controller.docexpController,
-      focusNode: controller.docexpFocus,
-      onFieldSubmitted: (_) => onNextField(),
-      label: "passport_validity".tr(),
-      hintText: "date_format".tr(),
-      onChanged: (value) => onFieldChanged('docexp', value),
-      validator: (value) => _validateBookingDate(
-        value,
-        emptyMessage: 'passport_expiry_required'.tr(),
-      ),
-      suggestions: getSuggestions('docexp'),
-      suffix: IconButton(
-        onPressed: onDocexpCalendarTap,
-        icon: const Icon(Icons.calendar_month),
-      ),
-      inputFormatters: [docexpFormatter],
-    );
-  }
-
-  Widget _buildFirstnameField(BuildContext context) {
-    return CustomAutocompleteInputField(
-      key: firstnameKey,
-      showError: showErrors,
-      controller: controller.firstnameController,
-      focusNode: controller.firstnameFocus,
-      onFieldSubmitted: (_) => onNextField(),
-      label: "first_name".tr(),
-      validator: (value) {
-        if (value?.trim().isEmpty ?? true) {
-          return "name_not_entered".tr();
-        }
-        return null;
-      },
-      onChanged: (value) => onFieldChanged('firstname', value),
-      textInputAction: TextInputAction.next,
-      textCapitalization: TextCapitalization.characters,
-      keyboardType: TextInputType.text,
-      inputFormatters: passengerNameInputFormatters,
-      suggestions: getSuggestions('firstname'),
-    );
-  }
-
-  Widget _buildLastnameField(BuildContext context) {
-    return CustomAutocompleteInputField(
-      key: lastnameKey,
-      showError: showErrors,
-      controller: controller.lastnameController,
-      focusNode: controller.lastnameFocus,
-      onFieldSubmitted: (_) => onNextField(),
-      label: "last_name".tr(),
-      validator: (value) {
-        if (value?.trim().isEmpty ?? true) {
-          return "surname_not_entered".tr();
-        }
-        return null;
-      },
-      onChanged: (value) => onFieldChanged('lastname', value),
-      suggestions: getSuggestions('lastname'),
-      textInputAction: TextInputAction.next,
-      textCapitalization: TextCapitalization.characters,
-      keyboardType: TextInputType.text,
-      inputFormatters: passengerNameInputFormatters,
-    );
-  }
-
-  Widget _buildMiddlenameField(BuildContext context) {
-    return CustomAutocompleteInputField(
-      key: middlenameKey,
-      showError: showErrors,
-      controller: controller.middlenameController,
-      focusNode: controller.middlenameFocus,
-      onFieldSubmitted: (_) => onNextField(),
-      label: "father".tr(),
-      validator: (value) => null,
-      onChanged: (value) => onFieldChanged('middlename', value),
-      textInputAction: TextInputAction.next,
-      textCapitalization: TextCapitalization.characters,
-      keyboardType: TextInputType.text,
-      inputFormatters: passengerNameInputFormatters,
-      suggestions: getSuggestions('middlename'),
-    );
-  }
-
-  Widget _buildBirthdateField(BuildContext context) {
-    return CustomAutocompleteInputField(
-      key: birthdateKey,
-      inputFormatters: [birthdateFormatter],
-      showError: showErrors,
-      textInputAction: TextInputAction.next,
-      textCapitalization: TextCapitalization.characters,
-      keyboardType: TextInputType.number,
-      controller: controller.birthdateController,
-      focusNode: controller.birthdateFocus,
-      onFieldSubmitted: (_) => onNextField(),
-      label: "birth_date".tr(),
-      hintText: "date_format".tr(),
-      onChanged: (value) => onFieldChanged('birthdate', value),
-      validator: (value) => _validateBookingDate(
-        value,
-        emptyMessage: 'birthdate_required'.tr(),
-      ),
-      suggestions: getSuggestions('birthdate'),
-      suffix: IconButton(
-        onPressed: onBirthdateCalendarTap,
-        icon: const Icon(Icons.calendar_month),
-      ),
-    );
-  }
-
-  /// Jins — tug'ilgan sana yonidagi ikki bo'lakli tanlagich.
-  ///
-  /// Maketdagidek: butun blok atrofida och kulrang kontur, tanlangan bo'lak
-  /// ustida esa ko'k kontur — tashqi tomoni yumaloq, ichki tomoni tekis
-  /// (ya'ni ikkala bo'lak orasida to'g'ri vertikal chiziq hosil bo'ladi).
-  Widget _buildGenderField(BuildContext context) {
-    final bool isMale = passenger.gender == PassengerConstants.genderMale;
-    const double radius = 16;
-
-    return SizedBox(
-      key: genderKey,
-      height: 58,
-      child: Stack(
-        children: [
-          // 1. Umumiy och kontur.
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(radius),
-                border: Border.all(width: 1.5, color: context.color.outline),
-              ),
-            ),
-          ),
-          // 2. Tanlangan yarmi ustidagi ko'k kontur.
-          Positioned.fill(
-            child: AnimatedAlign(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOut,
-              alignment: isMale ? Alignment.centerLeft : Alignment.centerRight,
-              child: FractionallySizedBox(
-                widthFactor: 0.5,
-                heightFactor: 1,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: isMale
-                        ? const BorderRadius.horizontal(
-                            left: Radius.circular(radius))
-                        : const BorderRadius.horizontal(
-                            right: Radius.circular(radius)),
-                    border: Border.all(
-                      width: 2,
-                      color: ProjectTheme.brandColor,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          // 3. Yozuvlar va bosish sohalari.
-          Row(
-            children: [
-              _GenderSegment(
-                label: "male".tr(),
-                selected: isMale,
-                radius: const BorderRadius.horizontal(
-                    left: Radius.circular(radius)),
-                onTap: () =>
-                    onFieldChanged('gender', PassengerConstants.genderMale),
-              ),
-              _GenderSegment(
-                label: "female".tr(),
-                selected: !isMale,
-                radius: const BorderRadius.horizontal(
-                    right: Radius.circular(radius)),
-                onTap: () =>
-                    onFieldChanged('gender', PassengerConstants.genderFemale),
-              ),
-            ],
-          ),
-        ],
-      ),
+      chevronAsset: Assets.iconsFormChevronDownIcon,
+      errorText:
+          showErrors && code.isEmpty ? "citizenship_not_selected".tr() : null,
+      leading: code.isEmpty ? null : BookingCountryFlag(code: code),
+      onTap: onCitizenTap,
     );
   }
 }
 
-/// Ramkali kichik tugma: ikonka + yozuv (+ ixtiyoriy o'ng ikonka).
-class _ActionPill extends StatelessWidget {
-  final String? svgAsset;
-  final IconData? icon;
-  final String label;
-  final IconData? trailing;
-  final VoidCallback? onTap;
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.text);
 
-  const _ActionPill({
-    this.svgAsset,
-    this.icon,
-    required this.label,
-    required this.onTap,
-    this.trailing,
-  }) : assert(svgAsset != null || icon != null);
+  final String text;
 
   @override
   Widget build(BuildContext context) {
-    final bool enabled = onTap != null;
-    return Opacity(
-      opacity: enabled ? 1 : 0.5,
-      child: Material(
-        color: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: BorderSide(width: 1.5, color: context.color.outline),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 13),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (svgAsset != null)
-                  SvgPicture.asset(
-                    svgAsset!,
-                    width: 18,
-                    height: 18,
-                    fit: BoxFit.contain,
-                    colorFilter: ColorFilter.mode(
-                      context.color.onSurface,
-                      BlendMode.srcIn,
-                    ),
-                    placeholderBuilder: (_) => Icon(
-                      icon ?? Icons.image_outlined,
-                      size: 18,
-                      color: context.color.onSurface,
-                    ),
-                  )
-                else
-                  Icon(icon!, size: 18, color: context.color.onSurface),
-                const SizedBox(width: 7),
-                Flexible(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: context.textTheme.bodyMedium?.copyWith(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-                if (trailing != null) ...[
-                  const SizedBox(width: 2),
-                  Icon(trailing, size: 20, color: context.color.outline),
-                ],
-              ],
-            ),
-          ),
-        ),
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 8),
+      child: Text(
+        text,
+        style: context.textTheme.bodyLarge
+            ?.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
       ),
     );
   }
 }
 
-/// Jins tanlagichning bitta bo'lagi — foni shaffof, chunki ramkalar Stack'da
-/// alohida chiziladi. Bu yerda faqat yozuv va bosish sohasi.
-class _GenderSegment extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final BorderRadius radius;
-  final VoidCallback onTap;
-
-  const _GenderSegment({
-    required this.label,
-    required this.selected,
-    required this.radius,
+/// Tezkor to'ldirish kartasi. [compact] — ikki ustunda (ikonka tepada),
+/// aks holda to'liq kenglikda qator (o'ngda strelka).
+class _QuickFillCard extends StatelessWidget {
+  const _QuickFillCard({
+    required this.iconAsset,
+    required this.title,
+    required this.subtitle,
+    required this.compact,
     required this.onTap,
   });
 
+  final String iconAsset;
+  final String title;
+  final String subtitle;
+  final bool compact;
+  final VoidCallback onTap;
+
   @override
   Widget build(BuildContext context) {
-    final bool isDark = context.themeProvider.isDark;
-    return Expanded(
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: radius,
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: () {
-            AnalyticsService()
-                .trackButtonTap('gender_select', extra: {'value': label});
-            onTap();
-          },
-          child: Center(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontFamily: "packages/mysafar_sdk/Gilroy",
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: selected
-                    ? ProjectTheme.brandColor
-                    : (isDark
-                        ? ProjectTheme.secondaryTextDark
-                        : ProjectTheme.secondaryTextLight),
-              ),
-            ),
+    final bool isDark = context.isDarkMode;
+    final Color brand = ProjectTheme.brandColor;
+    final Color accent = isDark ? Colors.white : brand;
+
+    final Widget icon = Container(
+      width: 40,
+      height: 40,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.08)
+            : brand.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: SvgPicture.asset(
+        iconAsset,
+        width: 22,
+        height: 22,
+        colorFilter: ColorFilter.mode(accent, BlendMode.srcIn),
+      ),
+    );
+
+    final Widget texts = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: context.textTheme.bodyMedium?.copyWith(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
           ),
         ),
+        const SizedBox(height: 2),
+        Text(
+          subtitle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: context.textTheme.bodySmall?.copyWith(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w500,
+            color: BookingFormStyle.label(context),
+          ),
+        ),
+      ],
+    );
+
+    return Material(
+      color: context.color.primaryContainer,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: compact
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [icon, const SizedBox(height: 12), texts],
+                )
+              : Row(
+                  children: [
+                    icon,
+                    const SizedBox(width: 12),
+                    Expanded(child: texts),
+                    SvgPicture.asset(
+                      Assets.iconsBookingChevronRightIcon,
+                      width: 20,
+                      height: 20,
+                      colorFilter: ColorFilter.mode(
+                        BookingFormStyle.hint(context),
+                        BlendMode.srcIn,
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Fuqarolik yonidagi kichik bayroq (asset bo'lmasa hech narsa chizmaydi).
+class BookingCountryFlag extends StatelessWidget {
+  const BookingCountryFlag({super.key, required this.code});
+
+  final String code;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(3),
+      child: Image.asset(
+        'packages/mysafar_sdk/assets/img/flags/${code.toLowerCase()}.png',
+        width: 22,
+        height: 16,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
       ),
     );
   }

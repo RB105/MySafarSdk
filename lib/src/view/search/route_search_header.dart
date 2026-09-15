@@ -374,9 +374,7 @@ class _WebSearchCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: isDark ? ProjectTheme.cardColorDark : Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: isDark
-            ? Border.all(color: ProjectTheme.borderDark)
-            : null,
+        border: isDark ? Border.all(color: ProjectTheme.borderDark) : null,
         boxShadow: isDark ? null : _Web.cardShadow,
       ),
       child: Column(
@@ -525,7 +523,7 @@ class _WebField extends StatelessWidget {
               ),
               if (icon != null) ...[
                 const SizedBox(width: 8),
-                _SvgIcon(icon!, size: 20, color: _Web.placeholder),
+                _SvgIcon(icon!, size: 18, color: _Web.placeholder),
               ],
             ],
           ),
@@ -628,7 +626,8 @@ class _WebTogglePill extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w500,
-                    color: isDark ? ProjectTheme.textColorDark : _Web.toggleText,
+                    color:
+                        isDark ? ProjectTheme.textColorDark : _Web.toggleText,
                   ),
                 ),
               ),

@@ -379,8 +379,9 @@ class _HomeHotTicketCard extends StatelessWidget {
   }
 }
 
-/// "So'ngi qidiruvlar" — hero rasm ICHIDA, shahar kartasi ostida.
-/// Oxirgi 2 ta qidiruv yonma-yon, yarim-transparent chip sifatida.
+/// "So'ngi qidiruvlar" — hero rasm ICHIDA, qidiruv kartasi ostida.
+/// Kelgusi sanali qidiruvlar gorizontal ro'yxatda; kartani bosish qidiruvni
+/// qayta ishga tushiradi. Kartalar qidiruv kartasi bilan bir xil shisha uslubda.
 class RecentSearchesWidget extends StatefulWidget {
   const RecentSearchesWidget({super.key});
 
@@ -389,6 +390,8 @@ class RecentSearchesWidget extends StatefulWidget {
 }
 
 class _RecentSearchesWidgetState extends State<RecentSearchesWidget> {
+  static const int _maxVisible = 6;
+
   List<RecommendationRequestBody> _items = const [];
 
   @override
@@ -404,17 +407,6 @@ class _RecentSearchesWidgetState extends State<RecentSearchesWidget> {
     super.dispose();
   }
 
-  DateTime? _parseDotDate(String? d) {
-    if (d == null) return null;
-    final p = d.split('.');
-    if (p.length != 3) return null;
-    try {
-      return DateTime(int.parse(p[2]), int.parse(p[1]), int.parse(p[0]));
-    } catch (_) {
-      return null;
-    }
-  }
-
   void _load() {
     final list = RecentSearchCache().read();
     final today = DateTime.now();
@@ -424,23 +416,15 @@ class _RecentSearchesWidgetState extends State<RecentSearchesWidget> {
     for (final p in list) {
       final s = p.segments;
       if (s == null || s.isEmpty) continue;
-      final date = _parseDotDate(s.first.date);
+      final date = _parseRecentDate(s.first.date);
+      // O'tib ketgan sanali qidiruvni takrorlab bo'lmaydi — ko'rsatilmaydi.
       if (date == null || date.isBefore(startOfDay)) continue;
       visible.add(p);
-      if (visible.length >= 2) break;
+      if (visible.length >= _maxVisible) break;
     }
 
     if (!mounted) return;
     setState(() => _items = visible);
-  }
-
-  String _dates(RecommendationRequestBody p) {
-    final s = p.segments!;
-    final start = ElementFormatter.formatDate(s.first.date ?? '');
-    if (s.length > 1) {
-      return '$start - ${ElementFormatter.formatDate(s.last.date ?? '')}';
-    }
-    return start;
   }
 
   void _repeatSearch(RecommendationRequestBody p) {
@@ -455,109 +439,303 @@ class _RecentSearchesWidgetState extends State<RecentSearchesWidget> {
     if (_items.isEmpty) return const SizedBox.shrink();
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-      child: Row(
+      padding: const EdgeInsets.only(top: 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (int i = 0; i < _items.length; i++) ...[
-            if (i > 0) const SizedBox(width: 8),
-            Expanded(child: _chip(context, _items[i])),
-          ],
-          // Bitta item bo'lsa — yarim kenglikda qoladi (chapda).
-          if (_items.length == 1) const Expanded(child: SizedBox.shrink()),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                SvgPicture.asset(
+                  Assets.iconsPlaceRecentIcon,
+                  width: 16,
+                  height: 16,
+                  colorFilter:
+                      const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    "home_recent_searches".tr(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.textTheme.bodyMedium?.copyWith(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      shadows: [
+                        Shadow(
+                          color: Colors.black.withOpacity(0.35),
+                          blurRadius: 6,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              // Bitta qidiruv — to'liq kenglikda; bir nechta bo'lsa keyingi
+              // karta chetdan ko'rinib turadi (surish mumkinligi seziladi).
+              final double cardWidth = _items.length == 1
+                  ? constraints.maxWidth - 32
+                  : (constraints.maxWidth * 0.74).clamp(0.0, 300.0);
+              return SizedBox(
+                height: _RecentSearchCard.height,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  clipBehavior: Clip.none,
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: _items.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 10),
+                  itemBuilder: (context, index) => SizedBox(
+                    width: cardWidth,
+                    child: _RecentSearchCard(
+                      search: _items[index],
+                      onTap: () => _repeatSearch(_items[index]),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
         ],
       ),
     );
   }
+}
 
-  Widget _chip(BuildContext context, RecommendationRequestBody p) {
-    final s = p.segments!;
-    final from = s.first.from?.cityName ?? s.first.from?.cityIataCode ?? '';
-    final to = s.first.to?.cityName ?? s.first.to?.cityIataCode ?? '';
-    final title = '$from → $to';
+/// Keshdagi sana formati: `dd.MM.yyyy`.
+DateTime? _parseRecentDate(String? d) {
+  if (d == null) return null;
+  final p = d.split('.');
+  if (p.length != 3) return null;
+  try {
+    return DateTime(int.parse(p[2]), int.parse(p[1]), int.parse(p[0]));
+  } catch (_) {
+    return null;
+  }
+}
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Material(
-          color: Colors.white.withValues(alpha: 0.22),
-          child: InkWell(
-            onTap: () => _repeatSearch(p),
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.35),
+/// So'ngi qidiruv kartasi: chapda samolyot belgisi, yo'nalish ("Toshkent →
+/// Dubay", borib-kelishda ⇄), ostida sana(lar) va yo'lovchilar soni.
+class _RecentSearchCard extends StatefulWidget {
+  static const double height = 72;
+
+  final RecommendationRequestBody search;
+  final VoidCallback onTap;
+
+  const _RecentSearchCard({required this.search, required this.onTap});
+
+  @override
+  State<_RecentSearchCard> createState() => _RecentSearchCardState();
+}
+
+class _RecentSearchCardState extends State<_RecentSearchCard> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed != value) setState(() => _pressed = value);
+  }
+
+  String _cityName(AirPortsModel? place) {
+    final name = place?.cityName?.trim() ?? '';
+    return name.isNotEmpty ? name : (place?.cityIataCode ?? '');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isDark = context.isDarkMode;
+    final search = widget.search;
+    final segments = search.segments!;
+    final first = segments.first;
+
+    final bool isMulti = search.flight_Type == 2 || segments.length > 2;
+    final bool isRoundTrip = !isMulti && segments.length == 2;
+
+    final from = _cityName(first.from);
+    final to = _cityName(isMulti ? segments.last.to : first.to);
+
+    final start = _parseRecentDate(first.date);
+    final end = segments.length > 1 ? _parseRecentDate(segments.last.date) : null;
+    final String dates;
+    if (start == null) {
+      dates = first.date ?? '';
+    } else if (end == null || end.isSame(start)) {
+      dates = start.dateWithMonthLowerCase;
+    } else if (start.year == end.year && start.month == end.month) {
+      // Bir oy ichida — ixcham: "12–19 Okt".
+      dates = '${start.day}–${end.dateWithMonthLowerCase}';
+    } else {
+      dates = '${start.dateWithMonthLowerCase} – ${end.dateWithMonthLowerCase}';
+    }
+    final passengers = search.adt + search.chd + search.inf;
+
+    // Qidiruv kartasi (MainSearchForm._homeCard) bilan bir xil shisha.
+    final Color glass =
+        isDark ? Colors.black.withOpacity(0.28) : Colors.white.withOpacity(0.94);
+    final Color border =
+        isDark ? Colors.white.withOpacity(0.22) : Colors.white.withOpacity(0.55);
+    final Color titleColor = isDark ? Colors.white : ProjectTheme.textColorLight;
+    final Color muted =
+        isDark ? Colors.white.withOpacity(0.72) : const Color(0xFF5B6B85);
+    final Color tileBg =
+        isDark ? Colors.white.withOpacity(0.14) : const Color(0xFFEAF1FF);
+    final Color tileFg = isDark ? Colors.white : ProjectTheme.brandColor;
+    const radius = 18.0;
+
+    final base = context.textTheme.bodyMedium ?? const TextStyle();
+    final titleStyle = base.copyWith(
+      color: titleColor,
+      fontSize: 15,
+      fontWeight: FontWeight.w700,
+      height: 1.2,
+    );
+    final metaStyle = base.copyWith(
+      color: muted,
+      fontSize: 12.5,
+      fontWeight: FontWeight.w500,
+      height: 1.2,
+    );
+
+    Widget icon(String asset, double size, Color color) => SvgPicture.asset(
+          asset,
+          width: size,
+          height: size,
+          colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+        );
+
+    return Semantics(
+      button: true,
+      label: '$from – $to, $dates, $passengers',
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onTap,
+        onTapDown: (_) => _setPressed(true),
+        onTapUp: (_) => _setPressed(false),
+        onTapCancel: () => _setPressed(false),
+        child: AnimatedScale(
+          scale: _pressed ? 0.97 : 1,
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOut,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(radius),
+              boxShadow: isDark
+                  ? null
+                  : [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.10),
+                        blurRadius: 14,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(radius),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(10, 10, 8, 10),
+                  decoration: BoxDecoration(
+                    color: glass,
+                    borderRadius: BorderRadius.circular(radius),
+                    border: Border.all(color: border),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: tileBg,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: icon(Assets.iconsRecentPlaneIcon, 22, tileFg),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    from,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: titleStyle,
+                                  ),
+                                ),
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 5),
+                                  child: icon(
+                                    isRoundTrip
+                                        ? Assets.iconsRecentRoundTripIcon
+                                        : Assets.iconsCalendarRouteArrowIcon,
+                                    15,
+                                    muted,
+                                  ),
+                                ),
+                                Flexible(
+                                  child: Text(
+                                    to,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: titleStyle,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 5),
+                            Row(
+                              children: [
+                                icon(Assets.iconsRecentCalendarIcon, 14, muted),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    dates,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: metaStyle,
+                                  ),
+                                ),
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 6),
+                                  child: Container(
+                                    width: 3,
+                                    height: 3,
+                                    decoration: BoxDecoration(
+                                      color: muted,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                ),
+                                icon(Assets.iconsRecentPassengerIcon, 14, muted),
+                                const SizedBox(width: 3),
+                                Text('$passengers', style: metaStyle),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      icon(Assets.iconsRecentChevronIcon, 18, muted),
+                    ],
+                  ),
                 ),
-              ),
-              // ListTile uslubi: leading (chap-o'rta) + title/subtitle.
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 34,
-                    height: 34,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Colors.white.withValues(alpha: 0.38),
-                          Colors.white.withValues(alpha: 0.16),
-                        ],
-                      ),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.5),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.12),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: CustomPaint(
-                      size: const Size(18, 18),
-                      painter: _ClockIconPainter(),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                            height: 1.2,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          _dates(p),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.82),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            height: 1.2,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
               ),
             ),
           ),
@@ -565,35 +743,6 @@ class _RecentSearchesWidgetState extends State<RecentSearchesWidget> {
       ),
     );
   }
-}
-
-/// Dumaloq badge ichidagi soat — millar aniq ko'rinadi.
-class _ClockIconPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final stroke = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = size.shortestSide * 0.12
-      ..strokeCap = StrokeCap.round;
-
-    final fill = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-
-    final c = Offset(size.width / 2, size.height / 2);
-    final r = size.shortestSide * 0.42;
-
-    canvas.drawCircle(c, r, stroke);
-    canvas.drawCircle(c, size.shortestSide * 0.07, fill);
-
-    // Soat millari (12 va ~4).
-    canvas.drawLine(c, Offset(c.dx, c.dy - r * 0.55), stroke);
-    canvas.drawLine(c, Offset(c.dx + r * 0.42, c.dy + r * 0.12), stroke);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 /// "24/7 yordam" kartasi (Figma) — bosilganda qo'llab-quvvatlash menyusi.

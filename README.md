@@ -61,6 +61,49 @@ MySafarConfig(
 )
 ```
 
+### Foydalanuvchi ma'lumotlari (email, kartalar) — ixtiyoriy
+
+Host o'z user'ining emaili va kartalarini `init`ga berishi mumkin. Hech narsa
+berilmasa (yoki ro'yxatlar bo'sh bo'lsa) SDK odatdagidek ishlaydi. So'mdagi
+kartalar va boshqa valyutadagi kartalar alohida ro'yxatda qabul qilinadi:
+
+```dart
+await MySafarSdk.init(
+  config: ...,
+  userData: MySafarUserData(
+    email: 'user@example.com',
+    uzsCards: [
+      MySafarUzsCard(
+        cardNumber: '8600123412341234', // 16 raqam
+        expire: '2812',                 // YYMM (12/2028)
+        cardMask: '8600 **** **** 1234', // ixtiyoriy — berilmasa raqamdan hosil qilinadi
+        owner: 'ALIYEV VALI',           // ixtiyoriy
+        balance: 1250000,               // ixtiyoriy, so'mda (tiyinda emas)
+      ),
+    ],
+    foreignCards: [
+      MySafarForeignCard(
+        cardToken: '...',               // host processing tokeni
+        cardMask: '4276 **** **** 1234',
+        owner: 'ALIYEV VALI',           // ixtiyoriy
+        currency: 'USD',                // ISO 4217, default USD
+      ),
+    ],
+  ),
+);
+
+// Karta qo'shildi / balans o'zgardi / boshqa user kirdi:
+MySafarSdk.updateUserData(MySafarUserData(...));
+// Host'dan chiqildi:
+MySafarSdk.clearUserData();
+```
+
+- Karta ma'lumotlari faqat xotirada turadi — diskka, keshga, analytics'ga
+  yozilmaydi; `toString()` karta raqamini maskalaydi.
+- Yaroqsiz kartalar (16 raqamsiz, `YYMM` bo'lmagan muddat, bo'sh token) jim
+  tashlab yuboriladi — init yiqilmaydi.
+- `MySafarEmbed.email` berilmasa `userData.email` ishlatiladi.
+
 Embed ichidagi bosh ekranda host'ga qaytish tugmasi chiqadi; Android back ham
 avval SDK stack'ini yechib, oxirida host ekraniga qaytadi.
 
@@ -116,19 +159,27 @@ tinglanadi va SDK'ga uzatiladi: `MySafarSdk.handleLink(uri)`.
 ## Example
 
 Local secretlar `env.json` orqali beriladi (`env.json` gitignore'da; template: `env.json.example`).
+Kalit nomlari Unired `.env` bilan bir xil: `MYSAFAR_BASE_URL`, `MYSAFAR_SKOTE_BASE_URL`,
+`MYSAFAR_PARTNER_TOKEN`, `MYSAFAR_APP_NAME`.
 
 ```bash
 cd example
-cp env.json.example env.json   # bir marta — PARTNER_TOKEN / USER_PHONE / USER_EMAIL
+cp env.json.example env.json   # bir marta — MYSAFAR_* (+ ixtiyoriy USER_PHONE / USER_EMAIL)
 flutter run --dart-define-from-file=env.json                          # to'liq app
 flutter run -t lib/main_embed.dart --dart-define-from-file=env.json   # embed
 ```
 
+**Debug to'ldirish.** Faqat debug build'da `MySafarSdk.init` host bo'sh qoldirgan
+`baseUrl`, `skoteBaseUrl`, `partnerToken`, `appName` maydonlarini shu `MYSAFAR_*`
+dart-define qiymatlaridan to'ldiradi (host bergan qiymat doim ustun). Release/profile
+build'da hech narsa to'ldirilmaydi — barcha ma'lumot host `init`ga bergan config'dan
+keladi. Repo public: token kodga yoki git'ga yozilmaydi.
+
 Yoki alohida:
 
 ```bash
-flutter run --dart-define=PARTNER_TOKEN=xxx
-flutter run -t lib/main_embed.dart --dart-define=PARTNER_TOKEN=xxx
+flutter run --dart-define=MYSAFAR_PARTNER_TOKEN=xxx
+flutter run -t lib/main_embed.dart --dart-define=MYSAFAR_PARTNER_TOKEN=xxx
 ```
 
 ## Test

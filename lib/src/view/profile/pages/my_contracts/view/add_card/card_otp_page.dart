@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
+import 'package:mysafar_sdk/src/core/widgets/sdk_dialog.dart';
 import 'package:mysafar_sdk/src/view/profile/pages/my_contracts/view/add_card/add_card_service.dart';
 import 'package:pinput/pinput.dart';
 
@@ -146,72 +147,22 @@ class _CardOtpPageState extends State<CardOtpPage> {
   }
 
   Future<void> _showLinkErrorDialog(String message) {
-    return showDialog<void>(useRootNavigator: false, 
+    return showSdkAlert<void>(
       context: context,
+      tone: SdkDialogTone.error,
       barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        icon: Icon(
-          Icons.error_outline_rounded,
-          color: ProjectTheme.error,
-          size: 48,
-        ),
-        content: Text(
-          message,
-          textAlign: TextAlign.center,
-          style: context.textTheme.bodyLarge?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        actionsAlignment: MainAxisAlignment.center,
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(
-              "retry".tr(),
-              style: TextStyle(
-                color: ProjectTheme.brandColor,
-                fontWeight: FontWeight.w700,
-                fontSize: 16,
-              ),
-            ),
-          ),
-        ],
-      ),
+      message: message,
+      actions: [SdkDialogAction(label: "retry".tr())],
     );
   }
 
   Future<void> _showSuccessDialog() {
-    return showDialog<void>(useRootNavigator: false, 
+    return showSdkAlert<void>(
       context: context,
+      tone: SdkDialogTone.success,
       barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        icon: Icon(
-          Icons.check_circle_rounded,
-          color: ProjectTheme.success,
-          size: 48,
-        ),
-        content: Text(
-          "card_added_contract_success".tr(),
-          textAlign: TextAlign.center,
-          style: context.textTheme.bodyLarge?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        actionsAlignment: MainAxisAlignment.center,
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(
-              "ok".tr(),
-              style: TextStyle(
-                color: ProjectTheme.brandColor,
-                fontWeight: FontWeight.w700,
-                fontSize: 16,
-              ),
-            ),
-          ),
-        ],
-      ),
+      message: "card_added_contract_success".tr(),
+      actions: [SdkDialogAction(label: "ok".tr())],
     );
   }
 

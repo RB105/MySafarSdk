@@ -10,21 +10,18 @@ import 'package:mysafar_sdk/mysafar_sdk.dart';
 ///
 /// Yoki alohida:
 ///   flutter run -t lib/main_embed.dart \
-///     --dart-define=PARTNER_TOKEN=xxx \
+///     --dart-define=MYSAFAR_PARTNER_TOKEN=xxx \
 ///     --dart-define=USER_PHONE=998... \
 ///     --dart-define=USER_EMAIL=...
 Future<void> main() async {
   await MySafarSdk.init(
+    // Unired init'i bilan bir xil config. URL/token bo'sh — debug'da SDK
+    // ularni env.json dagi MYSAFAR_* qiymatlaridan to'ldiradi. Release'da
+    // hech narsa to'ldirilmaydi: host haqiqiy qiymatlarni shu yerga beradi.
     config: const MySafarConfig(
-      baseUrl: String.fromEnvironment(
-        'BASE_URL',
-        defaultValue: 'https://api.mysafar.ru',
-      ),
-      skoteBaseUrl: String.fromEnvironment(
-        'SKOTE_BASE_URL',
-        defaultValue: 'https://cms.mysafar.uz/api',
-      ),
-      partnerToken: String.fromEnvironment('PARTNER_TOKEN'),
+      baseUrl: '',
+      skoteBaseUrl: '',
+      enableServicesTab: false,
 
       // brandColor berilmasa default #0057BE qoladi.
       // brandColor: Colors.green,
@@ -46,6 +43,28 @@ Future<void> main() async {
       //   description: 'bilan parvoz qiling',
       // ),
     ),
+    // Ixtiyoriy: host user emaili va kartalari. Berilmasa SDK odatdagidek
+    // ishlaydi. Keyin o'zgarsa: MySafarSdk.updateUserData(...).
+    // userData: MySafarUserData(
+    //   email: 'user@example.com',
+    //   uzsCards: [
+    //     MySafarUzsCard(
+    //       cardNumber: '8600123412341234',
+    //       expire: '2812', // YYMM
+    //       cardMask: '8600 **** **** 1234',
+    //       owner: 'ALIYEV VALI',
+    //       balance: 1250000, // so'mda
+    //     ),
+    //   ],
+    //   foreignCards: [
+    //     MySafarForeignCard(
+    //       cardToken: 'host-processing-token',
+    //       cardMask: '4276 **** **** 1234',
+    //       owner: 'ALIYEV VALI',
+    //       currency: 'USD',
+    //     ),
+    //   ],
+    // ),
   );
 
   // Back diagnostikasi: tizim back'i Flutter'ga yetib keladimi.
@@ -96,7 +115,7 @@ class HostHomePage extends StatelessWidget {
                   locale: Localizations.localeOf(context),
                   // Host joriy temasi — har ochilishda beriladi:
                   //themeMode:  ThemeMode.dark // → faqat qorong'u
-                 themeMode:  ThemeMode.light // → faqat yorug'
+                  themeMode: ThemeMode.light, // → faqat yorug'
                   // null            → sistema temasi (terminal `b` ishlaydi)
                   // Production (Unired): ThemeMode.dark yoki .light
                   // themeMode: ThemeMode.dark,

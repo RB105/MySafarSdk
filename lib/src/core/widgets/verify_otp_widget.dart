@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator;
 import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart' show showToastMessage;
+import 'package:mysafar_sdk/src/core/widgets/sdk_dialog.dart';
 import 'package:mysafar_sdk/src/view/auth/logic/bloc/auth_cubit.dart';
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
 import 'package:pinput/pinput.dart';
@@ -260,11 +261,9 @@ class _VerifyOtpWidgetState extends State<VerifyOtpWidget> {
                       Visibility(
                           visible:
                               state.loginAuthStatus == ActionStatus.isLoading,
-                          child: AlertDialog.adaptive(
-                            backgroundColor: context.color.primaryContainer,
-                            content: Center(
-                              child: CircularProgressIndicator.adaptive(),
-                            ),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            child: SdkLoadingCard(),
                           )),
                     ],
                   ),

@@ -37,6 +37,10 @@ android {
     }
 
     defaultConfig {
-        minSdk = 26
+        // 24 — host ilova (Unired) minSdk'i bilan bir xil. Plugin ishlatadigan
+        // yangi API'lar (OnBackInvokedCallback — 33, OnBackAnimationCallback —
+        // 34) kodda `Build.VERSION.SDK_INT` bilan himoyalangan, API 26'ga xos
+        // hech narsa yo'q. 26 bo'lganda host'ning manifest merger'i yiqilardi.
+        minSdk = 24
     }
 }

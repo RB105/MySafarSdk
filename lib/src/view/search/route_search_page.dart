@@ -9,7 +9,9 @@ import 'package:mysafar_sdk/src/core/config/response_config.dart'
     show NetworkSuccessResponse;
 import 'package:mysafar_sdk/src/core/enum/currency.dart'
     show AppCurrency, AppCurrencyExtension;
+import 'package:flutter_svg/flutter_svg.dart' show SvgPicture;
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
+import 'package:mysafar_sdk/src/generated/assets.dart' show Assets;
 import 'package:mysafar_sdk/src/core/styles/theme.dart' show ProjectTheme;
 import 'package:mysafar_sdk/src/core/tools/currency_provider.dart'
     show CurrencyProvider;
@@ -398,7 +400,7 @@ class _RouteSearchViewState extends State<_RouteSearchView>
       children: [
         if (enableMulti) ...[
           _RouteModeTabBar(controller: _tabController),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
         ],
         AnimatedSize(
           duration: const Duration(milliseconds: 320),

@@ -1,10 +1,11 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'package:flutter/services.dart'
+    show Clipboard, ClipboardData, HapticFeedback, SystemUiOverlayStyle;
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
@@ -12,23 +13,31 @@ import 'package:mysafar_sdk/src/core/tools/formatters.dart';
 import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart';
 import 'package:mysafar_sdk/src/core/widgets/edge_swipe_back.dart';
 import 'package:mysafar_sdk/src/core/widgets/response_state.dart';
-import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
+import 'package:mysafar_sdk/src/core/widgets/sdk_dialog.dart';
+import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/cubit/booking/confirm/booking_confirm_states.dart';
+import 'package:mysafar_sdk/src/cubit/profile/tickets/confirmed_tickets_cubit.dart';
 import 'package:mysafar_sdk/src/model/local/payment_type.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_model.dart'
     show FlightPrice, FluffyRub, FluffyUzs;
 import 'package:mysafar_sdk/src/core/config/response_config.dart'
     show NetworkSuccessResponse;
 import 'package:mysafar_sdk/src/model/remote/booking/booking_create_model.dart';
-import 'package:mysafar_sdk/src/model/remote/booking/payment_type_model.dart' show Result;
+import 'package:mysafar_sdk/src/model/remote/booking/payment_type_model.dart'
+    show Result;
 import 'package:mysafar_sdk/src/model/remote/payment/payment_type_config.dart';
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart';
 import 'package:mysafar_sdk/src/service/booking_service.dart';
 import 'package:mysafar_sdk/src/service/payment/payment_type_repository.dart';
 import 'package:mysafar_sdk/src/view/booking/support/payment_helper.dart';
+import 'package:mysafar_sdk/src/view/booking/widget/booking_form_fields.dart'
+    show BookingFieldError, BookingFormStyle;
 import 'package:mysafar_sdk/src/view/booking/widget/next_button_widget.dart';
+import 'package:mysafar_sdk/src/view/booking/widget/payment_countdown_card.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/payment_type_card.dart';
-
+import 'package:mysafar_sdk/src/view/booking/widget/support_widget.dart';
+import 'package:mysafar_sdk/src/view/tickets/ticket_page.dart'
+    show RecommendationsTicketPage;
 
 class BookingConfirmPage extends StatefulWidget {
   static const routeName = '/bookingConfirm';
@@ -50,11 +59,24 @@ class BookingConfirmPage extends StatefulWidget {
 
 class _BookingConfirmPageState extends State<BookingConfirmPage> {
   Timer? _timer;
+  Timer? _copyResetTimer;
+
+  /// Vaqt tugagach chiptalar sahifasiga qaytishni rejalashtiruvchi taymer.
+  Timer? _expiryTimer;
+  bool _leavingAfterExpiry = false;
+
+  /// Vaqt tugaganda sahifada qolmasdan (foydalanuvchi natijani ko'rib olishi
+  /// uchun) shuncha kutib, chiptalar sahifasiga qaytamiz.
+  static const Duration _expiryLeaveDelay = Duration(milliseconds: 1800);
   int _remainingSeconds = 0;
 
   final ValueNotifier<int> _remainingNotifier = ValueNotifier<int>(0);
+  final GlobalKey _methodsKey = GlobalKey();
   String? _selectedPaymentType;
 
+  /// Usul tanlanmay "To'lovga o'tish" bosilganda ro'yxat qizil konturlanadi.
+  bool _showSelectionError = false;
+  bool _idCopied = false;
 
   List<PaymentTypeEntry> _paymentTypeItems = [];
   bool _paymentTypesLoading = true;
@@ -87,6 +109,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
       setState(() {
         _paymentTypeItems = _buildPaymentEntries(cached);
         _paymentTypesLoading = false;
+        _reconcileSelection();
       });
     }
 
@@ -153,10 +176,15 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
 
   /// Ro'yxat yangilangach tanlovni tekshiradi — tanlangan tur endi faol emas
   /// yoki umuman yo'q bo'lsa, tanlovni bekor qiladi (o'chirilgan turni to'lashning
-  /// oldini oladi). setState ichida chaqiriladi.
+  /// oldini oladi). Faqat bitta faol tur bo'lsa — uni avtomatik tanlaydi.
+  /// setState ichida chaqiriladi.
   void _reconcileSelection() {
     if (!_isSelectionActive()) {
       _selectedPaymentType = null;
+    }
+    final active = _paymentTypeItems.where((e) => e.isActive).toList();
+    if (_selectedPaymentType == null && active.length == 1) {
+      _selectedPaymentType = active.first.type.id;
     }
   }
 
@@ -180,8 +208,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
 
       final base = PaymentConstants.paymentTypeByName(c.name);
       // Firebase rasm faqat ilovada lokal logosi yo'q yangi turlar uchun (mobile-home).
-      final hasNetworkImage =
-          base == null && c.imageUrl.trim().isNotEmpty;
+      final hasNetworkImage = base == null && c.imageUrl.trim().isNotEmpty;
       // Na Firebase rasm, na lokal asset bo'lsa — ko'rsatib bo'lmaydi.
       if (base == null && !hasNetworkImage) continue;
       // Yorliq — joriy tilga mos; bo'sh bo'lsa lokal (hardcoded) yorliqqa qaytadi.
@@ -209,6 +236,8 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
 
     if (_remainingSeconds > 0) {
       _startCountdown();
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _onTimeExpired());
     }
   }
 
@@ -222,7 +251,8 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
       if (!mounted) return;
       final now = DateTime.now();
       final diff = now.difference(createdTime);
-      final remaining = PaymentConstants.paymentTimeLimitSeconds - diff.inSeconds;
+      final remaining =
+          PaymentConstants.paymentTimeLimitSeconds - diff.inSeconds;
       final clamped = remaining > 0 ? remaining : 0;
 
       final wasActive = _remainingSeconds > 0;
@@ -234,6 +264,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
       // (davom etish tugmasi o'chadi).
       if (wasActive && clamped <= 0) {
         setState(() {});
+        _onTimeExpired();
       }
 
       if (remaining <= 0) {
@@ -242,9 +273,50 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
     });
   }
 
+  /// To'lov vaqti tugadi: sahifada qotib qolmasdan, qisqa pauzadan so'ng
+  /// chiptalar sahifasiga qaytib xuddi shu yo'nalish bo'yicha qayta qidiramiz.
+  ///
+  /// Sahifa hozir ko'rinmayotgan bo'lsa (masalan to'lov WebView'i yoki dialog
+  /// ochiq) — foydalanuvchini to'lov o'rtasida uzib qo'ymaymiz; sahifaga
+  /// qaytgach ishlaydi.
+  void _onTimeExpired() {
+    if (!mounted || _leavingAfterExpiry) return;
+    final route = ModalRoute.of(context);
+    if (route == null || !route.isCurrent) {
+      _expiryTimer?.cancel();
+      _expiryTimer = Timer(const Duration(milliseconds: 500), _onTimeExpired);
+      return;
+    }
+    setState(() => _leavingAfterExpiry = true);
+    _expiryTimer?.cancel();
+    _expiryTimer = Timer(_expiryLeaveDelay, _leaveAfterExpiry);
+  }
+
+  void _leaveAfterExpiry() {
+    if (!mounted) return;
+    final route = ModalRoute.of(context);
+    // Kutish paytida dialog ochilgan bo'lsa — yopilishini kutamiz.
+    if (route == null || !route.isCurrent) {
+      _expiryTimer =
+          Timer(const Duration(milliseconds: 500), _leaveAfterExpiry);
+      return;
+    }
+    // Bron yaratilgan edi — buyurtmalar keshi eskirdi.
+    ConfirmedTicketsCubit.clearCache();
+    final returned = RecommendationsTicketPage.returnAndSearchAgain(
+      context,
+      message: 'payment_expired_toast'.tr(),
+    );
+    // Chiptalar sahifasi stack'da yo'q (masalan buyurtmalardan to'lovga
+    // kelingan) — bosh sahifaga qaytamiz.
+    if (!returned) PaymentHelper.navigateToHome(context);
+  }
+
   @override
   void dispose() {
     _timer?.cancel();
+    _expiryTimer?.cancel();
+    _copyResetTimer?.cancel();
     _remainingNotifier.dispose();
     super.dispose();
   }
@@ -268,15 +340,13 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
             },
             child: EdgeSwipeBack(
               onBack: () => _handleBack(context),
-              child: SafeArea(
-                top: Platform.isAndroid,
-                bottom: Platform.isAndroid,
-                child: Scaffold(
-                  backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-                  appBar: _buildAppBar(context),
-                  body: _buildBody(context, state),
-                  bottomNavigationBar: _buildBottomButton(context, state),
-                ),
+              // Tashqi SafeArea yo'q: status bar ostini ham Scaffold foni
+              // to'ldiradi (AppBar tepa, NextButtonWidget pastki insetni oladi).
+              child: Scaffold(
+                backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+                appBar: _buildAppBar(context),
+                body: _buildBody(context, state),
+                bottomNavigationBar: _buildBottomButton(context, state),
               ),
             ),
           );
@@ -296,82 +366,28 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
 
   Future<bool> _showExitConfirmDialog(BuildContext context) async {
     if (!context.mounted) return false;
-    final result = await showDialog<bool>(useRootNavigator: false, 
+    final isExpired = _remainingSeconds <= 0;
+    final result = await showSdkAlert<bool>(
       context: context,
+      icon: Assets.iconsDialogHourglassIcon,
+      tone: SdkDialogTone.warning,
       barrierDismissible: false,
-      builder: (dialogContext) {
-        final isExpired = _remainingSeconds <= 0;
-        return Dialog(
-          backgroundColor: context.color.primaryContainer,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'exit_payment_title'.tr(),
-                  textAlign: TextAlign.center,
-                  style: context.textTheme.bodyMedium?.copyWith(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'exit_payment_message'.tr(
-                    namedArgs: {
-                      'time': isExpired
-                          ? 'payment_time_expired'.tr()
-                          : PaymentHelper.formatDuration(_remainingSeconds),
-                    },
-                  ),
-                  textAlign: TextAlign.center,
-                  style: context.textTheme.bodyMedium?.copyWith(fontSize: 14),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  height: 48,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      elevation: 0,
-                      backgroundColor: ProjectTheme.brandColor,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    onPressed: () => Navigator.of(dialogContext).pop(false),
-                    child: Text(
-                      'exit_payment_continue'.tr(),
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 48,
-                  child: TextButton(
-                    onPressed: () => Navigator.of(dialogContext).pop(true),
-                    child: Text(
-                      'exit_payment_exit'.tr(),
-                      style: const TextStyle(
-                        color: Color(0xffEF2323),
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+      title: 'exit_payment_title'.tr(),
+      message: 'exit_payment_message'.tr(
+        namedArgs: {
+          'time': isExpired
+              ? 'payment_time_expired'.tr()
+              : PaymentHelper.formatDuration(_remainingSeconds),
+        },
+      ),
+      actions: [
+        SdkDialogAction(label: 'exit_payment_continue'.tr(), value: false),
+        SdkDialogAction(
+          label: 'exit_payment_exit'.tr(),
+          value: true,
+          variant: SdkDialogButtonVariant.dangerSoft,
+        ),
+      ],
     );
     return result ?? false;
   }
@@ -392,7 +408,8 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
     }
   }
 
-  void _handlePaymentSuccess(BuildContext context, BookingConfirmSuccessState state) {
+  void _handlePaymentSuccess(
+      BuildContext context, BookingConfirmSuccessState state) {
     final data = state.data;
     final type = (_selectedPaymentType ?? '').toUpperCase();
 
@@ -411,7 +428,8 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
     if (url != null) PaymentHelper.openInWebView(context, url);
   }
 
-  void _handlePriceChange(BuildContext context, BookingConfirmChangeAmountSuccessState state) {
+  void _handlePriceChange(
+      BuildContext context, BookingConfirmChangeAmountSuccessState state) {
     final bookData = state.data['data']?['book'];
     if (bookData == null) return;
 
@@ -450,296 +468,270 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
   }
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {
-    final isDark = context.isDarkMode;
     return AppBar(
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: true,
-      backgroundColor: context.color.primaryContainer,
-      leadingWidth: 56,
-      leading: Center(
-        child: Material(
-          color:
-              isDark ? Colors.white.withAlpha(20) : Colors.black.withAlpha(10),
-          shape: const CircleBorder(),
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: () async {
-              final shouldExit = await _showExitConfirmDialog(context);
-              if (shouldExit && context.mounted) {
-                PaymentHelper.navigateToHome(context);
-              }
-            },
-            child: const SizedBox(
-              width: 38,
-              height: 38,
-              child: Icon(Icons.arrow_back_ios_new_rounded, size: 17),
-            ),
-          ),
-        ),
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      // Tema status bar'ni oq/qora bo'yaydi — sahifa fonidan farq qilmasin.
+      systemOverlayStyle: (context.isDarkMode
+              ? SystemUiOverlayStyle.light
+              : SystemUiOverlayStyle.dark)
+          .copyWith(statusBarColor: Colors.transparent),
+      leading: IconButton(
+        onPressed: () => _handleBack(context),
+        icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 19),
       ),
       title: Text(
         'ticket_payment'.tr(),
         style: context.textTheme.bodyLarge
-            ?.copyWith(fontSize: 16, fontWeight: FontWeight.w800),
-      ),
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(1),
-        child: Container(
-          height: 1,
-          color: isDark ? const Color(0xff3A3A3A) : const Color(0xffEAEBEE),
-        ),
+            ?.copyWith(fontSize: 17, fontWeight: FontWeight.w800),
       ),
     );
   }
 
   Widget _buildBody(BuildContext context, BookingConfirmStates state) {
-    // Kichik ekranlarda (yoki to'lov turlari ko'payganda) kontent sig'masligi
-    // mumkin — shuning uchun scroll qilinadi. Pastda tugma (bottomNavigationBar)
-    // bilan urilmasligi uchun ozroq bo'sh joy qoldiramiz.
-    return SingleChildScrollView(
-      padding: const EdgeInsets.only(bottom: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: _buildSectionHeader(context, 'select_payment_method'),
+    // Taymer tepaga qadalgan — usul tanlash paytida ham doim ko'rinadi.
+    // Qolgani: asosiy amal (to'lov usuli), so'ng yordamchi ma'lumot.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: PaymentCountdownCard(
+            remaining: _remainingNotifier,
+            researching: _leavingAfterExpiry,
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: PaymentTypesGrid(
-              items: _paymentTypeItems,
-              isLoading: _paymentTypesLoading,
-              selectedType: _selectedPaymentType,
-              onTypeSelected: (type) {
-                setState(() => _selectedPaymentType = type);
-              },
+        ),
+        Expanded(child: _buildScrollableContent(context)),
+      ],
+    );
+  }
+
+  Widget _buildScrollableContent(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _SectionTitle('select_payment_method'.tr()),
+          KeyedSubtree(
+            key: _methodsKey,
+            // Vaqt tugagach usul tanlashning ma'nosi yo'q — ro'yxat xiralashadi.
+            child: _PaymentMethodsLock(
+              locked: _remainingSeconds <= 0,
+              child: PaymentMethodList(
+                items: _paymentTypeItems,
+                isLoading: _paymentTypesLoading,
+                selectedType: _selectedPaymentType,
+                hasError: _showSelectionError,
+                onTypeSelected: (type) {
+                  setState(() {
+                    _selectedPaymentType = type;
+                    _showSelectionError = false;
+                  });
+                },
+              ),
             ),
           ),
-          context.szBoxHeight24,
-          _buildRemainingTime(context),
-          context.szBoxHeight16,
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: _buildBillingIdInfo(context),
+          BookingFieldError(
+            text: _showSelectionError ? 'select_payment_type'.tr() : null,
           ),
+          const SizedBox(height: 20),
+          _buildBillingIdInfo(context),
+          const SizedBox(height: 12),
+          const SupportWidget(),
         ],
       ),
     );
   }
 
-  /// To'lov ID'sini nusxalash + to'lovda muammo bo'lsa nima qilish bo'yicha
-  /// qisqa yo'riqnoma. Foydalanuvchi ushbu ID orqali keyinroq «Xizmatlar»
-  /// bo'limidan qayta to'lov qilishi yoki texnik xizmatga murojaat qilishi mumkin.
+  /// Buyurtma ID — nusxalash tugmasi bilan, ostida to'lovda muammo bo'lsa
+  /// nima qilish bo'yicha qisqa yo'riqnoma. Foydalanuvchi ushbu ID orqali
+  /// keyinroq «Xizmatlar» bo'limidan qayta to'lov qilishi mumkin.
   Widget _buildBillingIdInfo(BuildContext context) {
     final billingId = widget.bookingCreateModel.billingId ?? '';
     if (billingId.isEmpty) return const SizedBox.shrink();
 
     final isDark = context.isDarkMode;
-    final muted = isDark ? const Color(0xffCCCFD3) : const Color(0xff8E8E92);
     final brand = ProjectTheme.brandColor;
+    final muted = BookingFormStyle.label(context);
+    final accent = isDark ? Colors.white : brand;
+    final tileColor = isDark
+        ? Colors.white.withValues(alpha: 0.08)
+        : brand.withValues(alpha: 0.08);
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: brand.withAlpha(isDark ? 30 : 15),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: brand.withAlpha(60)),
-      ),
+    return BookingCard(
+      padding: EdgeInsets.zero,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'payment_order_id'.tr(),
-                      style: TextStyle(
-                        fontFamily: "packages/mysafar_sdk/Gilroy",
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: muted,
-                      ),
+          InkWell(
+            onTap: () => _copyBillingId(billingId),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
+              child: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: tileColor,
+                      borderRadius:
+                          BorderRadius.circular(BookingFormStyle.radius),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      billingId,
-                      style: context.textTheme.bodyLarge?.copyWith(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: brand,
-                      ),
+                    child: SvgPicture.asset(
+                      Assets.iconsOrderTicketIcon,
+                      width: 22,
+                      height: 22,
+                      colorFilter: ColorFilter.mode(accent, BlendMode.srcIn),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              GestureDetector(
-                onTap: () {
-                  Clipboard.setData(ClipboardData(text: billingId)).then((_) {
-                    if (context.mounted) {
-                      ProjectDialogs.showCustomToast(
-                          context, "id_copied".tr());
-                    }
-                  });
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: brand.withAlpha(isDark ? 46 : 25),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: brand.withAlpha(80)),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.copy, size: 14, color: brand),
-                      const SizedBox(width: 6),
-                      Text(
-                        'copy'.tr(),
-                        style: context.textTheme.bodySmall?.copyWith(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: brand,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'payment_order_id'.tr(),
+                          style: context.textTheme.bodySmall?.copyWith(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: muted,
+                          ),
                         ),
+                        const SizedBox(height: 2),
+                        Text(
+                          billingId,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: context.textTheme.bodyLarge?.copyWith(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    transitionBuilder: (child, anim) =>
+                        ScaleTransition(scale: anim, child: child),
+                    child: Container(
+                      key: ValueKey(_idCopied),
+                      height: 36,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: _idCopied
+                            ? ProjectTheme.success.withValues(alpha: 0.12)
+                            : tileColor,
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                    ],
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _idCopied
+                              ? SvgPicture.asset(
+                                  Assets.iconsBookingDoneIcon,
+                                  width: 16,
+                                  height: 16,
+                                  colorFilter: ColorFilter.mode(
+                                      ProjectTheme.success, BlendMode.srcIn),
+                                )
+                              : SvgPicture.asset(
+                                  Assets.iconsOrderCopyIcon,
+                                  width: 16,
+                                  height: 16,
+                                  colorFilter:
+                                      ColorFilter.mode(accent, BlendMode.srcIn),
+                                ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _idCopied ? 'id_copied'.tr() : 'copy'.tr(),
+                            style: context.textTheme.bodySmall?.copyWith(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: _idCopied ? ProjectTheme.success : accent,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.info_outline_rounded, size: 16, color: muted),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'payment_id_help'.tr(),
-                  style: TextStyle(
-                    fontFamily: "packages/mysafar_sdk/Gilroy",
-                    fontSize: 12,
-                    height: 1.4,
-                    fontWeight: FontWeight.w500,
-                    color: muted,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(BuildContext context, String key) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 16, bottom: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 4,
-            height: 18,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [ProjectTheme.brandColor, ProjectTheme.accentLight],
-              ),
-              borderRadius: BorderRadius.circular(4),
             ),
           ),
-          const SizedBox(width: 10),
-          Text(
-            key.tr(),
-            style: context.textTheme.bodyLarge
-                ?.copyWith(fontSize: 16, fontWeight: FontWeight.w800),
+          Divider(
+            height: 1,
+            thickness: 1,
+            indent: 14,
+            endIndent: 14,
+            color: context.color.outline.withValues(alpha: 0.6),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRemainingTime(BuildContext context) {
-    final isDark = context.isDarkMode;
-    final muted = isDark ? const Color(0xffCCCFD3) : const Color(0xff8E8E92);
-
-    // Soniyalik yangilanish faqat shu blokni qayta chizadi.
-    return ValueListenableBuilder<int>(
-      valueListenable: _remainingNotifier,
-      builder: (context, remaining, _) {
-        final isExpired = remaining <= 0;
-        final low = !isExpired && remaining < 120;
-        final color = isExpired
-            ? const Color(0xFFD92D20)
-            : (low ? const Color(0xFFE2AE12) : ProjectTheme.brandColor);
-
-        return Center(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: color.withAlpha(isDark ? 38 : 20),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: color.withAlpha(95)),
-            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
             child: Row(
-              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.timer_outlined, color: color, size: 22),
+                Padding(
+                  padding: const EdgeInsets.only(top: 1),
+                  child: SvgPicture.asset(
+                    Assets.iconsBookingInfoIcon,
+                    width: 18,
+                    height: 18,
+                    colorFilter: ColorFilter.mode(muted, BlendMode.srcIn),
+                  ),
+                ),
                 const SizedBox(width: 10),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'payment_time_left'.tr(),
-                      style: TextStyle(
-                        fontFamily: "packages/mysafar_sdk/Gilroy",
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: muted,
-                      ),
+                Expanded(
+                  child: Text(
+                    'payment_id_help'.tr(),
+                    style: context.textTheme.bodySmall?.copyWith(
+                      fontSize: 13,
+                      height: 1.4,
+                      fontWeight: FontWeight.w500,
+                      color: muted,
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      isExpired
-                          ? 'payment_time_expired'.tr()
-                          : PaymentHelper.formatDuration(remaining),
-                      style: TextStyle(
-                        fontFamily: "packages/mysafar_sdk/Gilroy",
-                        fontSize: 20,
-                        color: color,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ],
             ),
           ),
-        );
-      },
+        ],
+      ),
     );
+  }
+
+  Future<void> _copyBillingId(String billingId) async {
+    await Clipboard.setData(ClipboardData(text: billingId));
+    HapticFeedback.lightImpact();
+    if (!mounted) return;
+    setState(() => _idCopied = true);
+    _copyResetTimer?.cancel();
+    _copyResetTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _idCopied = false);
+    });
   }
 
   Widget _buildBottomButton(BuildContext context, BookingConfirmStates state) {
     final isLoading = state is BookingConfirmLoadingState;
-    final canProceed = _isSelectionActive() && _remainingSeconds > 0;
+    // Tugma faqat vaqt tugaganda o'chadi. To'lov usuli tanlanmagan bo'lsa
+    // bosilganda sababini ko'rsatamiz (jim o'chirilgan tugma o'rniga).
+    final canProceed = _remainingSeconds > 0 && !_paymentTypesLoading;
 
     return NextButtonWidget(
-      nextTittle: 'continue_purchase',
+      nextTittle: 'proceed_to_payment',
       analyticsId: 'booking_confirm_continue',
       isLoading: isLoading,
       passenger: widget.passengerNumber,
-      price: _getDisplayPrice(state),
+      price: _formatPrice(_getDisplayPrice(state)),
       showButton: true,
       onPressed: canProceed ? () => _onPaymentPressed(context, state) : null,
     );
@@ -777,10 +769,52 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
     return widget.price;
   }
 
+  /// Pastki paneldagi summa uchun nusxa: `4870000` → `4 870 000`.
+  /// Asl [FlightPrice] obyektiga tegmaydi (u boshqa sahifalar bilan umumiy).
+  FlightPrice? _formatPrice(FlightPrice? price) {
+    if (price == null) return null;
+    return FlightPrice(
+      rub: price.rub == null
+          ? null
+          : FluffyRub(amount: _formatAmount(price.rub!.amount)),
+      uzs: price.uzs == null
+          ? null
+          : FluffyUzs(amount: _formatAmount(price.uzs!.amount)),
+      usd: price.usd == null
+          ? null
+          : FluffyRub(amount: _formatAmount(price.usd!.amount)),
+    );
+  }
+
+  /// Butun qismni 3 xonadan bo'shliq bilan ajratadi, o'nlik qismni saqlaydi
+  /// (`385.50` → `385.5`, `4870000.0` → `4 870 000`). Son bo'lmasa — o'zi.
+  String? _formatAmount(String? raw) {
+    if (raw == null) return null;
+    final cleaned = raw.replaceAll(' ', '');
+    if (double.tryParse(cleaned) == null) return raw;
+    final parts = cleaned.split('.');
+    final integer = parts.first.replaceAllMapped(
+      RegExp(r'\B(?=(\d{3})+(?!\d))'),
+      (_) => ' ',
+    );
+    final decimal =
+        parts.length > 1 ? parts[1].replaceFirst(RegExp(r'0+$'), '') : '';
+    return decimal.isEmpty ? integer : '$integer.$decimal';
+  }
+
   void _onPaymentPressed(BuildContext context, BookingConfirmStates state) {
     if (!_isSelectionActive()) {
-      ProjectDialogs.showCustomToast(context, 'select_payment_type'.tr(),
-          type: AppMessageType.warning);
+      HapticFeedback.mediumImpact();
+      setState(() => _showSelectionError = true);
+      final methodsContext = _methodsKey.currentContext;
+      if (methodsContext != null) {
+        Scrollable.ensureVisible(
+          methodsContext,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          alignment: 0.2,
+        );
+      }
       return;
     }
 
@@ -795,6 +829,43 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
         'transaction_type': transactionType,
         'tr_id': widget.bookingCreateModel.trId,
       },
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 8),
+      child: Text(
+        text,
+        style: context.textTheme.bodyLarge
+            ?.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
+class _PaymentMethodsLock extends StatelessWidget {
+  const _PaymentMethodsLock({required this.locked, required this.child});
+
+  final bool locked;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      ignoring: locked,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 250),
+        opacity: locked ? 0.5 : 1,
+        child: child,
+      ),
     );
   }
 }

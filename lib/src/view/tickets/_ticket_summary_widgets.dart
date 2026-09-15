@@ -176,8 +176,7 @@ class _DatePriceStripState extends State<_DatePriceStrip> {
               itemBuilder: (context, index) {
                 final date = dates[index];
                 final bool isSelected = _sameDay(date, widget.selected);
-                final int key =
-                    date.year * 10000 + date.month * 100 + date.day;
+                final int key = date.year * 10000 + date.month * 100 + date.day;
                 final double? v = priceValueByDay[key];
                 final bool isCheapest = v != null && v <= (minVisible ?? -1);
                 return _DateStripItem(
@@ -289,11 +288,7 @@ class _DateStripItem extends StatelessWidget {
               child: Ink(
                 decoration: isSelected
                     ? BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [brand, ProjectTheme.blueBg],
-                        ),
+                        color: brand,
                         borderRadius: BorderRadius.circular(12),
                       )
                     : null,
@@ -309,8 +304,7 @@ class _DateStripItem extends StatelessWidget {
                     Text(
                       price ?? "—",
                       maxLines: 1,
-                      style:
-                          _TixTheme.style(13.5, FontWeight.w800, priceColor),
+                      style: _TixTheme.style(13.5, FontWeight.w800, priceColor),
                     ),
                   ],
                 ),
@@ -319,779 +313,6 @@ class _DateStripItem extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-// ────────────────────────────────────────────────────────────────────
-//  KO'RINISH FILTRLARI — web'dagi TO'LIQ "Filtr" sheet'i (accordion)
-// ────────────────────────────────────────────────────────────────────
-
-/// Sheet bo'limlari — chip bosilganda mos bo'lim ochiq holda ochiladi.
-enum _ViewFilterSection { sort, transfer, baggage, tariff, time, airlines }
-
-/// Chiplardagi barcha ko'rinish-filtr qiymatlari bitta joyda.
-/// Sheet nusxa (clone) ustida ishlaydi; "Qo'llash" bosilgandagina sahifa
-/// holatiga ko'chiriladi.
-class _ViewFilterValues {
-  static const double dayMinutes = 1440;
-
-  int sort = 0; // 0-narx, 1-uchish, 2-qo'nish, 3-davomiylik
-  bool directOnly = false;
-  bool baggageOnly = false;
-  bool refundable = false;
-  bool exchangeable = false;
-  RangeValues depRange = const RangeValues(0, dayMinutes);
-  RangeValues arrRange = const RangeValues(0, dayMinutes);
-  final Set<String> excludedAirlines = {};
-
-  static bool _isFullRange(RangeValues r) =>
-      r.start <= 0 && r.end >= dayMinutes;
-
-  bool get hasTimeFilter => !_isFullRange(depRange) || !_isFullRange(arrRange);
-
-  bool get hasAnyFilter =>
-      directOnly ||
-      baggageOnly ||
-      refundable ||
-      exchangeable ||
-      hasTimeFilter ||
-      excludedAirlines.isNotEmpty;
-
-  void reset() {
-    sort = 0;
-    directOnly = false;
-    baggageOnly = false;
-    refundable = false;
-    exchangeable = false;
-    depRange = const RangeValues(0, dayMinutes);
-    arrRange = const RangeValues(0, dayMinutes);
-    excludedAirlines.clear();
-  }
-
-  void copyFrom(_ViewFilterValues other) {
-    sort = other.sort;
-    directOnly = other.directOnly;
-    baggageOnly = other.baggageOnly;
-    refundable = other.refundable;
-    exchangeable = other.exchangeable;
-    depRange = other.depRange;
-    arrRange = other.arrRange;
-    excludedAirlines
-      ..clear()
-      ..addAll(other.excludedAirlines);
-  }
-
-  _ViewFilterValues clone() => _ViewFilterValues()..copyFrom(this);
-
-  static String _fmtMinutes(double m) {
-    final h = (m ~/ 60).toString().padLeft(2, '0');
-    final mm = (m.toInt() % 60).toString().padLeft(2, '0');
-    return "$h:$mm";
-  }
-
-  static String rangeLabel(RangeValues r) =>
-      "${_fmtMinutes(r.start)} – ${_fmtMinutes(r.end)}";
-
-  String sortLabel() => switch (sort) {
-        1 => "dep_order".tr(),
-        2 => "arr_order".tr(),
-        3 => "duration_order".tr(),
-        _ => "price_order".tr(),
-      };
-
-  String transferLabel() => directOnly ? "only_direct".tr() : "all".tr();
-
-  String baggageLabel() =>
-      baggageOnly ? "add_baggage".tr() : "filter_mixed".tr();
-
-  String tariffLabel() {
-    if (refundable && exchangeable) return "${"filter_refundable".tr()} +1";
-    if (refundable) return "filter_refundable".tr();
-    if (exchangeable) return "filter_exchangeable".tr();
-    return "all".tr();
-  }
-
-  String timeLabel() {
-    if (!hasTimeFilter) return "all".tr();
-    return rangeLabel(!_isFullRange(depRange) ? depRange : arrRange);
-  }
-}
-
-/// Web'dagi to'liq "Filtr" sheet'ini ochadi. "Qo'llash" bosilsa yangi
-/// qiymatlarni, bekor qilinsa `null` qaytaradi. [initialSection] `null`
-/// bo'lsa barcha bo'limlar yig'ilgan holda ochiladi.
-Future<_ViewFilterValues?> _showViewFiltersSheet(
-  BuildContext context, {
-  required _ViewFilterValues initial,
-  required _ViewFilterSection? initialSection,
-  required List<_AirlineGroup> airlines,
-}) {
-  return showSdkModalBottomSheet<_ViewFilterValues>(
-    context: context,
-    isScrollControlled: true,
-    // useSafeArea: false — balandlikni sheet o'zi SafeArea bilan
-    // hisoblaydi; aks holda 0.9*screen + tashqi SafeArea overflow beradi.
-    useSafeArea: false,
-    backgroundColor: Colors.transparent,
-    builder: (context) => _ViewFiltersSheet(
-      initial: initial,
-      initialSection: initialSection,
-      airlines: airlines,
-    ),
-  );
-}
-
-class _ViewFiltersSheet extends StatefulWidget {
-  final _ViewFilterValues initial;
-  final _ViewFilterSection? initialSection;
-  final List<_AirlineGroup> airlines;
-
-  const _ViewFiltersSheet({
-    required this.initial,
-    required this.initialSection,
-    required this.airlines,
-  });
-
-  @override
-  State<_ViewFiltersSheet> createState() => _ViewFiltersSheetState();
-}
-
-class _ViewFiltersSheetState extends State<_ViewFiltersSheet> {
-  late final _ViewFilterValues _draft = widget.initial.clone();
-  late _ViewFilterSection? _expanded = widget.initialSection;
-
-  void _toggle(_ViewFilterSection s) {
-    HapticFeedback.lightImpact();
-    setState(() => _expanded = _expanded == s ? null : s);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final t = _TixTheme.of(context);
-    final media = MediaQuery.of(context);
-    // Faqat status/notch tepadan ayiriladi; pastki inset footer padding'da.
-    // useSafeArea:false + 0.9*fullScreen overflow bergan edi.
-    final available = media.size.height - media.viewPadding.top;
-    final height = available * 0.9;
-
-    return Padding(
-      padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
-      child: Container(
-        height: height,
-        decoration: BoxDecoration(
-          color: t.card,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: SafeArea(
-          top: false,
-          bottom: false,
-          child: Column(
-            children: [
-              const SizedBox(height: 10),
-              Container(
-                width: 44,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: t.mid.withAlpha(90),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              // Sarlavha + yopish tugmasi (web'dagi kabi).
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 10, 4),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        "filter_title".tr(),
-                        style: _TixTheme.style(20, FontWeight.w800, t.hi),
-                      ),
-                    ),
-                    Material(
-                      color: t.line.withAlpha(t.dark ? 40 : 255),
-                      shape: const CircleBorder(),
-                      clipBehavior: Clip.antiAlias,
-                      child: InkWell(
-                        onTap: () => Navigator.of(context).pop(),
-                        child: SizedBox(
-                          width: 38,
-                          height: 38,
-                          child:
-                              Icon(Icons.close_rounded, size: 21, color: t.hi),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                children: [
-                  _SheetSection(
-                    icon: Icons.swap_vert_rounded,
-                    title: "order_by_tab".tr(),
-                    subtitle: _draft.sortLabel(),
-                    expanded: _expanded == _ViewFilterSection.sort,
-                    onHeaderTap: () => _toggle(_ViewFilterSection.sort),
-                    children: [
-                      for (int i = 0; i < 4; i++)
-                        _ViewFilterOptionRow(
-                          label: [
-                            "price_order".tr(),
-                            "dep_order".tr(),
-                            "arr_order".tr(),
-                            "duration_order".tr(),
-                          ][i],
-                          selected: _draft.sort == i,
-                          onTap: () {
-                            HapticFeedback.lightImpact();
-                            setState(() => _draft.sort = i);
-                          },
-                        ),
-                    ],
-                  ),
-                  _SheetSection(
-                    icon: Icons.flight_takeoff_rounded,
-                    title: "transfer_tab".tr(),
-                    subtitle: _draft.transferLabel(),
-                    expanded: _expanded == _ViewFilterSection.transfer,
-                    onHeaderTap: () => _toggle(_ViewFilterSection.transfer),
-                    children: [
-                      _ViewFilterOptionRow(
-                        label: "all".tr(),
-                        selected: !_draft.directOnly,
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          setState(() => _draft.directOnly = false);
-                        },
-                      ),
-                      _ViewFilterOptionRow(
-                        label: "only_direct".tr(),
-                        selected: _draft.directOnly,
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          setState(() => _draft.directOnly = true);
-                        },
-                      ),
-                    ],
-                  ),
-                  _SheetSection(
-                    icon: Icons.luggage_rounded,
-                    title: "baggage_tab".tr(),
-                    subtitle: _draft.baggageLabel(),
-                    expanded: _expanded == _ViewFilterSection.baggage,
-                    onHeaderTap: () => _toggle(_ViewFilterSection.baggage),
-                    children: [
-                      // Web'dagi kabi bitta switch: o'chiq — aralash,
-                      // yoniq — faqat bagajli reyslar.
-                      _SheetSwitchRow(
-                        label: _draft.baggageLabel(),
-                        value: _draft.baggageOnly,
-                        onChanged: (v) {
-                          HapticFeedback.lightImpact();
-                          setState(() => _draft.baggageOnly = v);
-                        },
-                      ),
-                    ],
-                  ),
-                  _SheetSection(
-                    icon: Icons.verified_user_outlined,
-                    title: "filter_tariff_title".tr(),
-                    subtitle: _draft.tariffLabel(),
-                    expanded: _expanded == _ViewFilterSection.tariff,
-                    onHeaderTap: () => _toggle(_ViewFilterSection.tariff),
-                    children: [
-                      _ViewFilterOptionRow(
-                        label: "filter_refundable".tr(),
-                        selected: _draft.refundable,
-                        isCheckbox: true,
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          setState(
-                              () => _draft.refundable = !_draft.refundable);
-                        },
-                      ),
-                      _ViewFilterOptionRow(
-                        label: "filter_exchangeable".tr(),
-                        selected: _draft.exchangeable,
-                        isCheckbox: true,
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          setState(
-                              () => _draft.exchangeable = !_draft.exchangeable);
-                        },
-                      ),
-                    ],
-                  ),
-                  _SheetSection(
-                    icon: Icons.schedule_rounded,
-                    title: "filter_time_title".tr(),
-                    subtitle: _draft.timeLabel(),
-                    expanded: _expanded == _ViewFilterSection.time,
-                    onHeaderTap: () => _toggle(_ViewFilterSection.time),
-                    children: [
-                      _SheetTimeRange(
-                        icon: Icons.flight_takeoff_rounded,
-                        label: "filter_dep_time".tr(),
-                        values: _draft.depRange,
-                        onChanged: (r) => setState(() => _draft.depRange = r),
-                      ),
-                      const SizedBox(height: 10),
-                      _SheetTimeRange(
-                        icon: Icons.flight_land_rounded,
-                        label: "filter_arr_time".tr(),
-                        values: _draft.arrRange,
-                        onChanged: (r) => setState(() => _draft.arrRange = r),
-                      ),
-                    ],
-                  ),
-                  _SheetSection(
-                    icon: Icons.airplane_ticket_outlined,
-                    title: "airlines_tab".tr(),
-                    subtitle: _draft.excludedAirlines.isEmpty
-                        ? "all".tr()
-                        : "${widget.airlines.length - _draft.excludedAirlines.length}/${widget.airlines.length}",
-                    expanded: _expanded == _ViewFilterSection.airlines,
-                    onHeaderTap: () => _toggle(_ViewFilterSection.airlines),
-                    showDivider: false,
-                    children: [
-                      _SheetAirlineRow(
-                        title: "all_airlines".tr(),
-                        checked: _draft.excludedAirlines.isEmpty,
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          setState(() {
-                            if (_draft.excludedAirlines.isEmpty) {
-                              _draft.excludedAirlines.addAll(
-                                  [for (final a in widget.airlines) a.code]);
-                            } else {
-                              _draft.excludedAirlines.clear();
-                            }
-                          });
-                        },
-                      ),
-                      for (final a in widget.airlines)
-                        _SheetAirlineRow(
-                          code: a.code,
-                          title: a.title,
-                          checked: !_draft.excludedAirlines.contains(a.code),
-                          onTap: () {
-                            HapticFeedback.lightImpact();
-                            setState(() {
-                              if (!_draft.excludedAirlines.remove(a.code)) {
-                                _draft.excludedAirlines.add(a.code);
-                              }
-                            });
-                          },
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            // Pastki tugmalar (web'dagi kabi): Tozalash + Qo'llash.
-            // viewPadding.bottom — gesture/nav panel ustida qolishi uchun.
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                  16, 8, 16, 12 + MediaQuery.viewPaddingOf(context).bottom),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _SheetFooterButton(
-                      label: "filter_clear".tr(),
-                      filled: false,
-                      onTap: () {
-                        HapticFeedback.mediumImpact();
-                        setState(() => _draft.reset());
-                        AnalyticsService().trackButtonTap('filter_reset',
-                            extra: {'source': 'sheet'});
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _SheetFooterButton(
-                      label: "apply".tr(),
-                      filled: true,
-                      onTap: () {
-                        HapticFeedback.mediumImpact();
-                        AnalyticsService().trackButtonTap('filter_applied',
-                            extra: {
-                          'sort': _draft.sort,
-                          'direct_only': _draft.directOnly,
-                          'baggage_only': _draft.baggageOnly,
-                          'refundable': _draft.refundable,
-                          'exchangeable': _draft.exchangeable,
-                          'time_filter': _draft.hasTimeFilter,
-                          'excluded_airlines': _draft.excludedAirlines.length,
-                          'has_any_filter': _draft.hasAnyFilter,
-                        });
-                        Navigator.of(context).pop(_draft);
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-      ),
-    );
-  }
-}
-
-/// Accordion bo'limi: ikonkali sarlavha (joriy qiymat bilan) va ochilganda
-/// ko'rinadigan kontent (web'dagi "Filterlar" bo'limlari kabi).
-class _SheetSection extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool expanded;
-  final VoidCallback onHeaderTap;
-  final List<Widget> children;
-  final bool showDivider;
-
-  const _SheetSection({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.expanded,
-    required this.onHeaderTap,
-    required this.children,
-    this.showDivider = true,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final t = _TixTheme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        InkWell(
-          onTap: onHeaderTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: ProjectTheme.brandColor.withAlpha(t.dark ? 46 : 18),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(icon, size: 21, color: ProjectTheme.brandColor),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: _TixTheme.style(15.5, FontWeight.w700, t.hi),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: _TixTheme.style(12.5, FontWeight.w500, t.mid),
-                      ),
-                    ],
-                  ),
-                ),
-                AnimatedRotation(
-                  turns: expanded ? 0.5 : 0,
-                  duration: const Duration(milliseconds: 180),
-                  child: Icon(Icons.keyboard_arrow_down_rounded,
-                      size: 22, color: t.mid),
-                ),
-              ],
-            ),
-          ),
-        ),
-        if (expanded)
-          Padding(
-            padding: const EdgeInsets.only(top: 2, bottom: 8),
-            child: Column(children: children),
-          ),
-        if (showDivider) Divider(height: 1, thickness: 1, color: t.line),
-      ],
-    );
-  }
-}
-
-/// Bagaj bo'limidagi switch qatori (web'dagi kabi).
-class _SheetSwitchRow extends StatelessWidget {
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  const _SheetSwitchRow({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final t = _TixTheme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: t.line, width: 1),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: _TixTheme.style(14.5, FontWeight.w500, t.hi),
-            ),
-          ),
-          Switch(
-            value: value,
-            activeThumbColor: Colors.white,
-            activeTrackColor: ProjectTheme.brandColor,
-            onChanged: onChanged,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Vaqt oralig'i slideri: sarlavha + joriy oraliq + slider + shkala
-/// (web'dagi "Ketish vaqti / Qo'nish vaqti" bloklari).
-class _SheetTimeRange extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final RangeValues values;
-  final ValueChanged<RangeValues> onChanged;
-
-  const _SheetTimeRange({
-    required this.icon,
-    required this.label,
-    required this.values,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final t = _TixTheme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, size: 16, color: t.mid),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                label,
-                style: _TixTheme.style(13.5, FontWeight.w600, t.hi),
-              ),
-            ),
-            Text(
-              _ViewFilterValues.rangeLabel(values),
-              style: _TixTheme.style(13.5, FontWeight.w800, t.hi),
-            ),
-          ],
-        ),
-        SliderTheme(
-          data: SliderThemeData(
-            activeTrackColor: ProjectTheme.brandColor,
-            inactiveTrackColor: t.line,
-            thumbColor: Colors.white,
-            overlayColor: ProjectTheme.brandColor.withAlpha(26),
-            trackHeight: 4,
-            rangeThumbShape: const RoundRangeSliderThumbShape(
-                enabledThumbRadius: 10, elevation: 2),
-          ),
-          child: RangeSlider(
-            values: values,
-            min: 0,
-            max: _ViewFilterValues.dayMinutes,
-            divisions: 48, // 30 daqiqalik qadam
-            onChanged: onChanged,
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              for (final h in const ["00", "06", "12", "18", "24"])
-                Text(h, style: _TixTheme.style(11.5, FontWeight.w500, t.mid)),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Aviakompaniyalar bo'limidagi qator: logo + nom + checkbox.
-class _SheetAirlineRow extends StatelessWidget {
-  final String? code;
-  final String title;
-  final bool checked;
-  final VoidCallback onTap;
-
-  const _SheetAirlineRow({
-    this.code,
-    required this.title,
-    required this.checked,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final t = _TixTheme.of(context);
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          children: [
-            if (code != null) ...[
-              _AirlineCircle(code: code!, size: 28),
-              const SizedBox(width: 8),
-            ],
-            Expanded(
-              child: Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: _TixTheme.style(
-                    14, code == null ? FontWeight.w700 : FontWeight.w500, t.hi),
-              ),
-            ),
-            Icon(
-              checked
-                  ? Icons.check_box_rounded
-                  : Icons.check_box_outline_blank_rounded,
-              size: 22,
-              color: checked ? ProjectTheme.brandColor : t.mid.withAlpha(140),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Sheet pastidagi tugma: to'ldirilgan (Qo'llash) yoki hoshiyali (Tozalash).
-class _SheetFooterButton extends StatelessWidget {
-  final String label;
-  final bool filled;
-  final VoidCallback onTap;
-
-  const _SheetFooterButton({
-    required this.label,
-    required this.filled,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final t = _TixTheme.of(context);
-    return Material(
-      color: filled ? ProjectTheme.brandColor : Colors.transparent,
-      borderRadius: BorderRadius.circular(16),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          height: 52,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: filled ? null : Border.all(color: t.line, width: 1.2),
-          ),
-          child: Text(
-            label,
-            style: _TixTheme.style(
-                15, FontWeight.w700, filled ? Colors.white : t.hi),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Sheet ichidagi bitta variant qatori (web'dagi kabi: tanlangani ko'k
-/// hoshiya bilan ajratiladi, belgi o'ng tomonda).
-class _ViewFilterOptionRow extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final bool isCheckbox;
-  final VoidCallback onTap;
-
-  const _ViewFilterOptionRow({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-    this.isCheckbox = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final t = _TixTheme.of(context);
-    final Color border = selected ? ProjectTheme.brandColor : t.line;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
-        color: selected
-            ? ProjectTheme.brandColor.withAlpha(t.dark ? 46 : 16)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: border, width: selected ? 1.4 : 1),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: _TixTheme.style(14.5,
-                        selected ? FontWeight.w700 : FontWeight.w500, t.hi),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Icon(
-                  isCheckbox
-                      ? (selected
-                          ? Icons.check_box_rounded
-                          : Icons.check_box_outline_blank_rounded)
-                      : (selected
-                          ? Icons.radio_button_checked_rounded
-                          : Icons.radio_button_off_rounded),
-                  size: 22,
-                  color:
-                      selected ? ProjectTheme.brandColor : t.mid.withAlpha(140),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -1105,46 +326,101 @@ class _FilteredEmptyView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return _TicketsEmptyView(
+      title: "not_found_tickets".tr(),
+      actionLabel: "filter_clear".tr(),
+      onAction: () {
+        HapticFeedback.lightImpact();
+        onClear();
+      },
+    );
+  }
+}
+
+/// Natija yo'q holati: yumshoq doira ichida qidiruv ikonkasi, sarlavha,
+/// ixtiyoriy izoh va tugma.
+class _TicketsEmptyView extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  const _TicketsEmptyView({
+    required this.title,
+    this.subtitle,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     final t = _TixTheme.of(context);
-    return Column(
-      children: [
-        const SizedBox(height: 24),
-        SizedBox(
-          height: 48,
-          width: 48,
-          child: Image.asset(Assets.ticketsSearchEmptyIcon),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          "not_found_tickets".tr(),
-          textAlign: TextAlign.center,
-          style: _TixTheme.style(14, FontWeight.w600, t.hi),
-        ),
-        const SizedBox(height: 14),
-        Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(22),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: () {
-              HapticFeedback.lightImpact();
-              onClear();
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 11),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: ProjectTheme.brandColor, width: 1.2),
-              ),
-              child: Text(
-                "filter_clear".tr(),
-                style: _TixTheme.style(
-                    13.5, FontWeight.w700, ProjectTheme.brandColor),
+    final brand = ProjectTheme.brandColor;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 48, 16, 24),
+      child: Column(
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: t.dark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : brand.withValues(alpha: 0.08),
+              shape: BoxShape.circle,
+            ),
+            child: SvgPicture.asset(
+              Assets.iconsPlaceEmptySearchIcon,
+              width: 32,
+              height: 32,
+              colorFilter: ColorFilter.mode(
+                t.dark ? Colors.white : brand,
+                BlendMode.srcIn,
               ),
             ),
           ),
-        ),
-      ],
+          const SizedBox(height: 16),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: _TixTheme.style(16, FontWeight.w700, t.hi, height: 1.3),
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              subtitle!,
+              textAlign: TextAlign.center,
+              style: _TixTheme.style(13.5, FontWeight.w500, t.mid, height: 1.4),
+            ),
+          ],
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(height: 18),
+            SizedBox(
+              height: 44,
+              child: FilledButton(
+                onPressed: onAction,
+                style: FilledButton.styleFrom(
+                  backgroundColor: t.dark
+                      ? Colors.white.withValues(alpha: 0.10)
+                      : brand.withValues(alpha: 0.10),
+                  foregroundColor: t.dark ? Colors.white : brand,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 22),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: Text(
+                  actionLabel!,
+                  style: _TixTheme.style(
+                      14, FontWeight.w700, t.dark ? Colors.white : brand),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -1214,10 +490,10 @@ class _AirlinesSummaryCardState extends State<_AirlinesSummaryCard> {
     final hiddenCount = groups.length - _collapsedCount;
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       decoration: BoxDecoration(
         color: t.card,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: t.cardShadow,
       ),
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
@@ -1233,7 +509,7 @@ class _AirlinesSummaryCardState extends State<_AirlinesSummaryCard> {
                   child: Text(
                     "airlines_by_title".tr(),
                     maxLines: 1,
-                    style: _TixTheme.style(15.5, FontWeight.w800, t.hi),
+                    style: _TixTheme.style(15.5, FontWeight.w700, t.hi),
                   ),
                 ),
               ),
@@ -1270,7 +546,7 @@ class _AirlinesSummaryCardState extends State<_AirlinesSummaryCard> {
           const SizedBox(height: 4),
           for (int i = 0; i < visible.length; i++) ...[
             if (i > 0) Divider(height: 1, thickness: 1, color: t.line),
-            _AirlineSummaryRow(group: visible[i]),
+            _AirlineSummaryRow(group: visible[i], isCheapest: i == 0),
           ],
         ],
       ),
@@ -1281,7 +557,10 @@ class _AirlinesSummaryCardState extends State<_AirlinesSummaryCard> {
 class _AirlineSummaryRow extends StatelessWidget {
   final _AirlineGroup group;
 
-  const _AirlineSummaryRow({required this.group});
+  /// Eng arzon aviakompaniya (ro'yxatda birinchi) — narxi yashil.
+  final bool isCheapest;
+
+  const _AirlineSummaryRow({required this.group, this.isCheapest = false});
 
   /// "HH:mm" → daqiqa (saralash uchun; xato format oxiriga tushadi).
   static int _timeMinutes(String t) {
@@ -1370,12 +649,18 @@ class _AirlineSummaryRow extends StatelessWidget {
                     child: Text(
                       price,
                       maxLines: 1,
-                      style: _TixTheme.style(14.5, FontWeight.w800, _kTixGreen),
+                      style: _TixTheme.style(14.5, FontWeight.w800,
+                          isCheapest ? _kTixGreen : t.hi),
                     ),
                   ),
                 ),
-                Icon(Icons.chevron_right_rounded,
-                    size: 18, color: _kTixGreen.withAlpha(160)),
+                const SizedBox(width: 2),
+                SvgPicture.asset(
+                  Assets.iconsBookingChevronRightIcon,
+                  width: 18,
+                  height: 18,
+                  colorFilter: ColorFilter.mode(t.mid, BlendMode.srcIn),
+                ),
               ],
             ),
             if (times.isNotEmpty) ...[
@@ -1393,18 +678,12 @@ class _AirlineSummaryRow extends StatelessWidget {
                       child: Row(
                         children: [
                           for (final e in times.take(5)) ...[
-                            GestureDetector(
+                            _TimeChip(
+                              label: e.key,
+                              highlighted: e.key == cheapestTime,
                               onTap: () => _openFlight(context, e.value),
-                              child: Text(
-                                e.key,
-                                style: _TixTheme.style(
-                                  13,
-                                  FontWeight.w700,
-                                  e.key == cheapestTime ? _kTixGreen : t.hi,
-                                ),
-                              ),
                             ),
-                            const SizedBox(width: 14),
+                            const SizedBox(width: 6),
                           ],
                         ],
                       ),
@@ -1414,6 +693,43 @@ class _AirlineSummaryRow extends StatelessWidget {
               ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Aviakompaniya qatoridagi bosiladigan jo'nash vaqti chipi.
+class _TimeChip extends StatelessWidget {
+  final String label;
+  final bool highlighted;
+  final VoidCallback onTap;
+
+  const _TimeChip({
+    required this.label,
+    required this.highlighted,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = _TixTheme.of(context);
+    return Material(
+      color: highlighted ? _kTixGreen.withAlpha(t.dark ? 50 : 26) : t.tonal,
+      borderRadius: BorderRadius.circular(8),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+          child: Text(
+            label,
+            style: _TixTheme.style(
+              12.5,
+              FontWeight.w700,
+              highlighted ? _kTixGreen : t.hi,
+            ),
+          ),
         ),
       ),
     );

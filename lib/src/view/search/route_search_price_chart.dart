@@ -788,7 +788,10 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
                         "home_find_ticket".tr(),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                        // Button style'ning textStyle'i theme shriftini
+                        // almashtiradi — Gilroy shu yerda aniq beriladi.
                         style: const TextStyle(
+                          fontFamily: _Web.fontFamily,
                           color: Colors.white,
                           fontWeight: FontWeight.w800,
                           fontSize: 16,
@@ -800,6 +803,7 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
+                            fontFamily: _Web.fontFamily,
                             color: Colors.white70,
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -895,62 +899,15 @@ class _ModeSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color trackColor =
-        isDark ? Colors.white.withAlpha(20) : const Color(0xFFF1F4F9);
-
-    Widget segment(String label, bool selected, VoidCallback onTap) {
-      return Expanded(
-        child: GestureDetector(
-          onTap: onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOut,
-            padding: const EdgeInsets.symmetric(vertical: 9),
-            decoration: BoxDecoration(
-              color: selected
-                  ? (isDark ? ProjectTheme.brandColor : Colors.white)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(10),
-              boxShadow: selected && !isDark
-                  ? [
-                      BoxShadow(
-                        color: Colors.black.withAlpha(20),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ]
-                  : null,
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              label,
-              maxLines: 1,
-              style: TextStyle(
-                fontSize: 13.5,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: selected && isDark
-                    ? Colors.white
-                    : context.textTheme.bodyMedium?.color,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: trackColor,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          segment("one_way".tr(), !round, () => onChanged(false)),
-          segment("round_trip".tr(), round, () => onChanged(true)),
-        ],
-      ),
+    // Sahifadagi rejim tablari bilan bir xil kapsula tanlagich.
+    return _SegmentedPill(
+      height: 44,
+      selectedIndex: round ? 1 : 0,
+      onChanged: (i) => onChanged(i == 1),
+      items: [
+        _SegmentItem("one_way".tr()),
+        _SegmentItem("round_trip".tr()),
+      ],
     );
   }
 }
