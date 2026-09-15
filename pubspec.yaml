@@ -58,6 +58,8 @@ dependencies:
   audio_waveforms: ^2.0.1
   flutter_animate: ^4.5.2
   pixel_snap: ^0.1.5
+  # card_token (AES-256-GCM) — Unired ham shu versiyani ishlatadi.
+  pointycastle: ^3.9.1
   record: '>=6.0.0 <8.0.0'
   # 4.x'da qoladi: 5.x runtime'da pigeon->analyzer tortadi va host applarning
   # codegen to'plami (hive_generator, analyzer pin) bilan to'qnashadi.

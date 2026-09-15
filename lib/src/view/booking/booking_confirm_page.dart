@@ -1,12 +1,18 @@
 import 'dart:async';
+import 'dart:convert' show jsonEncode;
 
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'
     show Clipboard, ClipboardData, HapticFeedback, SystemUiOverlayStyle;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import 'package:mysafar_sdk/src/api/callbacks.dart'
+    show MySafarCardTokenRequest;
+import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
+import 'package:mysafar_sdk/src/api/user_data.dart' show MySafarUzsCard;
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
 import 'package:mysafar_sdk/src/core/tools/formatters.dart';
@@ -14,6 +20,8 @@ import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart';
 import 'package:mysafar_sdk/src/core/widgets/edge_swipe_back.dart';
 import 'package:mysafar_sdk/src/core/widgets/response_state.dart';
 import 'package:mysafar_sdk/src/core/widgets/sdk_dialog.dart';
+import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart'
+    show AppMessageType;
 import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/cubit/booking/confirm/booking_confirm_states.dart';
 import 'package:mysafar_sdk/src/cubit/profile/tickets/confirmed_tickets_cubit.dart';
@@ -29,12 +37,14 @@ import 'package:mysafar_sdk/src/model/remote/payment/payment_type_config.dart';
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart';
 import 'package:mysafar_sdk/src/service/booking_service.dart';
 import 'package:mysafar_sdk/src/service/payment/payment_type_repository.dart';
+import 'package:mysafar_sdk/src/service/payment/card_token_encoder.dart';
 import 'package:mysafar_sdk/src/view/booking/support/payment_helper.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/booking_form_fields.dart'
     show BookingFieldError, BookingFormStyle;
 import 'package:mysafar_sdk/src/view/booking/widget/next_button_widget.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/payment_countdown_card.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/payment_type_card.dart';
+import 'package:mysafar_sdk/src/view/booking/widget/saved_cards_sheet.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/support_widget.dart';
 import 'package:mysafar_sdk/src/view/tickets/ticket_page.dart'
     show RecommendationsTicketPage;
@@ -80,6 +90,17 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
 
   List<PaymentTypeEntry> _paymentTypeItems = [];
   bool _paymentTypesLoading = true;
+
+  /// "HUMO / Uzcard" uchun sheet'da tanlangan saqlangan karta — to'lov URL'i
+  /// kelgach unga `card_token` qo'shiladi. `null` — oddiy (qo'lda) to'lov.
+  MySafarUzsCard? _pendingSavedCard;
+
+  /// Host'dan `card_token` kutilmoqda — tugma yuklanish holatida turadi.
+  bool _preparingCardToken = false;
+  bool _savedCardsSheetOpen = false;
+
+  /// Host `card_token` qaytarishi uchun maksimal kutish.
+  static const Duration _cardTokenTimeout = Duration(seconds: 20);
 
   @override
   void initState() {
@@ -396,6 +417,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
     if (state is BookingConfirmSuccessState) {
       _handlePaymentSuccess(context, state);
     } else if (state is BookingConfirmErrorState) {
+      _pendingSavedCard = null;
       AnalyticsService().trackPaymentFailed(
         trId: widget.bookingCreateModel.trId ?? '',
         billingId: widget.bookingCreateModel.billingId ?? '',
@@ -408,10 +430,12 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
     }
   }
 
-  void _handlePaymentSuccess(
-      BuildContext context, BookingConfirmSuccessState state) {
+  Future<void> _handlePaymentSuccess(
+      BuildContext context, BookingConfirmSuccessState state) async {
     final data = state.data;
     final type = (_selectedPaymentType ?? '').toUpperCase();
+    final savedCard = _pendingSavedCard;
+    _pendingSavedCard = null;
 
     String? url;
     switch (type) {
@@ -425,7 +449,132 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
         url = data['payment_url'] as String?;
     }
 
-    if (url != null) PaymentHelper.openInWebView(context, url);
+    if (url == null) return;
+    if (type == PaymentConstants.mysafarpay && savedCard != null) {
+      url = await _withCardToken(url, savedCard);
+      if (!context.mounted) return;
+    }
+    PaymentHelper.openInWebView(context, url);
+  }
+
+  /// Saqlangan karta bilan to'lov — "Unired → MySafar card_token" hujjati
+  /// bo'yicha: karta raqami, muddati, `tr_id` va `iat` AES-256-GCM bilan
+  /// shifrlanib, to'lov URL'iga `card_token` qo'shiladi (sahifa kartani o'zi
+  /// to'ldirib, SMS bosqichiga o'tadi).
+  ///
+  /// Token manbai: `callbacks.onCreateCardToken` (server) bo'lsa — u, aks
+  /// holda `config.cardTokenSecret` bilan SDK o'zi shifrlaydi. Token
+  /// yaratilmasa — asl URL (karta qo'lda kiritiladi, to'lov to'xtamaydi).
+  Future<String> _withCardToken(String url, MySafarUzsCard card) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return url;
+
+    // Token faqat https orqali uzatiladi (hujjat, 6-bo'lim).
+    if (uri.scheme != 'https') {
+      _debugCardToken(
+          'skip', 'to\'lov URL https emas — card_token qo\'shilmaydi');
+      _debugCardToken('url', url);
+      return url;
+    }
+
+    // Token ichidagi tr_id URL'dagi `trid` bilan aynan bir xil bo'lishi shart.
+    final trId = uri.queryParameters['trid'] ?? widget.bookingCreateModel.trId;
+    if (trId == null || trId.isEmpty) {
+      _debugCardToken('skip', 'trid topilmadi — card_token qo\'shilmaydi');
+      return url;
+    }
+    final billingId = uri.queryParameters['billing_id'] ??
+        widget.bookingCreateModel.billingId ??
+        '';
+
+    final token = (await _createCardToken(card, trId, billingId))?.trim();
+    if (token == null || token.isEmpty) {
+      _debugCardToken('token', '(yo\'q) — oddiy URL ochiladi');
+      _debugCardToken('url', url);
+      if (mounted) {
+        ProjectDialogs.showCustomToast(
+          context,
+          'saved_card_token_failed'.tr(),
+          type: AppMessageType.warning,
+        );
+      }
+      return url;
+    }
+    final result = uri.replace(queryParameters: {
+      ...uri.queryParametersAll,
+      'card_token': token,
+    }).toString();
+    _debugCardToken('token', token);
+    _debugCardToken('url', result);
+    return result;
+  }
+
+  Future<String?> _createCardToken(
+    MySafarUzsCard card,
+    String trId,
+    String billingId,
+  ) async {
+    final provider = MySafarSdk.callbacks.onCreateCardToken;
+    if (provider != null) {
+      _debugCardToken(
+        'payload (host callback)',
+        jsonEncode({
+          'card_number': card.cardNumberDigits,
+          'expire': card.expire,
+          'tr_id': trId,
+          'billing_id': billingId,
+        }),
+      );
+      return _requestCardToken(
+        provider,
+        MySafarCardTokenRequest(card: card, trId: trId, billingId: billingId),
+      );
+    }
+
+    final secret = MySafarSdk.config.cardTokenSecret;
+    if (!CardTokenEncoder.isValidKey(secret)) {
+      debugPrint(
+          'MySafarSdk: config.cardTokenSecret (64 belgili hex) berilmagan '
+          '— card_token yaratilmaydi.');
+      return null;
+    }
+    final payload = CardTokenEncoder.payload(
+      cardNumber: card.cardNumberDigits,
+      expire: card.expire,
+      trId: trId,
+      issuedAt: DateTime.now(),
+    );
+    _debugCardToken('payload', jsonEncode(payload));
+    try {
+      return CardTokenEncoder(secret!).encrypt(payload);
+    } catch (e) {
+      debugPrint('MySafarSdk: card_token shifrlanmadi (${e.runtimeType})');
+      return null;
+    }
+  }
+
+  /// Faqat debug build'da: `card_token` uchun yig'ilgan ma'lumot va yakuniy
+  /// to'lov URL'ini konsolga chiqaradi (release'da hech narsa yozilmaydi —
+  /// karta raqami log'ga tushmasin).
+  void _debugCardToken(String label, String value) {
+    if (!kDebugMode) return;
+    debugPrint('[MySafar card_token] $label: $value', wrapWidth: 1024);
+  }
+
+  Future<String?> _requestCardToken(
+    Future<String?> Function(MySafarCardTokenRequest) provider,
+    MySafarCardTokenRequest request,
+  ) async {
+    setState(() => _preparingCardToken = true);
+    String? token;
+    try {
+      token = await provider(request).timeout(_cardTokenTimeout);
+    } catch (e) {
+      // Karta ma'lumotlari/token log'ga chiqmaydi — faqat xato turi.
+      debugPrint('MySafarSdk: card_token olinmadi (${e.runtimeType})');
+    }
+    if (mounted) setState(() => _preparingCardToken = false);
+    return token;
   }
 
   void _handlePriceChange(
@@ -531,6 +680,11 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
                     _selectedPaymentType = type;
                     _showSelectionError = false;
                   });
+                  // HUMO / Uzcard + host kartalari bor — darhol kartani so'raymiz.
+                  if (type == PaymentConstants.mysafarpay &&
+                      _canUseSavedCards) {
+                    _openSavedCardsSheet(context);
+                  }
                 },
               ),
             ),
@@ -721,7 +875,8 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
   }
 
   Widget _buildBottomButton(BuildContext context, BookingConfirmStates state) {
-    final isLoading = state is BookingConfirmLoadingState;
+    final isLoading =
+        state is BookingConfirmLoadingState || _preparingCardToken;
     // Tugma faqat vaqt tugaganda o'chadi. To'lov usuli tanlanmagan bo'lsa
     // bosilganda sababini ko'rsatamiz (jim o'chirilgan tugma o'rniga).
     final canProceed = _remainingSeconds > 0 && !_paymentTypesLoading;
@@ -818,8 +973,57 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
       return;
     }
 
-    if (state is BookingConfirmLoadingState) return;
+    if (state is BookingConfirmLoadingState || _preparingCardToken) return;
 
+    // HUMO / Uzcard + host kartalari — avval kartani tanlatamiz (sheet'dagi
+    // tanlov to'lovni o'zi boshlaydi).
+    if (_selectedPaymentType == PaymentConstants.mysafarpay &&
+        _canUseSavedCards) {
+      _openSavedCardsSheet(context);
+      return;
+    }
+
+    _submitPayment(context);
+  }
+
+  /// Saqlangan kartalar sheet'i: host UZS kartalar bergan bo'lsa.
+  /// (`card_token` callback'i berilmagan bo'lsa ham sheet ochiladi — karta
+  /// tanlanganda sahifa oddiy rejimda ochiladi.)
+  bool get _canUseSavedCards => MySafarSdk.userData.uzsCards.isNotEmpty;
+
+  Future<void> _openSavedCardsSheet(BuildContext context) async {
+    if (_savedCardsSheetOpen ||
+        _preparingCardToken ||
+        _remainingSeconds <= 0 ||
+        context.read<BookingConfirmCubit>().state
+            is BookingConfirmLoadingState) {
+      return;
+    }
+    _savedCardsSheetOpen = true;
+    final choice = await showSavedCardsSheet(
+      context,
+      cards: MySafarSdk.userData.uzsCards,
+    );
+    _savedCardsSheetOpen = false;
+    if (choice == null || !mounted || !context.mounted) return;
+    // Sheet ochiq turganda vaqt tugagan yoki boshqa usul tanlangan bo'lishi mumkin.
+    if (_remainingSeconds <= 0 ||
+        _selectedPaymentType != PaymentConstants.mysafarpay) {
+      return;
+    }
+
+    AnalyticsService().trackButtonTap(
+      choice.isOtherCard ? 'payment_other_card' : 'payment_saved_card',
+    );
+    _pendingSavedCard = choice.card;
+    _submitPayment(context);
+  }
+
+  void _submitPayment(BuildContext context) {
+    if (context.read<BookingConfirmCubit>().state
+        is BookingConfirmLoadingState) {
+      return;
+    }
     // Tanlangan tur ID'si allaqachon API nomi (MYSAFARPAY / PAYME / PAYGINE /
     // CLICK / VISA) — uni to'g'ridan-to'g'ri transaction_type sifatida yuboramiz.
     final String transactionType = _selectedPaymentType!.toUpperCase();

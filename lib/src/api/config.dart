@@ -26,7 +26,8 @@ class MySafarConfig {
       this.brandColor,
       this.bottomBarStyle,
       this.homeHeaderStyle,
-      this.support});
+      this.support,
+      this.cardTokenSecret});
 
   /// Asosiy backend (masalan `https://api.mysafar.ru`).
   final String baseUrl;
@@ -108,6 +109,18 @@ class MySafarConfig {
   /// ko'rsatadi (`hasPartnerSupport` / `partnerSupport*`).
   final MySafarSupportConfig? support;
 
+  /// MySafar bergan `card_token` shifrlash kaliti — 64 belgili hex (32 bayt).
+  ///
+  /// Berilsa, "HUMO / Uzcard" da saqlangan karta tanlanganda SDK karta
+  /// raqami va muddatini hujjat bo'yicha (AES-256-GCM, `tr_id` ga bog'langan,
+  /// `iat` bilan) shifrlab, to'lov URL'iga `card_token` qo'shadi.
+  /// `callbacks.onCreateCardToken` berilgan bo'lsa u ustun (token serverda).
+  ///
+  /// Kalit ilova ichida bo'ladi — uni kodga/repoga yozmang, host maxfiy
+  /// sozlamasidan bering. Debug'da bo'sh bo'lsa `MYSAFAR_CARD_TOKEN_SECRET`
+  /// (env.json) dan olinadi.
+  final String? cardTokenSecret;
+
   /// Support telefon (UI + `tel:`). Host bermasa default.
   String get supportPhone {
     return partnerSupportPhone ?? MySafarSupportConfig.defaultPhone;
@@ -161,6 +174,7 @@ class MySafarConfig {
     MySafarBottomBarStyle? bottomBarStyle,
     MySafarHomeHeaderStyle? homeHeaderStyle,
     MySafarSupportConfig? support,
+    String? cardTokenSecret,
   }) {
     return MySafarConfig(
       baseUrl: baseUrl ?? this.baseUrl,
@@ -182,6 +196,7 @@ class MySafarConfig {
       bottomBarStyle: bottomBarStyle ?? this.bottomBarStyle,
       homeHeaderStyle: homeHeaderStyle ?? this.homeHeaderStyle,
       support: support ?? this.support,
+      cardTokenSecret: cardTokenSecret ?? this.cardTokenSecret,
     );
   }
 }

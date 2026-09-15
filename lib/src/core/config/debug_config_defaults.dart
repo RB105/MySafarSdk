@@ -18,12 +18,14 @@ class DebugConfigDefaults {
   static const String skoteBaseUrlKey = 'MYSAFAR_SKOTE_BASE_URL';
   static const String partnerTokenKey = 'MYSAFAR_PARTNER_TOKEN';
   static const String appNameKey = 'MYSAFAR_APP_NAME';
+  static const String cardTokenSecretKey = 'MYSAFAR_CARD_TOKEN_SECRET';
 
   static const Map<String, String> _compileTimeEnv = {
     baseUrlKey: String.fromEnvironment(baseUrlKey),
     skoteBaseUrlKey: String.fromEnvironment(skoteBaseUrlKey),
     partnerTokenKey: String.fromEnvironment(partnerTokenKey),
     appNameKey: String.fromEnvironment(appNameKey),
+    cardTokenSecretKey: String.fromEnvironment(cardTokenSecretKey),
   };
 
   /// [config]dagi bo'sh maydonlarni [env]dan to'ldiradi. Host bergan
@@ -47,11 +49,13 @@ class DebugConfigDefaults {
     final skoteBaseUrl = fill(config.skoteBaseUrl, skoteBaseUrlKey);
     final partnerToken = fill(config.partnerToken, partnerTokenKey);
     final appName = fill(config.appName, appNameKey);
+    final cardTokenSecret = fill(config.cardTokenSecret, cardTokenSecretKey);
 
     if (baseUrl == null &&
         skoteBaseUrl == null &&
         partnerToken == null &&
-        appName == null) {
+        appName == null &&
+        cardTokenSecret == null) {
       return config;
     }
     return config.copyWith(
@@ -59,6 +63,7 @@ class DebugConfigDefaults {
       skoteBaseUrl: skoteBaseUrl,
       partnerToken: partnerToken,
       appName: appName,
+      cardTokenSecret: cardTokenSecret,
     );
   }
 }

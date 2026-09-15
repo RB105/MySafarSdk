@@ -32,9 +32,8 @@ class MySafarUserData {
   MySafarUserData sanitized() {
     final trimmedEmail = email?.trim();
     return MySafarUserData(
-      email: (trimmedEmail == null || trimmedEmail.isEmpty)
-          ? null
-          : trimmedEmail,
+      email:
+          (trimmedEmail == null || trimmedEmail.isEmpty) ? null : trimmedEmail,
       uzsCards: List.unmodifiable(uzsCards.where((c) => c.isValid)),
       foreignCards: List.unmodifiable(foreignCards.where((c) => c.isValid)),
     );
@@ -65,6 +64,7 @@ class MySafarUzsCard {
     this.cardMask,
     this.owner,
     this.balance,
+    this.cardLogoUrl,
   });
 
   /// To'liq karta raqami (16 raqam). Bo'shliq/tire bo'lsa ham qabul qilinadi.
@@ -83,6 +83,11 @@ class MySafarUzsCard {
 
   /// Karta balansi so'mda (tiyinda emas). Masalan `1250000.50`.
   final num? balance;
+
+  /// Karta (processing) logotipining to'liq URL'i — `https://...` (`.svg` yoki
+  /// `.png`/`.jpg`). Kartalar ro'yxatida ko'rsatiladi; berilmasa yoki
+  /// yuklanmasa karta raqamiga qarab SDK'dagi UzCard / Humo logotipi chiqadi.
+  final String? cardLogoUrl;
 
   /// Faqat raqamlar (`8600123412341234`).
   String get cardNumberDigits => cardNumber.replaceAll(RegExp(r'\D'), '');

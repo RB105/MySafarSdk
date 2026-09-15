@@ -79,6 +79,7 @@ await MySafarSdk.init(
         cardMask: '8600 **** **** 1234', // ixtiyoriy — berilmasa raqamdan hosil qilinadi
         owner: 'ALIYEV VALI',           // ixtiyoriy
         balance: 1250000,               // ixtiyoriy, so'mda (tiyinda emas)
+        cardLogoUrl: 'https://.../uzcard.svg', // ixtiyoriy, to'liq URL (.svg / .png)
       ),
     ],
     foreignCards: [
@@ -103,6 +104,57 @@ MySafarSdk.clearUserData();
 - Yaroqsiz kartalar (16 raqamsiz, `YYMM` bo'lmagan muddat, bo'sh token) jim
   tashlab yuboriladi — init yiqilmaydi.
 - `MySafarEmbed.email` berilmasa `userData.email` ishlatiladi.
+
+### Saqlangan UZS karta bilan to'lov (`card_token`) — ixtiyoriy
+
+"Chipta uchun to'lov" sahifasida **HUMO / Uzcard** tanlanganda, host
+`uzsCards` va `onCreateCardToken` bergan bo'lsa, kartalar ro'yxati (bottom
+sheet) ochiladi:
+
+- **Karta tanlansa** — SDK bron to'lovini boshlaydi, `card_token` yaratadi va
+  to'lov sahifasini `...?trid=...&billing_id=...&card_token=...` bilan ochadi
+  (karta avtomatik to'ldiriladi, foydalanuvchi faqat SMS kodni kiritadi).
+- **"Boshqa karta"** — avvalgidek oddiy to'lov sahifasi (karta qo'lda kiritiladi).
+- `uzsCards` bo'sh bo'lsa — sheet chiqmaydi, oqim o'zgarmaydi.
+
+Token "Unired → MySafar card_token" hujjati bo'yicha yaratiladi:
+
+- plaintext JSON: `{"card_number","expire" (YYMM),"tr_id","iat"}` — `tr_id`
+  to'lov URL'idagi `trid` dan olinadi, `iat` — hozirgi Unix vaqt (token 10
+  daqiqa amal qiladi);
+- AES-256-GCM, 12 baytli tasodifiy IV, AAD yo'q;
+- `card_token = base64url(IV ‖ CIPHERTEXT ‖ TAG)`, padding'siz;
+- faqat `https://` to'lov URL'iga qo'shiladi.
+
+Kalitni (64 belgili hex, MySafar beradi) config orqali bering. Kalitni kodga
+yoki repoga yozmang — host maxfiy sozlamasidan (`.env` va h.k.) o'qing:
+
+```dart
+await MySafarSdk.init(
+  config: MySafarConfig(
+    ...,
+    cardTokenSecret: env['MYSAFAR_CARD_TOKEN_SECRET'],
+  ),
+);
+```
+
+Debug'da `cardTokenSecret` bo'sh bo'lsa `env.json` dagi
+`MYSAFAR_CARD_TOKEN_SECRET` ishlatiladi. Debug konsolida
+`[MySafar card_token] payload / token / url` qatorlari chiqadi (release'da
+yozilmaydi).
+
+Token serverda yaratilishi kerak bo'lsa `callbacks.onCreateCardToken` bering —
+u `cardTokenSecret` dan ustun:
+
+```dart
+callbacks: MySafarCallbacks(
+  onCreateCardToken: (request) => myBackend.createMySafarCardToken(
+    cardNumber: request.card.cardNumberDigits,
+    expire: request.card.expire, // YYMM
+    trId: request.trId,          // URL'dagi trid
+  ), // null / xato → sahifa oddiy rejimda ochiladi
+),
+```
 
 Embed ichidagi bosh ekranda host'ga qaytish tugmasi chiqadi; Android back ham
 avval SDK stack'ini yechib, oxirida host ekraniga qaytadi.

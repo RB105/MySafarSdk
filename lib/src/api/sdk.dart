@@ -34,6 +34,8 @@ import 'package:mysafar_sdk/src/service/analytics/appmetrica_analytics.dart'
     show AppMetricaAnalytics;
 import 'package:mysafar_sdk/src/service/deep_link_gateway.dart'
     show DeepLinkGateway;
+import 'package:mysafar_sdk/src/service/payment/card_token_encoder.dart'
+    show CardTokenEncoder;
 
 /// SDK'ning markaziy kirish nuqtasi. Host app `runApp`dan oldin [init]ni
 /// chaqiradi; SDK ichidagi kod config/token/analytics'ga shu holder orqali
@@ -80,6 +82,7 @@ class MySafarSdk {
   /// jim tashlab yuboriladi.
   static void updateUserData(MySafarUserData userData) {
     _userData = userData.sanitized();
+    _warnIfCardTokenCallbackMissing();
     if (kDebugMode) {
       final dropped = userData.uzsCards.length +
           userData.foreignCards.length -
@@ -88,6 +91,20 @@ class MySafarSdk {
       if (dropped > 0) {
         debugPrint('MySafarSdk: $dropped ta yaroqsiz karta tashlab yuborildi.');
       }
+    }
+  }
+
+  static void _warnIfCardTokenCallbackMissing() {
+    final hasSecret = CardTokenEncoder.isValidKey(_config?.cardTokenSecret);
+    if (kDebugMode &&
+        _userData.uzsCards.isNotEmpty &&
+        _callbacks.onCreateCardToken == null &&
+        !hasSecret) {
+      debugPrint(
+        'MySafarSdk: uzsCards berilgan, lekin config.cardTokenSecret (yoki '
+        'callbacks.onCreateCardToken) yo\'q — kartalar ro\'yxati ko\'rsatiladi, '
+        'lekin card_token yaratilmaydi.',
+      );
     }
   }
 
@@ -139,6 +156,7 @@ class MySafarSdk {
       }
     }
     _callbacks = callbacks;
+    _warnIfCardTokenCallbackMissing();
 
     AppConfig.apply(config);
     if (kDebugMode && !AppConfig.hasValidPartnerToken) {

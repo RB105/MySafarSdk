@@ -54,6 +54,7 @@ Future<void> main() async {
     //       cardMask: '8600 **** **** 1234',
     //       owner: 'ALIYEV VALI',
     //       balance: 1250000, // so'mda
+    //       cardLogoUrl: 'https://example.com/logo/uzcard.svg', // to'liq URL
     //     ),
     //   ],
     //   foreignCards: [
@@ -64,6 +65,15 @@ Future<void> main() async {
     //       currency: 'USD',
     //     ),
     //   ],
+    // ),
+    // card_token kaliti: config'da `cardTokenSecret` (debug'da bo'sh bo'lsa
+    // env.json dagi MYSAFAR_CARD_TOKEN_SECRET). Token serverda yaratilsa:
+    // callbacks: MySafarCallbacks(
+    //   onCreateCardToken: (request) => myBackend.createMySafarCardToken(
+    //     cardNumber: request.card.cardNumberDigits,
+    //     expire: request.card.expire, // YYMM
+    //     trId: request.trId,
+    //   ),
     // ),
   );
 
