@@ -1,6 +1,6 @@
 name: mysafar_sdk
 description: MySafar travel booking SDK — embeddable avia search/booking, visa, destinations and news flows.
-version: 0.1.0
+version: 0.2.0
 publish_to: 'none'
 
 environment:

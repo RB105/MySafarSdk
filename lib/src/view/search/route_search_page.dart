@@ -37,7 +37,7 @@ import 'package:mysafar_sdk/src/view/tickets/ticket_info_page.dart'
     show TicketInfoPage;
 import 'package:mysafar_sdk/src/view/tickets/ticket_page.dart'
     show RecommendationsTicketPage;
-import 'package:provider/provider.dart' show Provider;
+import 'package:provider/provider.dart' show Consumer, Provider;
 import 'package:shimmer/shimmer.dart' show Shimmer;
 import 'package:syncfusion_flutter_datepicker/datepicker.dart'
     show PickerDateRange;
@@ -201,6 +201,21 @@ class _RouteSearchViewState extends State<_RouteSearchView>
     await Future.delayed(const Duration(milliseconds: 300));
     if (!mounted) return;
     await _pickPassengers();
+    // Valyuta avval tanlanmagan bo'lsa — bir marta so'raymiz (keyin eslab
+    // qoladi; pill orqali istalgan payt o'zgartiriladi).
+    if (!mounted) return;
+    await Future.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
+    _maybePromptCurrency();
+  }
+
+  /// Valyuta AVVAL tanlanmagan bo'lsa (birinchi marta) bottom-sheet ochib
+  /// so'raydi; tanlangach global [CurrencyProvider]ga saqlanadi va keyingi
+  /// qidiruvlarda qayta so'ralmaydi.
+  void _maybePromptCurrency() {
+    final provider = Provider.of<CurrencyProvider>(context, listen: false);
+    if (provider.hasSelected) return;
+    ProjectDialogs.showCurrencyMenu(context);
   }
 
   /// Sana tanlash (kalendar). Muvaffaqiyatli tanlansa `true`.
@@ -492,6 +507,18 @@ class _RouteSearchViewState extends State<_RouteSearchView>
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 10),
+        // Qidiruv natijalariga o'tishdan oldin valyuta tanlash — narxlar shu
+        // valyutada ko'rsatiladi (global CurrencyProvider'ga yoziladi).
+        Consumer<CurrencyProvider>(
+          builder: (_, cp, __) => Align(
+            alignment: Alignment.centerRight,
+            child: _WebCurrencyPill(
+              value: cp.currency.label,
+              onTap: () => ProjectDialogs.showCurrencyMenu(context),
+            ),
+          ),
         ),
         const SizedBox(height: 12),
         _WebSearchButton(onTap: _search),

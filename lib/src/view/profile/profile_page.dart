@@ -220,6 +220,16 @@ class _ProfilePageState extends State<ProfilePage> {
               title: "settings".tr(),
               onTap: () => Navigator.pushNamed(context, SettingsPage.routeName),
             ),
+          // Embed/lite rejimda (to'liq Settings yashirin) tilni bevosita
+          // profildan o'zgartirish — faqat SDK ichida (host lokalizatsiyasiga
+          // tegmaydi).
+          if (!fullProfile)
+            _MenuRow(
+              icon: Assets.iconsProfileLanguageIcon,
+              title: "lang".tr(),
+              value: context.locale.languageCode.toUpperCase(),
+              onTap: () => ProjectDialogs.showLanguageMenu(context),
+            ),
           _MenuRow(
             icon: Assets.iconsProfileSupportIcon,
             title: "support".tr(),
@@ -606,12 +616,16 @@ class _MenuRow extends StatelessWidget {
   final bool danger;
   final bool showChevron;
 
+  /// Strelka oldidagi joriy qiymat (masalan tanlangan til kodi).
+  final String? value;
+
   const _MenuRow({
     required this.icon,
     required this.title,
     required this.onTap,
     this.danger = false,
     this.showChevron = true,
+    this.value,
   });
 
   @override
@@ -663,6 +677,17 @@ class _MenuRow extends StatelessWidget {
                 ),
               ),
             ),
+            if (value != null && value!.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              Text(
+                value!,
+                style: context.textTheme.bodySmall?.copyWith(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: BookingFormStyle.label(context),
+                ),
+              ),
+            ],
             if (showChevron) ...[
               const SizedBox(width: 8),
               SvgPicture.asset(

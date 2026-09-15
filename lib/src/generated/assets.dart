@@ -421,6 +421,7 @@ class Assets {
   static const String iconsProfileDocumentIcon = 'packages/mysafar_sdk/assets/img/home/icons/profile_document_icon.svg';
   static const String iconsProfileEditIcon = 'packages/mysafar_sdk/assets/img/home/icons/profile_edit_icon.svg';
   static const String iconsProfileLogoutIcon = 'packages/mysafar_sdk/assets/img/home/icons/profile_logout_icon.svg';
+  static const String iconsProfileLanguageIcon = 'packages/mysafar_sdk/assets/img/home/icons/profile_language_icon.svg';
   static const String iconsProfileMailIcon = 'packages/mysafar_sdk/assets/img/home/icons/profile_mail_icon.svg';
   static const String iconsProfileReceiptIcon = 'packages/mysafar_sdk/assets/img/home/icons/profile_receipt_icon.svg';
   static const String iconsProfileSettingsIcon = 'packages/mysafar_sdk/assets/img/home/icons/profile_settings_icon.svg';
