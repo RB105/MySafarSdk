@@ -242,7 +242,7 @@ class _SavedCardTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final owner = card.owner?.trim();
+    final owner = card.displayOwner;
     final balance = card.balance;
 
     return Semantics(
@@ -268,7 +268,7 @@ class _SavedCardTile extends StatelessWidget {
             fontFeatures: const [FontFeature.tabularFigures()],
           ),
         ),
-        subtitle: (owner != null && owner.isNotEmpty) ? owner : _processingName,
+        subtitle: owner ?? _processingName,
         trailing: balance == null ? null : _Balance(amount: balance),
       ),
     );

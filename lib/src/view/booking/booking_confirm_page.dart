@@ -39,6 +39,7 @@ import 'package:mysafar_sdk/src/service/booking_service.dart';
 import 'package:mysafar_sdk/src/service/payment/payment_type_repository.dart';
 import 'package:mysafar_sdk/src/service/payment/card_token_encoder.dart';
 import 'package:mysafar_sdk/src/view/booking/support/payment_helper.dart';
+import 'package:mysafar_sdk/src/view/booking/support/webview_debug.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/booking_form_fields.dart'
     show BookingFieldError, BookingFormStyle;
 import 'package:mysafar_sdk/src/view/booking/widget/next_button_widget.dart';
@@ -449,6 +450,16 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
         url = data['payment_url'] as String?;
     }
 
+    if (WebViewDebug.enabled) {
+      WebViewDebug.log('== confirm javobi: type=$type '
+          'keys=${data.keys.toList()} tr_id=${widget.bookingCreateModel.trId}');
+      for (final key in const ['payment_url', 'visa_ecom', 'paygine_qr_url']) {
+        if (data.containsKey(key)) {
+          WebViewDebug.log('   $key (${data[key].runtimeType}): ${data[key]}');
+        }
+      }
+      WebViewDebug.log('   tanlangan url: $url');
+    }
     if (url == null) return;
     if (type == PaymentConstants.mysafarpay && savedCard != null) {
       url = await _withCardToken(url, savedCard);

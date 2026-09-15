@@ -21,6 +21,11 @@ dependencies:
   bloc: '>=7.2.0 <10.0.0'
   mask_text_input_formatter: ^2.9.0
   webview_flutter: ^4.2.4
+  # Android WebView'da uchinchi tomon cookie'larini yoqish uchun (3DS iframe'lari).
+  # Diapazon keng — Unired 4.11.0 ga qotirgan.
+  webview_flutter_android: '>=4.0.0 <5.0.0'
+  # iOS: javaScriptCanOpenWindowsAutomatically (3.24.2+). Unired 3.25.1.
+  webview_flutter_wkwebview: '>=3.24.2 <4.0.0'
   flutter_bloc: '>=7.3.0 <10.0.0'
   intl: ^0.20.2
   # Diapazon keng — host app (masalan Unired 32.x) bilan to'qnashmasligi uchun.
@@ -51,10 +56,7 @@ dependencies:
   expandable_page_view: ^1.0.17
   latlong2: '>=0.9.0 <0.11.0'
   permission_handler: '>=11.3.1 <13.0.0'
-  mrz_parser: ^2.0.1
   camera: ^0.11.2
-  google_mlkit_text_recognition: ^0.15.0
-  google_mlkit_commons: ^0.11.0
   audio_waveforms: ^2.0.1
   flutter_animate: ^4.5.2
   pixel_snap: ^0.1.5

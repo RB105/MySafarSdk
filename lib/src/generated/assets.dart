@@ -456,6 +456,7 @@ class Assets {
   static const String iconsScanFlashIcon = 'packages/mysafar_sdk/assets/img/home/icons/scan_flash_icon.svg';
   static const String iconsScanFlashOffIcon = 'packages/mysafar_sdk/assets/img/home/icons/scan_flash_off_icon.svg';
   static const String iconsScanFrameIcon = 'packages/mysafar_sdk/assets/img/home/icons/scan_frame_icon.svg';
+  static const String iconsScanGalleryIcon = 'packages/mysafar_sdk/assets/img/home/icons/scan_gallery_icon.svg';
   static const String iconsScanIdCardIcon = 'packages/mysafar_sdk/assets/img/home/icons/scan_id_card_icon.svg';
   static const String iconsScanPassportIcon = 'packages/mysafar_sdk/assets/img/home/icons/scan_passport_icon.svg';
   static const String iconsScanSavedPassengersIcon = 'packages/mysafar_sdk/assets/img/home/icons/scan_saved_passengers_icon.svg';

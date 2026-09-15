@@ -1,11 +1,3 @@
-// ignore: depend_on_referenced_packages
-import 'package:intl/intl.dart' show DateFormat;
-import 'package:mrz_parser/mrz_parser.dart';
-
-extension _Formatters on DateTime {
-  String formatToDMY() => DateFormat('dd.MM.yyyy').format(this);
-}
-
 class UsersModel {
   int? id;
   String? createdAt;
@@ -79,29 +71,40 @@ class UsersModel {
     return data;
   }
 
-  /// MRZ skan natijasidan [UsersModel] yasaydi.
+  /// `/v1/document/scan` javobidagi `passenger` obyektidan [UsersModel].
   ///
-  /// - [firstname]  ← MRZ givenNames (butun qiymati, ism+otasini ajratmaymiz)
-  /// - [middlename] ← '' (MRZ da sharif bo'lmaydi — foydalanuvchi qo'lda kiritadi)
-  /// - [docnum]     ← tozalangan (< va bo'shliqlar olib tashlanadi)
-  /// - [gender]     ← Sex.none → null (mavjud qiymatni ezmaslik uchun)
-  /// - [citizen]    ← ICAO alpha-3 → ISO alpha-2 jadval orqali (TUR→TR, KAZ→KZ)
-  static UsersModel fromScan(MRZResult result) {
+  /// - sanalar `yyyy-MM-dd` → forma formati `dd.MM.yyyy`
+  /// - `null` / tanilmagan maydonlar → `''` (formadagi mavjud qiymat
+  ///   [PassengerModel.mergeScan] orqali saqlanadi)
+  /// - jins faqat `M`/`F`, fuqarolik ISO alpha-2 (`UZ`), doctype `P`/`A`
+  static UsersModel fromDocumentScan(Map<String, dynamic> passenger) {
+    String text(String key) => (passenger[key] ?? '').toString().trim();
+
+    final gender = text('gender').toUpperCase();
+    final citizen = text('citizen').toUpperCase();
+    final doctype = text('doctype').toUpperCase();
+
     return UsersModel(
-      firstname: _cleanName(result.givenNames),
-      lastname: _cleanName(result.surnames),
-      middlename: '',
-      birthdate: result.birthDate.formatToDMY(),
-      doctype: _mapDocType(result.documentType),
-      docnum: _cleanDocNum(result.documentNumber),
-      docexp: result.expiryDate.formatToDMY(),
-      gender: _mapSex(result.sex),
-      citizen: _mapCountry(
-        result.nationalityCountryCode.isNotEmpty
-            ? result.nationalityCountryCode
-            : result.countryCode,
-      ),
+      firstname: _cleanName(text('firstname')),
+      lastname: _cleanName(text('lastname')),
+      middlename: _cleanName(text('middlename')),
+      birthdate: _apiDateToForm(text('birthdate')),
+      doctype: doctype.isEmpty ? null : _mapDocType(doctype),
+      docnum: _cleanDocNum(text('docnum')),
+      docexp: _apiDateToForm(text('docexp')),
+      gender: (gender == 'M' || gender == 'F') ? gender : null,
+      citizen: citizen.length == 3
+          ? _mapCountry(citizen)
+          : (citizen.length == 2 ? citizen : null),
     );
+  }
+
+  /// `yyyy-MM-dd` (yoki ISO datetime) → `dd.MM.yyyy`; boshqa ko'rinish
+  /// o'zgarishsiz, bo'sh → `''`.
+  static String _apiDateToForm(String raw) {
+    final match = RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch(raw);
+    if (match == null) return raw;
+    return '${match[3]}.${match[2]}.${match[1]}';
   }
 
   /// Ism/familiya tozalash: katta harf, ortiqcha bo'shliqlar.
@@ -109,21 +112,9 @@ class UsersModel {
     return raw.toUpperCase().replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
-  /// Hujjat raqamini tozalash: < va MRZ bo'lmagan belgilarni olib tashlash.
+  /// Hujjat raqamini tozalash: faqat lotin harflari va raqamlar qoladi.
   static String _cleanDocNum(String raw) {
     return raw.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
-  }
-
-  /// Jins: Sex.none (ID < belgisi) → null, server mavjud qiymatni saqlasin.
-  static String? _mapSex(Sex sex) {
-    switch (sex) {
-      case Sex.male:
-        return 'M';
-      case Sex.female:
-        return 'F';
-      default:
-        return null;
-    }
   }
 
   /// Loyiha doctype: passport = P, ID = A.

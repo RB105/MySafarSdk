@@ -78,7 +78,8 @@ class MySafarUzsCard {
   /// [cardNumber] dan hosil qilinadi — qarang [displayMask].
   final String? cardMask;
 
-  /// Karta egasi (masalan `ALIYEV VALI`).
+  /// Karta egasi (masalan `ALIYEV VALI` yoki maskalangan `ALIYEV V*****`).
+  /// UI'da [displayOwner] ishlatiladi.
   final String? owner;
 
   /// Karta balansi so'mda (tiyinda emas). Masalan `1250000.50`.
@@ -102,11 +103,34 @@ class MySafarUzsCard {
         '${digits.substring(digits.length - 4)}';
   }
 
+  /// Ko'rsatish uchun egasi: maska yulduzchalari qisqartiriladi —
+  /// `ABDIRAXMONOV R********` → `ABDIRAXMONOV R.`. Bo'sh bo'lsa `null`.
+  String? get displayOwner => _compactMaskedName(owner);
+
   bool get isValid =>
       cardNumberDigits.length == 16 && RegExp(r'^\d{4}$').hasMatch(expire);
 
   @override
   String toString() => 'MySafarUzsCard($displayMask)';
+}
+
+/// Maskalangan ismdagi yulduzchalarni qisqartiradi: maskali so'z qolgan
+/// harflari + `.` bo'ladi (`R********` → `R.`), faqat maskadan iborat so'z
+/// tashlanadi. Maskasiz so'zlar o'zgarmaydi.
+String? _compactMaskedName(String? name) {
+  final words = (name ?? '').trim().split(RegExp(r'\s+'));
+  final mask = RegExp(r'[*•]');
+  final result = <String>[];
+  for (final word in words) {
+    if (!word.contains(mask)) {
+      if (word.isNotEmpty) result.add(word);
+      continue;
+    }
+    final visible =
+        word.replaceAll(mask, '').replaceFirst(RegExp(r'\.+$'), '');
+    if (visible.isNotEmpty) result.add('$visible.');
+  }
+  return result.isEmpty ? null : result.join(' ');
 }
 
 /// Boshqa valyutadagi karta (USD va h.k.). To'liq raqam o'rniga host
@@ -125,8 +149,11 @@ class MySafarForeignCard {
   /// Ko'rsatish uchun maska (masalan `4276 **** **** 1234`).
   final String cardMask;
 
-  /// Karta egasi.
+  /// Karta egasi. UI'da [displayOwner] ishlatiladi.
   final String? owner;
+
+  /// Ko'rsatish uchun egasi — qarang [MySafarUzsCard.displayOwner].
+  String? get displayOwner => _compactMaskedName(owner);
 
   /// ISO 4217 valyuta kodi (`USD`, `EUR`, `RUB` ...). Default `USD`.
   final String currency;

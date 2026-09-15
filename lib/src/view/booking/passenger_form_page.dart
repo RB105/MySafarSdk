@@ -23,7 +23,7 @@ import 'package:mysafar_sdk/src/view/booking/widget/passenger_date_picker.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/paymentbottomsheet.dart'
     show showCitySearchPicker;
 import 'package:mysafar_sdk/src/view/booking/widget/scan_page.dart'
-    show showMrzScannerBottomSheet;
+    show showDocumentScanner;
 import 'package:mysafar_sdk/src/view/booking/widget/support_widget.dart'
     show BookingCard;
 
@@ -174,14 +174,19 @@ class _PassengerFormPageState extends State<PassengerFormPage> {
 
   Future<void> _openDocumentScanner() async {
     _dismissKeyboard();
-    final user = await showMrzScannerBottomSheet(context);
-    if (!mounted || user == null) return;
-    _applyUser(user);
+    final scan = await showDocumentScanner(context);
+    if (!mounted || scan == null) return;
+    // Faqat tanilgan maydonlar yoziladi — o'qilmaganlari saqlanib qoladi.
+    setState(() => _passenger = _passenger.mergeScan(scan));
+    _fillControllers();
   }
 
   Future<void> _showCitizenPicker() async {
     _dismissKeyboard();
-    final result = await showCitySearchPicker(context);
+    final result = await showCitySearchPicker(
+      context,
+      selectedCode: _passenger.citizen,
+    );
     if (!mounted || result == null) return;
     setState(() {
       _passenger = _passenger.copyWithCitizen(result['code'] ?? '');

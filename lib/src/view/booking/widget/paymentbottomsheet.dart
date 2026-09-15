@@ -71,21 +71,17 @@ void showPaymentOtpBottomSheet(
   );
 }
 
-Future<Map<String, dynamic>?> showCitySearchPicker(BuildContext context) async {
-  if (Platform.isIOS) {
-    return await showSdkCupertinoSheet<Map<String, dynamic>>(
-        context: context,
-        builder: (context) => MediaQuery.removePadding(
-              context: context,
-              removeTop: true,
-              child: SearchCountryWidget(),
-            ));
-  }
-
-  return await showSdkModalBottomSheet<Map<String, dynamic>>(
+/// Fuqarolik (davlat) tanlash — joy qidirish oynasi bilan bir xil to'liq
+/// balandlikdagi sheet. [selectedCode] — joriy tanlov belgilanadi.
+Future<Map<String, dynamic>?> showCitySearchPicker(
+  BuildContext context, {
+  String? selectedCode,
+}) {
+  return showSdkFullHeightSheet<Map<String, dynamic>>(
     context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    builder: (context) => SearchCountryWidget(),
+    builder: (context, controller) => SearchCountryWidget(
+      selectedCode: selectedCode,
+      scrollController: controller,
+    ),
   );
 }

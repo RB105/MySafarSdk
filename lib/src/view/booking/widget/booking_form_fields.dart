@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
@@ -176,7 +177,8 @@ class _BookingTextFieldState extends State<BookingTextField> {
   void initState() {
     super.initState();
     widget.focusNode.addListener(_rebuild);
-    widget.controller.addListener(_rebuild);
+    widget.controller.addListener(_onControllerChanged);
+    _syncMaskFormatters();
   }
 
   @override
@@ -187,20 +189,48 @@ class _BookingTextFieldState extends State<BookingTextField> {
       widget.focusNode.addListener(_rebuild);
     }
     if (oldWidget.controller != widget.controller) {
-      oldWidget.controller.removeListener(_rebuild);
-      widget.controller.addListener(_rebuild);
+      oldWidget.controller.removeListener(_onControllerChanged);
+      widget.controller.addListener(_onControllerChanged);
     }
+    _syncMaskFormatters();
   }
 
   @override
   void dispose() {
     widget.focusNode.removeListener(_rebuild);
-    widget.controller.removeListener(_rebuild);
+    widget.controller.removeListener(_onControllerChanged);
     super.dispose();
   }
 
   void _rebuild() {
     if (mounted) setState(() {});
+  }
+
+  void _onControllerChanged() {
+    _syncMaskFormatters();
+    _rebuild();
+  }
+
+  /// Matn koddan o'rnatilganda (skaner, saqlangan yo'lovchi, kalendar,
+  /// dastlabki to'ldirish) [MaskTextInputFormatter] buni ko'rmaydi va ichki
+  /// holati bo'sh qoladi — keyingi backspace butun maydonni tozalab yuboradi.
+  /// Shuning uchun formatter holatini controller matniga moslaymiz.
+  /// Foydalanuvchi yozganda matn formatter orqali o'tadi — o'zgarish yo'q.
+  void _syncMaskFormatters() {
+    final formatters = widget.inputFormatters;
+    if (formatters == null) return;
+    final text = widget.controller.text;
+    for (final formatter in formatters.whereType<MaskTextInputFormatter>()) {
+      if (formatter.getMaskedText() == text) continue;
+      if (text.isEmpty) {
+        formatter.clear();
+      } else {
+        formatter.formatEditUpdate(
+          TextEditingValue.empty,
+          TextEditingValue(text: formatter.unmaskText(text)),
+        );
+      }
+    }
   }
 
   Iterable<String> _options(TextEditingValue value) {
@@ -293,44 +323,48 @@ class _BookingTextFieldState extends State<BookingTextField> {
                   ),
                 ),
               ),
-              optionsViewBuilder: (context, onSelected, options) => Align(
-                alignment: Alignment.topLeft,
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Material(
-                    elevation: 3,
-                    shadowColor: Colors.black.withValues(alpha: 0.12),
-                    color: context.color.primaryContainer,
-                    shape: RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(BookingFormStyle.radius),
-                      side: BorderSide(color: context.color.outline),
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: SizedBox(
-                      width: _fieldWidth,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          for (final option in options)
-                            InkWell(
-                              onTap: () => onSelected(option),
-                              child: Container(
-                                height: 46,
-                                width: double.infinity,
-                                alignment: Alignment.centerLeft,
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 14),
-                                child: Text(
-                                  option,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: BookingFormStyle.value(context),
-                                ),
+              // Klaviatura ochiq, maydon pastda bo'lsa ostida joy qolmaydi —
+              // ro'yxat joy ko'proq tomonga (kerak bo'lsa tepaga) ochiladi.
+              optionsViewOpenDirection: OptionsViewOpenDirection.mostSpace,
+              // Tomonga moslash (tepaga/pastga) RawAutocomplete'ning o'zida;
+              // vertikal padding ikkala holatda ham maydondan 6px oraliq beradi.
+              optionsViewBuilder: (context, onSelected, options) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Material(
+                  elevation: 3,
+                  shadowColor: Colors.black.withValues(alpha: 0.12),
+                  color: context.color.primaryContainer,
+                  shape: RoundedRectangleBorder(
+                    borderRadius:
+                        BorderRadius.circular(BookingFormStyle.radius),
+                    side: BorderSide(color: context.color.outline),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: SizedBox(
+                    width: _fieldWidth,
+                    // Joy tavsiyalarga yetmasa (kichik ekran + klaviatura)
+                    // overflow o'rniga ro'yxat ichida scroll bo'ladi.
+                    child: ListView(
+                      shrinkWrap: true,
+                      padding: EdgeInsets.zero,
+                      children: [
+                        for (final option in options)
+                          InkWell(
+                            onTap: () => onSelected(option),
+                            child: Container(
+                              height: 46,
+                              alignment: Alignment.centerLeft,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 14),
+                              child: Text(
+                                option,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: BookingFormStyle.value(context),
                               ),
                             ),
-                        ],
-                      ),
+                          ),
+                      ],
                     ),
                   ),
                 ),

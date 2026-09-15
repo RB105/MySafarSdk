@@ -552,36 +552,34 @@ class ProjectDialogs {
 
   static void showLanguageMenu(BuildContext context) {
     showSdkModalBottomSheet(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-        ),
         context: context,
-        builder: (context) => LangOptionsWidget());
+        backgroundColor: Colors.transparent,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (context) => const LangOptionsWidget());
   }
 
   static void showThemeMenu(BuildContext context) {
     showSdkModalBottomSheet(
-        useSafeArea: Platform.isAndroid,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-        ),
         context: context,
+        backgroundColor: Colors.transparent,
+        isScrollControlled: true,
+        useSafeArea: true,
         builder: (dialogContext) {
           _dialogContext = dialogContext;
-          return ThemeOptionsWidget();
+          return const ThemeOptionsWidget();
         }).whenComplete(_afterComplete);
   }
 
   static void showCurrencyMenu(BuildContext context) {
     showSdkModalBottomSheet(
-        useSafeArea: Platform.isAndroid,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-        ),
         context: context,
+        backgroundColor: Colors.transparent,
+        isScrollControlled: true,
+        useSafeArea: true,
         builder: (dialogContext) {
           _dialogContext = dialogContext;
-          return CurrencyOptionsWidget();
+          return const CurrencyOptionsWidget();
         }).whenComplete(_afterComplete);
   }
 

@@ -6,6 +6,10 @@ class EndPoints {
 
   static const String egov = '/egov/';
 
+  /// Pasport/ID karta rasmidan yo'lovchi ma'lumotlarini o'qish
+  /// (multipart, `image` maydoni).
+  static const String document_scan = '/v1/document/scan';
+
   // auth
 
   static const String telegram_auth = '/auth/telegram-login';

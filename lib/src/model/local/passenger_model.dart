@@ -112,6 +112,33 @@ class PassengerModel {
     );
   }
 
+  /// Hujjat skaneri natijasini formaga qo'llaydi: faqat tanilgan (bo'sh
+  /// bo'lmagan) maydonlar yoziladi — skaner o'qiy olmagan maydonga
+  /// foydalanuvchi kiritgan qiymat o'chib ketmaydi.
+  PassengerModel mergeScan(UsersModel scan) {
+    String pick(String? value, String current) =>
+        (value != null && value.trim().isNotEmpty) ? value.trim() : current;
+    String pickName(String? value, String current) {
+      final name = _sanitizeName(value);
+      return name.isNotEmpty ? name : current;
+    }
+
+    return copyWith(
+      firstname: pickName(scan.firstname, firstname),
+      lastname: pickName(scan.lastname, lastname),
+      middlename: pickName(scan.middlename, middlename),
+      birthdate: pick(scan.birthdate, birthdate),
+      docexp: pick(scan.docexp, docexp),
+      docnum: pick(
+        (scan.docnum ?? '').toUpperCase().replaceAll(' ', ''),
+        docnum,
+      ),
+      gender: pick(scan.gender, gender),
+      citizen: pick(scan.citizen, citizen),
+      doctype: pick(scan.doctype, doctype),
+    );
+  }
+
   /// Saqlangan yo'lovchi yoki skaner natijasini formaga qo'llaydi. Jins,
   /// fuqarolik va hujjat turi bo'sh kelsa — joriy qiymati saqlanib qoladi.
   PassengerModel copyFromUser(UsersModel user) {
@@ -181,4 +208,3 @@ class PassengerConstants {
   static const String ageChild = 'chd';
   static const String ageInfant = 'inf';
 }
-

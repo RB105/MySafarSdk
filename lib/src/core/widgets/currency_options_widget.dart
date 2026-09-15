@@ -1,119 +1,54 @@
-import 'dart:io';
-
 import 'package:mysafar_sdk/src/core/enum/currency.dart';
 import 'package:mysafar_sdk/src/core/tools/currency_provider.dart';
+import 'package:mysafar_sdk/src/core/widgets/sdk_dialog.dart'
+    show SdkSheetFrame;
+import 'package:mysafar_sdk/src/core/widgets/sdk_option_sheet.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
 import 'package:provider/provider.dart' show Provider;
 
-class CurrencyOptionsWidget extends StatefulWidget {
+/// Valyuta tanlash sheet'i — kod, to'liq nom va bayroq; izohda narxlar
+/// tanlangan valyutada ko'rsatilishi aytiladi (birinchi qidiruvda ham
+/// shu sheet ochiladi).
+class CurrencyOptionsWidget extends StatelessWidget {
   const CurrencyOptionsWidget({super.key});
 
   @override
-  State<CurrencyOptionsWidget> createState() => _CurrencyOptionsWidgetState();
-}
-
-class _CurrencyOptionsWidgetState extends State<CurrencyOptionsWidget> {
-  late AppCurrency currency;
-  late CurrencyProvider currencyProvider;
-
-  @override
-  void initState() {
-    super.initState();
-  }
-
-  @override
-  void didChangeDependencies() {
-    currencyProvider = Provider.of<CurrencyProvider>(context);
-    currency = currencyProvider.currency;
-    super.didChangeDependencies();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return SafeArea(
-        bottom: Platform.isAndroid,
-        top: Platform.isAndroid,
+    final currencyProvider = Provider.of<CurrencyProvider>(context);
 
-        child:DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
-        ),
-        child: Padding(
-            padding: context.k16verticalPadding,
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              /// Header Row
-              Padding(
-                padding: context.k16horizontalPadding,
-                child: Row(
-                  children: [
-                    Text("rate".tr(), style: context.textTheme.bodyMedium),
-                    Spacer(),
-                    InkWell(
-                      onTap: () => Navigator.of(context).pop(),
-                      child: Icon(Icons.close),
-                    ),
-                  ],
-                ),
-              ),
-
-              Divider(thickness: 1, color: context.color.outline),
-              context.szBoxHeight12,
-
-              /// Options
-              Padding(
-                padding: context.k16horizontalPadding,
-                child: Column(
-                  children: [
-                    _buildOption("UZS", AppCurrency.uzs),
-                    context.szBoxHeight16,
-                    _buildOption("RUB", AppCurrency.rub),
-                    context.szBoxHeight16,
-                    _buildOption("USD", AppCurrency.usd),
-                    context.szBoxHeight16,
-                  ],
-                ),
-              ),
-
-              context.szBoxHeight16
-            ]))));
-  }
-
-  Widget _buildOption(String title, AppCurrency code) {
-    return InkWell(
-        highlightColor: Colors.transparent,
-        splashColor: Colors.transparent,
-        onTap: () {
-          currencyProvider.setCurrency(code);
+    return SdkSheetFrame(
+      child: SdkOptionList<AppCurrency>(
+        title: "rate".tr(),
+        subtitle: "currency_sheet_hint".tr(),
+        selected: currencyProvider.currency,
+        options: [
+          _option(AppCurrency.uzs, "UZS", "currency_uzs_name",
+              Assets.profileFlagUz),
+          _option(AppCurrency.rub, "RUB", "currency_rub_name",
+              Assets.profileFlagRu),
+          _option(AppCurrency.usd, "USD", "currency_usd_name",
+              Assets.profileFlagUs),
+        ],
+        onSelected: (currency) {
+          currencyProvider.setCurrency(currency);
           Navigator.pop(context);
         },
-        child: Row(children: [
-          SizedBox(
-            width: 24,
-            height: 18,
-            child: Center(
-              child: Image.asset(getFlag(code)),
-            ),
-          ),
-          context.szBoxWidth12,
-          Text(title, style: context.textTheme.bodyMedium),
-          Spacer(),
-          Visibility(
-              visible: currency == code,
-              replacement: SizedBox.shrink(),
-              child: Icon(Icons.check_circle,
-                  color:ProjectTheme.success))
-        ]));
+      ),
+    );
   }
 
-  String getFlag(AppCurrency code) {
-    switch (code) {
-      case AppCurrency.uzs:
-        return Assets.profileFlagUz;
-      case AppCurrency.usd:
-        return Assets.profileFlagUs;
-      case AppCurrency.rub:
-        return Assets.profileFlagRu;
-    }
+  SdkOptionItem<AppCurrency> _option(
+    AppCurrency value,
+    String code,
+    String nameKey,
+    String flag,
+  ) {
+    return SdkOptionItem(
+      value: value,
+      title: code,
+      subtitle: nameKey.tr(),
+      leading: SdkRoundFlag(image: Image.asset(flag, fit: BoxFit.cover)),
+    );
   }
 }

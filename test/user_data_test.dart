@@ -30,4 +30,21 @@ void main() {
     MySafarSdk.clearUserData();
     expect(MySafarSdk.userData.hasEmail, isFalse);
   });
+
+  test('displayOwner compacts masked name', () {
+    MySafarUzsCard card(String? owner) => MySafarUzsCard(
+        cardNumber: '8600123412341234', expire: '2812', owner: owner);
+    expect(card('ABDIRAXMONOV R********').displayOwner, 'ABDIRAXMONOV R.');
+    expect(card('  ALIYEV   V*****  S****** ').displayOwner, 'ALIYEV V. S.');
+    expect(card('R.**** ALIYEV').displayOwner, 'R. ALIYEV');
+    expect(card('ALIYEV VALI').displayOwner, 'ALIYEV VALI');
+    expect(card('ALIYEV ****').displayOwner, 'ALIYEV');
+    expect(card('  ').displayOwner, isNull);
+    expect(card(null).displayOwner, isNull);
+    expect(
+      const MySafarForeignCard(cardToken: 't', cardMask: 'm', owner: 'ALIYEV V***')
+          .displayOwner,
+      'ALIYEV V.',
+    );
+  });
 }

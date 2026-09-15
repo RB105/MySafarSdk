@@ -13,11 +13,16 @@ import 'package:mysafar_sdk/src/core/config/response_config.dart'
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart'
     show AnalyticsService;
 import 'package:dio/dio.dart'
-    show CancelToken, DioException, DioExceptionType, Options, Response;
+    show
+        CancelToken,
+        DioException,
+        DioExceptionType,
+        FormData,
+        Options,
+        Response;
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 
 mixin RequestConfig<T> {
-
   bool get hasAccessToken => MySafarSdk.tokens.isLoggedIn;
 
   /// Resolves the auth strategy. Partner auth takes precedence over bearer,
@@ -80,6 +85,37 @@ mixin RequestConfig<T> {
       authMode: _authMode(headers: headers, partnerToken: partnerToken),
       cancelToken: cancelToken,
     );
+  }
+
+  /// POST multipart/form-data (fayl yuklash). Retry o'chirilgan — yuborilgan
+  /// [FormData] oqimini qayta ishlatib bo'lmaydi.
+  Future<NetworkResponse> postMultipartRequest({
+    required String endPoint,
+    required FormData data,
+    final bool? headers,
+    final bool? partnerToken,
+    CancelToken? cancelToken,
+  }) async {
+    try {
+      final response = await DioClient.main.request(
+        endPoint,
+        data: data,
+        cancelToken: _resolveCancelToken(cancelToken),
+        options: Options(
+          method: 'POST',
+          extra: {
+            'authMode': _authMode(headers: headers, partnerToken: partnerToken),
+            'contentType': 'multipart/form-data',
+            'skipRetry': true,
+          },
+        ),
+      );
+      return _getResponse(response);
+    } on DioException catch (e) {
+      return _catchError(e);
+    } catch (e) {
+      return _unexpectedError(e, endPoint, 'POST');
+    }
   }
 
   /// GET — parametrlar **query** orqali (body emas).
@@ -188,11 +224,9 @@ mixin RequestConfig<T> {
         }
         return _dioErrorResponse(e, ErrorType.dio_error, "Bad response");
       case DioExceptionType.connectionError:
-        return _dioErrorResponse(
-            e, ErrorType.connectionError, "No connection");
+        return _dioErrorResponse(e, ErrorType.connectionError, "No connection");
       case DioExceptionType.unknown:
-        return _dioErrorResponse(
-            e, ErrorType.connectionError, "No connection");
+        return _dioErrorResponse(e, ErrorType.connectionError, "No connection");
 
       default:
         return _dioErrorResponse(e, ErrorType.other, "Something went wrong");
