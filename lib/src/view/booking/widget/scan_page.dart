@@ -60,6 +60,10 @@ class _DocumentScannerPageState extends State<_DocumentScannerPage>
   bool _uploading = false;
   String? _scanError;
 
+  /// Foydalanuvchi fokus uchun bosgan nuqta (viewport koordinatasida) —
+  /// qisqa vaqt belgi ko'rsatiladi.
+  Offset? _focusIndicator;
+
   bool get _cameraReady =>
       _cameraController?.value.isInitialized == true && _cameraError == null;
 
@@ -133,6 +137,9 @@ class _DocumentScannerPageState extends State<_DocumentScannerPage>
         await controller.dispose();
         return;
       }
+      // Hujjat ramka markazida turadi — fokus va ekspozitsiya o'sha nuqtaga
+      // sozlanadi, aks holda kamera fonga fokuslab, matn hira chiqadi.
+      await _focusAt(controller, _framePoint);
       setState(() {
         _cameraController = controller;
         _initializing = false;
@@ -163,6 +170,47 @@ class _DocumentScannerPageState extends State<_DocumentScannerPage>
     } catch (_) {}
   }
 
+  /// Ramka markazi (kamera koordinatasida 0..1) — [_frameRect] bilan bir xil.
+  static const Offset _framePoint = Offset(0.5, 0.52);
+
+  /// Berilgan nuqtaga avtofokus va ekspozitsiya. Qo'llab-quvvatlamaydigan
+  /// qurilmada jim o'tkaziladi.
+  Future<void> _focusAt(CameraController controller, Offset point) async {
+    try {
+      await controller.setFocusMode(FocusMode.auto);
+      await controller.setFocusPoint(point);
+    } catch (_) {
+      // Fokus nuqtasi qo'llab-quvvatlanmaydi.
+    }
+    try {
+      await controller.setExposureMode(ExposureMode.auto);
+      await controller.setExposurePoint(point);
+    } catch (_) {
+      // Ekspozitsiya nuqtasi qo'llab-quvvatlanmaydi.
+    }
+  }
+
+  /// Ekranga bosilganda o'sha joyga fokuslaydi va qisqa belgi ko'rsatadi.
+  Future<void> _focusOnTap(Offset localPosition, Size viewportSize) async {
+    final controller = _cameraController;
+    if (controller == null ||
+        !controller.value.isInitialized ||
+        _capturedPath != null ||
+        viewportSize.isEmpty) {
+      return;
+    }
+    final point = Offset(
+      (localPosition.dx / viewportSize.width).clamp(0.0, 1.0),
+      (localPosition.dy / viewportSize.height).clamp(0.0, 1.0),
+    );
+    setState(() => _focusIndicator = localPosition);
+    await _focusAt(controller, point);
+    await Future<void>.delayed(const Duration(milliseconds: 900));
+    if (mounted && _focusIndicator == localPosition) {
+      setState(() => _focusIndicator = null);
+    }
+  }
+
   Future<void> _toggleTorch() async {
     final controller = _cameraController;
     if (controller == null || !controller.value.isInitialized) return;
@@ -186,6 +234,11 @@ class _DocumentScannerPageState extends State<_DocumentScannerPage>
       _scanError = null;
     });
     try {
+      // Suratdan oldin ramka markaziga qayta fokuslaymiz va avtofokus
+      // sozlanib bo'lishini kutamiz — shoshilinch olingan kadr hira chiqadi.
+      await _focusAt(controller, _framePoint);
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      if (!mounted) return;
       final file = await controller.takePicture();
       if (_torchOn) unawaited(_toggleTorch());
       if (!mounted) return;
@@ -379,15 +432,29 @@ class _DocumentScannerPageState extends State<_DocumentScannerPage>
         builder: (context, constraints) {
           final size = constraints.biggest;
           final frame = _frameRect(size);
+          final focusPoint = _focusIndicator;
           return Stack(
             fit: StackFit.expand,
             children: [
-              background,
+              // Bosilgan joyga fokuslash — hujjat ramkadan chetroqda bo'lsa
+              // yoki kamera fonni fokuslab qolsa qo'l bilan to'g'rilash.
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTapDown: (details) =>
+                    _focusOnTap(details.localPosition, size),
+                child: background,
+              ),
               IgnorePointer(
                 child: CustomPaint(
                   painter: _DocumentFramePainter(frame: frame),
                 ),
               ),
+              if (focusPoint != null && capturedPath == null)
+                Positioned(
+                  left: focusPoint.dx - _focusRingSize / 2,
+                  top: focusPoint.dy - _focusRingSize / 2,
+                  child: const IgnorePointer(child: _FocusRing()),
+                ),
               Positioned(
                 left: 24,
                 right: 24,
@@ -453,7 +520,17 @@ class _DocumentScannerPageState extends State<_DocumentScannerPage>
             _DocTypeSwitch(
               value: _docType,
               enabled: !_busy,
-              onChanged: (type) => setState(() => _docType = type),
+              onChanged: (type) {
+                setState(() {
+                  _docType = type;
+                  _focusIndicator = null;
+                });
+                // Ramka o'lchami o'zgardi — markazga qayta fokuslaymiz.
+                final controller = _cameraController;
+                if (controller != null && controller.value.isInitialized) {
+                  unawaited(_focusAt(controller, _framePoint));
+                }
+              },
             ),
           const SizedBox(height: 18),
           Row(
@@ -597,6 +674,35 @@ class _DocumentScannerPageState extends State<_DocumentScannerPage>
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+const double _focusRingSize = 72;
+
+/// Fokus uchun bosilgan joydagi belgi.
+class _FocusRing extends StatelessWidget {
+  const _FocusRing();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: _focusRingSize,
+      height: _focusRingSize,
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.white, width: 1.5),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Center(
+        child: Container(
+          width: 6,
+          height: 6,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+          ),
         ),
       ),
     );
