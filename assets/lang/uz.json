@@ -906,5 +906,6 @@
   "payment_url_missing": "To'lov sahifasini ochib bo'lmadi. Qayta urinib ko'ring yoki buyurtma ID'si bilan qo'llab-quvvatlashga murojaat qiling.",
   "payment_close_title": "To'lov sahifasini yopasizmi?",
   "payment_close_message": "Agar to'lagan bo'lsangiz, to'lov holatini avtomatik tekshiramiz.",
-  "go_to_my_orders": "Buyurtmalarimga o'tish"
+  "go_to_my_orders": "Buyurtmalarimga o'tish",
+  "payment_pay_again": "Pul yechilmagan — qayta to'lash"
 }

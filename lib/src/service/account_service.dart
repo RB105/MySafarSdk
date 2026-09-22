@@ -44,11 +44,13 @@ class AccountService with RequestConfig {
 
   Future<NetworkResponse> checkAppVersion() async {
     final versionCode = await ProjectUtils.getVersionCode();
-    NetworkResponse response =
-        await postRequest(endPoint: EndPoints.check_version_platform, params: {
-      "version_code": versionCode,
-      "platform_type": Platform.isAndroid ? "ANDROID" : "IOS"
-    });
+    NetworkResponse response = await postRequest(
+        retryable: true,
+        endPoint: EndPoints.check_version_platform,
+        params: {
+          "version_code": versionCode,
+          "platform_type": Platform.isAndroid ? "ANDROID" : "IOS"
+        });
 
     if (response is NetworkSuccessResponse) {
       return NetworkSuccessResponse(data: response.data);

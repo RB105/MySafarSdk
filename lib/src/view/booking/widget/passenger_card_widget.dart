@@ -20,8 +20,9 @@ import 'package:mysafar_sdk/src/view/booking/widget/save_passenger_information.d
 import 'package:mysafar_sdk/src/view/booking/widget/support_widget.dart'
     show BookingCard;
 
-/// Ism/familiya/otasining ismi: faqat lotin A–Z va `-` (aviachipta talabi).
-/// Kirill avtomatik lotinga o'giriladi, apostrof/raqam/bo'sh joy tashlanadi.
+/// Ism/familiya/otasining ismi: aviachipta uchun lotin A–Z va `-`. Urg'uli
+/// harflar asosiy harfga keltiriladi, apostrof/raqam/bo'sh joy tashlanadi;
+/// kirillcha yozilsa "pasportdagidek lotincha yozing" xatosi chiqadi.
 final List<TextInputFormatter> passengerNameInputFormatters = [
   const PassengerNameFormatter(),
 ];

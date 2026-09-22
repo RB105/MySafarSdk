@@ -19,6 +19,7 @@ class BookingPaymentStatus {
   const BookingPaymentStatus({
     required this.state,
     this.sign = '',
+    this.ticketIssued = false,
     this.book,
     this.ticketReceiptUrl,
     this.billingNumber,
@@ -27,6 +28,11 @@ class BookingPaymentStatus {
   });
 
   final BookingPaymentState state;
+
+  /// Chipta haqiqatan chiqarilganmi (`Ticketed` / `PartiallyTicketed`).
+  /// `Paid` yoki `...WaitingPNR` da chipta hali yo'q — "e-chiptani yuklab
+  /// olish" taklif qilinmaydi (bo'sh PDF yoki 404 chiqardi).
+  final bool ticketIssued;
 
   /// Serverning xom holat nomi (analitika/log uchun), masalan `Booked`.
   final String sign;
@@ -59,6 +65,7 @@ class BookingPaymentStatus {
     'ticketedwaitingpnr',
     'partlyticketedwaitingpnr',
   };
+  static const Set<String> _issuedSigns = {'ticketed', 'partiallyticketed'};
   static const Set<String> _unpaidSigns = {'booked'};
   static const Set<String> _failedSigns = {'cancelled', 'canceled'};
 
@@ -98,26 +105,35 @@ class BookingPaymentStatus {
         state = BookingPaymentState.paid;
         sign = orderSign;
       } else {
-        sign = callback.isNotEmpty ? callback : orderSign;
+        // Hech biri "to'langan" demasa — buyurtmaning HOZIRGI holati ustun:
+        // `callback_status` oldingi (masalan bekor qilingan) urinishdan
+        // qolgan bo'lishi mumkin, jonli buyurtma esa `Booked`.
+        sign = orderSign.isNotEmpty ? orderSign : callback;
         state = stateOf(sign);
       }
+      final issued = _issuedSigns.contains(_normalize(callback)) ||
+          _issuedSigns.contains(_normalize(orderSign));
 
       String? receipt;
       final tickets = book?['tickets'];
       if (tickets is List && tickets.isNotEmpty) {
-        receipt = _string(_dig(tickets.first, const ['documents', 'ticket_receipt']));
+        receipt =
+            _string(_dig(tickets.first, const ['documents', 'ticket_receipt']));
       }
 
       final priceChanged = book?['is_search_price_changed'] == true ||
           book?['is_price_changed'] == true;
       final total = priceChanged
-          ? toDouble(_dig(
-              book, const ['agent_mode_prices', 'total_amount_for_active_agent_mode']))
+          ? toDouble(_dig(book, const [
+              'agent_mode_prices',
+              'total_amount_for_active_agent_mode'
+            ]))
           : null;
 
       return BookingPaymentStatus(
         state: state,
         sign: sign,
+        ticketIssued: issued,
         book: book == null ? null : Map<String, dynamic>.from(book),
         ticketReceiptUrl: receipt,
         billingNumber: _string(order?['billing_number']?.toString()),
@@ -202,7 +218,8 @@ class BookingDisplayAmount {
   }) {
     final booked = BookingPaymentStatus.toDouble(bookingAmount);
     final changed = ticketData?.changedTotal;
-    if (changed != null && (booked == null || (booked - changed).abs() >= 0.5)) {
+    if (changed != null &&
+        (booked == null || (booked - changed).abs() >= 0.5)) {
       return BookingDisplayAmount(
           changed, ticketData?.currency ?? bookingCurrency);
     }

@@ -68,6 +68,9 @@ class _DocumentScannerPageState extends State<_DocumentScannerPage>
   /// Kamera maydonining oxirgi o'lchami — suratni ramka bo'yicha kesish uchun.
   Size? _viewportSize;
 
+  /// Oxirgi kamera surati fayli (qayta olish / yopishda o'chiriladi).
+  String? _cameraCapturePath;
+
   bool get _cameraReady =>
       _cameraController?.value.isInitialized == true && _cameraError == null;
 
@@ -83,6 +86,7 @@ class _DocumentScannerPageState extends State<_DocumentScannerPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _discardCameraCapture();
     final controller = _cameraController;
     _cameraController = null;
     _cameraSession++;
@@ -153,13 +157,13 @@ class _DocumentScannerPageState extends State<_DocumentScannerPage>
     }
   }
 
-  /// Maksimal sifat: hujjat matni (MRZ, raqamlar) server OCR'i uchun tiniq
-  /// bo'lsin. Yuborishdan oldin surat kesiladi va kichraytiriladi
-  /// (prepareDocumentPhoto), fayl og'ir bo'lmaydi. Ba'zi qurilmalar `max`
-  /// bilan ochilmaydi — unda `veryHigh`.
+  /// 4K (`ultraHigh`, ~8 MP): hujjat matni (MRZ, raqamlar) server OCR'i uchun
+  /// tiniq, lekin `max` kabi 48–64 MP emas — past qurilmada surat ishlovida
+  /// xotira yetmay ilova yopilib qolmasin. Yuborishdan oldin surat kesiladi
+  /// va kichraytiriladi (prepareDocumentPhoto). Ochilmasa — `veryHigh`.
   static Future<CameraController> _openCamera(CameraDescription camera) async {
     for (final preset in const [
-      ResolutionPreset.max,
+      ResolutionPreset.ultraHigh,
       ResolutionPreset.veryHigh
     ]) {
       final controller = CameraController(camera, preset, enableAudio: false);
@@ -275,6 +279,7 @@ class _DocumentScannerPageState extends State<_DocumentScannerPage>
       if (_torchOn) unawaited(_toggleTorch());
       if (!mounted) return;
       _capturing = false;
+      _cameraCapturePath = file.path;
       await _upload(file.path, cropToFrame: true);
     } catch (_) {
       if (!mounted) return;
@@ -318,7 +323,11 @@ class _DocumentScannerPageState extends State<_DocumentScannerPage>
       frame: cropToFrame && viewport != null ? _frameRect(viewport) : null,
       viewport: cropToFrame ? viewport : null,
     );
-    if (!mounted) return;
+    if (!mounted) {
+      // Sahifa ishlov paytida yopildi — vaqtinchalik fayl qolib ketmasin.
+      if (uploadPath != path) unawaited(_deleteQuietly(uploadPath));
+      return;
+    }
 
     final response = await _service.scan(uploadPath);
     if (uploadPath != path) unawaited(_deleteQuietly(uploadPath));
@@ -353,8 +362,17 @@ class _DocumentScannerPageState extends State<_DocumentScannerPage>
     } catch (_) {}
   }
 
+  /// Kamera surati (kesh papkasida) — endi kerak emas bo'lsa o'chiriladi.
+  /// Galereya fayllariga tegilmaydi.
+  void _discardCameraCapture() {
+    final path = _cameraCapturePath;
+    _cameraCapturePath = null;
+    if (path != null) unawaited(_deleteQuietly(path));
+  }
+
   /// Xatodan keyin qayta suratga olish — jonli kamera qaytadi.
   void _retake() {
+    _discardCameraCapture();
     setState(() {
       _capturedPath = null;
       _scanError = null;
@@ -440,10 +458,14 @@ class _DocumentScannerPageState extends State<_DocumentScannerPage>
 
     final Widget background;
     if (capturedPath != null) {
+      // Ekranga to'liq o'lchamdagi (8 MP) rasm emas, ekran kengligidagi nusxa
+      // dekodlanadi — xotira tejaladi.
+      final media = MediaQuery.of(context);
       background = Image.file(
         File(capturedPath),
         fit: BoxFit.cover,
         gaplessPlayback: true,
+        cacheWidth: (media.size.width * media.devicePixelRatio).round(),
       );
     } else if (!_hasPermission) {
       return _buildCenteredState(

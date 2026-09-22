@@ -458,8 +458,8 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
       );
       ResponseState.errorState(state.error, context);
     } else if (state is BookingConfirmChangeAmountSuccessState) {
-      setState(() =>
-          _ticketData = BookingPaymentStatus.fromTicketData(state.data));
+      setState(
+          () => _ticketData = BookingPaymentStatus.fromTicketData(state.data));
       _handlePriceChange(context, state);
     } else if (state is BookingConfirmPaymentCheckingState) {
       setState(() => _phase = _PaymentPhase.checking);
@@ -631,7 +631,11 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
   /// Chipta PDF'i tayyor bo'lsa — `TicketPdfPage` argumentlari.
   Map<String, dynamic>? get _paidTicketArgs {
     final status = _ticketData;
-    if (status == null || (status.ticketReceiptUrl ?? '').isEmpty) return null;
+    if (status == null ||
+        !status.ticketIssued ||
+        (status.ticketReceiptUrl ?? '').isEmpty) {
+      return null;
+    }
     return status.ticketPdfArguments;
   }
 
@@ -679,26 +683,40 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
       if (status != null) _ticketData = status;
     });
     final cubit = context.read<BookingConfirmCubit>();
-    final checkAgain = await showSdkAlert<bool>(
+    final action = await showSdkAlert<_PendingAction>(
       context: context,
       icon: Assets.iconsDialogHourglassIcon,
       tone: SdkDialogTone.warning,
       title: 'payment_pending_title'.tr(),
       message: 'payment_pending_message'.tr(),
       actions: [
-        SdkDialogAction(label: 'payment_check_again'.tr(), value: true),
+        SdkDialogAction(
+          label: 'payment_check_again'.tr(),
+          value: _PendingAction.checkAgain,
+        ),
         SdkDialogAction(
           label: 'go_to_my_orders'.tr(),
-          value: false,
+          value: _PendingAction.orders,
           variant: SdkDialogButtonVariant.secondary,
         ),
+        // Shlyuz xatosi bilan to'lov sahifasi yopilgan bo'lsa — foydalanuvchi
+        // shu sahifadan qayta to'lay olsin (pul yechilmaganini o'zi biladi).
+        if (_remainingSeconds > 0)
+          SdkDialogAction(
+            label: 'payment_pay_again'.tr(),
+            value: _PendingAction.payAgain,
+            variant: SdkDialogButtonVariant.secondary,
+          ),
       ],
     );
-    if (checkAgain == null || !mounted || !context.mounted) return;
-    if (checkAgain) {
-      _checkPayment(cubit);
-    } else {
-      PaymentHelper.navigateToOrders(context);
+    if (action == null || !mounted || !context.mounted) return;
+    switch (action) {
+      case _PendingAction.checkAgain:
+        _checkPayment(cubit);
+      case _PendingAction.orders:
+        PaymentHelper.navigateToOrders(context);
+      case _PendingAction.payAgain:
+        setState(() => _phase = _PaymentPhase.idle);
     }
   }
 
@@ -899,7 +917,8 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
                 remaining: _remainingNotifier,
                 researching: _leavingAfterExpiry,
               ),
-            _PaymentPhase.inWebView || _PaymentPhase.checking =>
+            _PaymentPhase.inWebView ||
+            _PaymentPhase.checking =>
               const PaymentStatusCard(kind: PaymentStatusKind.checking),
             _PaymentPhase.pending =>
               const PaymentStatusCard(kind: PaymentStatusKind.pending),
@@ -1403,6 +1422,9 @@ enum _PaymentPhase {
   /// To'langan.
   paid,
 }
+
+/// "To'lov tasdiqlanmoqda" oynasidagi tanlov.
+enum _PendingAction { checkAgain, orders, payAgain }
 
 /// Faqat [NextButtonWidget] uchun: summa bron valyutasi belgisi bilan.
 class _BookingCurrencyProvider extends CurrencyProvider {

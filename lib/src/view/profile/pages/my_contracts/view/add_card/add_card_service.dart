@@ -10,6 +10,7 @@ class AddCardService with RequestConfig {
     debugPrint("get-card-info card=$cardNumber");
 
     final response = await postRequest(
+      retryable: true,
       headers: false,
       partnerToken: true,
       endPoint: EndPoints.get_card_info,

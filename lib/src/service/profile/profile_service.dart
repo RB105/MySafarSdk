@@ -72,6 +72,7 @@ class ProfileService with RequestConfig {
   Future<NetworkResponse> getTickets(
       {required Map<String, dynamic> params}) async {
     final NetworkResponse response = await postRequest(
+      retryable: true,
       params: params,
       endPoint: EndPoints.partner_tickets,
       partnerToken: true,

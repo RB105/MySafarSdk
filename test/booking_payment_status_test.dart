@@ -57,11 +57,12 @@ void main() {
     });
 
     test('Booked — to\'lanmagan, Cancelled — muvaffaqiyatsiz', () {
-      expect(BookingPaymentStatus.stateOf('Booked'), BookingPaymentState.unpaid);
+      expect(
+          BookingPaymentStatus.stateOf('Booked'), BookingPaymentState.unpaid);
       expect(
           BookingPaymentStatus.stateOf('CANCELED'), BookingPaymentState.failed);
-      expect(
-          BookingPaymentStatus.stateOf('Cancelled'), BookingPaymentState.failed);
+      expect(BookingPaymentStatus.stateOf('Cancelled'),
+          BookingPaymentState.failed);
     });
 
     test('noma\'lum / bo\'sh / AwaitPayment — pending', () {
@@ -132,9 +133,12 @@ void main() {
       expect(partner.ticketReceiptUrl, contains('eticket_125357974025'));
       expect(partner.currency, 'UZS');
 
-      // Buyurtma yozuvi: callback_status = Cancelled ustun.
+      // Buyurtma yozuvi: callback_status = Cancelled (eski urinish), lekin
+      // jonli buyurtma Booked — hozirgi holat ustun.
       final order = BookingPaymentStatus.fromTicketData(record);
-      expect(order.state, BookingPaymentState.failed);
+      expect(order.state, BookingPaymentState.unpaid);
+      // Booked buyurtmada ham ticket_receipt bor — lekin chipta chiqarilmagan.
+      expect(order.ticketIssued, isFalse);
     });
   });
 
@@ -179,13 +183,16 @@ void main() {
 
     test('summa yoki valyuta noma\'lum — null (sahifa narxi ishlatiladi)', () {
       expect(
-          BookingDisplayAmount.resolve(bookingAmount: null, bookingCurrency: 'UZS'),
+          BookingDisplayAmount.resolve(
+              bookingAmount: null, bookingCurrency: 'UZS'),
           isNull);
       expect(
-          BookingDisplayAmount.resolve(bookingAmount: 1000, bookingCurrency: null),
+          BookingDisplayAmount.resolve(
+              bookingAmount: 1000, bookingCurrency: null),
           isNull);
       expect(
-          BookingDisplayAmount.resolve(bookingAmount: 0, bookingCurrency: 'UZS'),
+          BookingDisplayAmount.resolve(
+              bookingAmount: 0, bookingCurrency: 'UZS'),
           isNull);
     });
   });
@@ -216,15 +223,13 @@ void main() {
     final delays = List<Duration>.filled(6, tick)..[0] = Duration.zero;
 
     Future<({BookingPaymentState state, BookingPaymentStatus? status})> poll(
-      List<BookingPaymentStatus?> responses, {
-      Duration grace = const Duration(milliseconds: 3),
-    }) {
+      List<BookingPaymentStatus?> responses,
+    ) {
       var i = 0;
       return BookingConfirmCubit.pollPaymentStatus(
         fetch: () async =>
             responses[i < responses.length ? i++ : responses.length - 1],
         delays: delays,
-        unpaidGrace: grace,
       );
     }
 
@@ -249,7 +254,8 @@ void main() {
       expect(result.state, BookingPaymentState.paid);
     });
 
-    test('Booked darhol "to\'lanmagan" emas — grace o\'tgach', () async {
+    test('Booked / Cancelled oyna oxirigacha kutiladi (callback kechikadi)',
+        () async {
       var calls = 0;
       final result = await BookingConfirmCubit.pollPaymentStatus(
         fetch: () async {
@@ -257,30 +263,41 @@ void main() {
           return _status(BookingPaymentState.unpaid);
         },
         delays: delays,
-        unpaidGrace: const Duration(milliseconds: 3),
       );
       expect(result.state, BookingPaymentState.unpaid);
-      // 0, 1, 2, 3 ms — to'rtinchi so'rovda grace tugaydi.
-      expect(calls, 4);
+      expect(calls, delays.length, reason: 'erta to\'xtamasligi kerak');
+
+      final cancelledThenPaid = await poll([
+        _status(BookingPaymentState.failed),
+        _status(BookingPaymentState.unpaid),
+        _status(BookingPaymentState.paid),
+      ]);
+      expect(cancelledThenPaid.state, BookingPaymentState.paid);
     });
 
-    test('bekor qilingan — darhol muvaffaqiyatsiz', () async {
+    test('oxirgi javob Cancelled — muvaffaqiyatsiz', () async {
       final result = await poll([_status(BookingPaymentState.failed)]);
       expect(result.state, BookingPaymentState.failed);
+    });
+
+    test('umumiy chegara o\'tsa to\'xtaydi', () async {
+      var calls = 0;
+      final result = await BookingConfirmCubit.pollPaymentStatus(
+        fetch: () async {
+          calls++;
+          return null;
+        },
+        delays: delays,
+        deadline: Duration.zero,
+      );
+      expect(calls, lessThanOrEqualTo(1));
+      expect(result.state, BookingPaymentState.pending);
     });
 
     test('tarmoq xatolari / AwaitPayment — pending', () async {
       expect((await poll([null])).state, BookingPaymentState.pending);
       expect((await poll([_status(BookingPaymentState.pending)])).state,
           BookingPaymentState.pending);
-    });
-
-    test('grace yetmasa ham oxirgi javob Booked — to\'lanmagan', () async {
-      final result = await poll(
-        [_status(BookingPaymentState.unpaid)],
-        grace: const Duration(hours: 1),
-      );
-      expect(result.state, BookingPaymentState.unpaid);
     });
 
     test('bekor qilinsa (cubit yopildi) so\'rov yuborilmaydi', () async {

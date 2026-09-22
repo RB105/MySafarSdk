@@ -370,6 +370,9 @@ class _CountryTile extends StatelessWidget {
                   child: Image.asset(
                     'packages/mysafar_sdk/assets/img/flags/${code.toLowerCase()}.png',
                     fit: BoxFit.cover,
+                    // 300×200 PNG 30×22 joyda — kichik nusxa dekodlanadi
+                    // (256 ta bayroq scroll paytida xotirani to'ldirmasin).
+                    cacheWidth: 90,
                     errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                   ),
                 ),

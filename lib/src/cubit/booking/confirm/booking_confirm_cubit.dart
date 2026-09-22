@@ -2,7 +2,8 @@
 
 part of 'booking_confirm_states.dart';
 
-class BookingConfirmCubit extends Cubit<BookingConfirmStates> with NetworkCancel {
+class BookingConfirmCubit extends Cubit<BookingConfirmStates>
+    with NetworkCancel {
   BookingConfirmCubit(String billingId) : super(BookingConfirmInitState()) {
     if (billingId.isNotEmpty) {
       getTicketStatus(billingId: billingId);
@@ -25,9 +26,12 @@ class BookingConfirmCubit extends Cubit<BookingConfirmStates> with NetworkCancel
     Duration(seconds: 15),
   ];
 
-  /// `Booked` (to'lanmagan) javobiga shuncha vaqtgacha ishonmaymiz — bank /
-  /// shlyuz callback'i backendga kechikib yetishi mumkin.
-  static const Duration paymentUnpaidGrace = Duration(seconds: 12);
+  /// Bitta holat so'rovi uchun chegara — sekin tarmoqda tekshiruv daqiqalab
+  /// cho'zilmasin (so'rov keyingi urinishda takrorlanadi).
+  static const Duration paymentCheckRequestTimeout = Duration(seconds: 10);
+
+  /// Butun tekshiruv uchun umumiy chegara.
+  static const Duration paymentCheckDeadline = Duration(seconds: 90);
 
   bool _checkingPayment = false;
 
@@ -161,53 +165,48 @@ class BookingConfirmCubit extends Cubit<BookingConfirmStates> with NetworkCancel
     try {
       final NetworkResponse response = await withNetworkCancel(
         () => bookingService.getTicketStatus(billingId: billingId),
-      );
+      ).timeout(paymentCheckRequestTimeout);
       if (response is NetworkSuccessResponse) {
         return BookingPaymentStatus.fromTicketData(response.data);
       }
     } catch (_) {
-      // Tarmoq xatosi — keyingi urinishda qayta so'raladi.
+      // Tarmoq xatosi yoki timeout — keyingi urinishda qayta so'raladi.
     }
     return null;
   }
 
-  /// Holatni [delays] oraliqlari bilan so'raydi: to'langan yoki bekor
-  /// qilingan bo'lsa darhol qaytadi; `Booked` javobi faqat [unpaidGrace]
-  /// o'tgach "to'lanmagan" deb qabul qilinadi; urinishlar tugasa — pending.
+  /// Holatni [delays] oraliqlari bilan so'raydi. Faqat "to'langan" javobi
+  /// tekshiruvni darhol tugatadi. `Booked` / `Cancelled` oxirgi so'z emas —
+  /// bank → shlyuz → backend zanjiri bir necha o'n soniya kechikishi mumkin,
+  /// shuning uchun oyna oxirigacha kutiladi (aks holda to'lagan foydalanuvchi
+  /// "to'lov o'tmadi" ko'rib, ikkinchi marta to'lardi).
+  /// Oxirida: oxirgi javob `Booked` → to'lanmagan, `Cancelled` →
+  /// muvaffaqiyatsiz, javob yo'q / noma'lum → pending.
   /// [fetch] `null` qaytarsa (tarmoq xatosi) keyingi urinishga o'tiladi.
   static Future<({BookingPaymentState state, BookingPaymentStatus? status})>
       pollPaymentStatus({
     required Future<BookingPaymentStatus?> Function() fetch,
     List<Duration> delays = paymentCheckDelays,
-    Duration unpaidGrace = paymentUnpaidGrace,
+    Duration deadline = paymentCheckDeadline,
     bool Function()? isCancelled,
   }) async {
+    final watch = Stopwatch()..start();
     BookingPaymentStatus? last;
-    var waited = Duration.zero;
     for (final delay in delays) {
       if (delay > Duration.zero) await Future<void>.delayed(delay);
-      waited += delay;
-      if (isCancelled?.call() == true) break;
+      if (isCancelled?.call() == true || watch.elapsed > deadline) break;
       final status = await fetch();
       if (status == null) continue;
       last = status;
-      switch (status.state) {
-        case BookingPaymentState.paid:
-        case BookingPaymentState.failed:
-          return (state: status.state, status: status);
-        case BookingPaymentState.unpaid:
-          if (waited >= unpaidGrace) {
-            return (state: BookingPaymentState.unpaid, status: status);
-          }
-        case BookingPaymentState.pending:
-          break;
+      if (status.state == BookingPaymentState.paid) {
+        return (state: BookingPaymentState.paid, status: status);
       }
     }
-    return (
-      state: last?.state == BookingPaymentState.unpaid
-          ? BookingPaymentState.unpaid
-          : BookingPaymentState.pending,
-      status: last,
-    );
+    final state = switch (last?.state) {
+      BookingPaymentState.unpaid => BookingPaymentState.unpaid,
+      BookingPaymentState.failed => BookingPaymentState.failed,
+      _ => BookingPaymentState.pending,
+    };
+    return (state: state, status: last);
   }
 }

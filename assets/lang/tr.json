@@ -906,5 +906,6 @@
   "payment_url_missing": "Ödeme sayfası açılamadı. Lütfen tekrar deneyin veya sipariş numaranızla desteğe başvurun.",
   "payment_close_title": "Ödeme sayfası kapatılsın mı?",
   "payment_close_message": "Ödemeyi zaten yaptıysanız, ödeme durumunu otomatik olarak kontrol edeceğiz.",
-  "go_to_my_orders": "Siparişlerime git"
+  "go_to_my_orders": "Siparişlerime git",
+  "payment_pay_again": "Ücret alınmadı — tekrar öde"
 }

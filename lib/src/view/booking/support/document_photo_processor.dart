@@ -9,8 +9,8 @@ import 'package:image/image.dart' as img;
 /// tayyorlanadi: EXIF burilishi to'g'rilanadi, hujjat ramkasi atrofi (zaxira
 /// chegara bilan) kesiladi va uzun tomoni [maxLongSide] gacha kichraytiriladi.
 ///
-/// Maqsad — tiniq, lekin og'ir bo'lmagan rasm: kamera maksimal sifatda oladi
-/// (12 MP gacha), hujjatdan tashqari joy tashlanadi, matn piksellari saqlanadi.
+/// Maqsad — tiniq, lekin og'ir bo'lmagan rasm: kamera 4K (~8 MP) oladi,
+/// hujjatdan tashqari joy tashlanadi, matn piksellari saqlanadi.
 /// Har qanday xatoda asl fayl yo'li qaytadi — skaner baribir ishlaydi.
 Future<String> prepareDocumentPhoto(
   String path, {

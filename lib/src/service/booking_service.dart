@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:mysafar_sdk/src/core/config/request_config.dart';
 import 'package:mysafar_sdk/src/core/config/response_config.dart'
-    show ErrorType, NetworkErrorResponse, NetworkResponse, NetworkSuccessResponse;
+    show
+        ErrorType,
+        NetworkErrorResponse,
+        NetworkResponse,
+        NetworkSuccessResponse;
 import 'package:mysafar_sdk/src/core/constants/end_points.dart' show EndPoints;
 import 'package:mysafar_sdk/src/core/constants/end_points.dart';
 import 'package:mysafar_sdk/src/core/enum/currency.dart';
@@ -210,6 +214,7 @@ class BookingService with RequestConfig {
   }) async {
     await TokenVerificationCache.ensureVerified(apiService);
     NetworkResponse response = await postRequest(
+        retryable: true,
         headers: false,
         partnerToken: true,
         endPoint: EndPoints.get_card_info,
@@ -230,6 +235,7 @@ class BookingService with RequestConfig {
   }) async {
     await TokenVerificationCache.ensureVerified(apiService);
     NetworkResponse response = await postRequest(
+      retryable: true,
       headers: false,
       partnerToken: true,
       endPoint: "${EndPoints.avia_booking_status}/$billingId",
@@ -279,6 +285,7 @@ class BookingService with RequestConfig {
   }) async {
     await TokenVerificationCache.ensureVerified(apiService);
     NetworkResponse response = await postRequest(
+      retryable: true,
       headers: false,
       partnerToken: true,
       endPoint: "${EndPoints.avia_ticketed_booking_info}/$billingId",

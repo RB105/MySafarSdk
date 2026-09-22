@@ -19,14 +19,30 @@ void main() {
       );
 
   group('normalizeName', () {
-    test('kirill lotinga, apostrof va bo\'sh joy tashlanadi', () {
-      expect(PassengerRules.normalizeName('Иванов'), 'IVANOV');
+    test('apostrof, bo\'sh joy va raqam tashlanadi', () {
       expect(PassengerRules.normalizeName("O'rinboyev"), 'ORINBOYEV');
       expect(PassengerRules.normalizeName('Oʻrinboyev'), 'ORINBOYEV');
       expect(PassengerRules.normalizeName("ERGASH O'G'LI"), 'ERGASHOGLI');
-      expect(PassengerRules.normalizeName('Ғулом'), 'GULOM');
-      expect(PassengerRules.normalizeName('Анна-Мария'), 'ANNA-MARIIA');
       expect(PassengerRules.normalizeName('ali2'), 'ALI');
+      expect(PassengerRules.normalizeName('anna-maria'), 'ANNA-MARIA');
+    });
+
+    test('urg\'uli lotin harflari asosiy harfga keltiriladi (o\'chmaydi)', () {
+      expect(PassengerRules.normalizeName('İbrahim'), 'IBRAHIM');
+      expect(PassengerRules.normalizeName('ÇAĞLAR'), 'CAGLAR');
+      expect(PassengerRules.normalizeName('Şeyma'), 'SEYMA');
+      expect(PassengerRules.normalizeName('Müller'), 'MULLER');
+      expect(PassengerRules.normalizeName('ıŞıK'), 'ISIK');
+    });
+
+    test('kirill o\'zgartirilmaydi — lotincha yozish so\'raladi', () {
+      final name = PassengerRules.normalizeName('Хуршид');
+      expect(name, 'ХУРШИД');
+      expect(PassengerRules.isLatinName(name), isFalse);
+      expect(
+        PassengerRules.fieldError('firstname', name, ageType: 'adt'),
+        'name_latin_only',
+      );
     });
 
     test('formatter kursorni to\'g\'ri joyga qo\'yadi', () {
@@ -60,9 +76,14 @@ void main() {
       expect(check('birthdate', '01.01.2010', age: 'chd'),
           'passenger_age_mismatch_child');
       expect(check('birthdate', '01.01.2026', age: 'inf'), isNull);
-      // Qaytish kuni 2 yoshga to'ladi — chaqaloq sifatida o'tmaydi.
+      // Qaytish kuni 2 yoshga to'ladi — chaqaloq sifatida o'tmaydi,
+      // lekin bola sifatida bron qilinadi.
       expect(check('birthdate', '15.10.2024', age: 'inf'),
           'passenger_age_mismatch_infant');
+      expect(check('birthdate', '15.10.2024', age: 'chd'), isNull);
+      // Butun safar davomida 2 yoshga to'lmaydi — bola emas, chaqaloq.
+      expect(check('birthdate', '01.06.2025', age: 'chd'),
+          'passenger_age_mismatch_child');
     });
 
     test('pasport safar tugaguncha amal qilishi kerak', () {

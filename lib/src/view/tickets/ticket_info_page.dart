@@ -14,7 +14,7 @@ import 'package:mysafar_sdk/src/core/styles/theme.dart';
 import 'package:mysafar_sdk/src/core/tools/currency_provider.dart'
     show CurrencyProvider;
 import 'package:mysafar_sdk/src/core/tools/formatters.dart';
-import 'package:mysafar_sdk/src/core/tools/lang_helper.dart' show currentLang;
+import 'package:mysafar_sdk/src/core/tools/lang_helper.dart' show dataLang;
 import 'package:mysafar_sdk/src/core/tools/project_assets.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart';
@@ -84,7 +84,8 @@ class _TicketInfoPageState extends State<TicketInfoPage> {
     super.didChangeDependencies();
     if (_checkStarted) return;
     _checkStarted = true;
-    unawaited(_checkFlight(currentLang()));
+    // Backend faqat uz/ru/en qabul qiladi — kk/tg/tr xom yuborilmasin.
+    unawaited(_checkFlight(dataLang()));
   }
 
   Future<void> _checkFlight(String lang) async {
