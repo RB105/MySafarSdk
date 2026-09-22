@@ -25,15 +25,24 @@ class PaymentHelper {
     }
   }
 
-  static void openInWebView(BuildContext context, String url) {
-    Navigator.of(context).push(
+  /// To'lov sahifasini ochadi; sahifa yopilganda (foydalanuvchi yopdi)
+  /// tugaydi — chaqiruvchi shundan so'ng to'lov holatini tekshiradi.
+  static Future<void> openInWebView(BuildContext context, String url) {
+    return Navigator.of(context).push<void>(
       MaterialPageRoute(
-        builder: (_) => WebViewScreen(url: url),
+        builder: (_) => WebViewScreen(url: url, confirmClose: true),
       ),
     );
   }
 
-  static void navigateToHome(BuildContext context) {
+  static void navigateToHome(BuildContext context) =>
+      _navigateToTab(context, 0);
+
+  /// "Buyurtmalar" tabi — to'langan chipta shu yerda chiqadi.
+  static void navigateToOrders(BuildContext context) =>
+      _navigateToTab(context, 1);
+
+  static void _navigateToTab(BuildContext context, int tab) {
     // Booking yakunlandi — biletlar keshi bekor qilinadi, keyingi ochilishda
     // serverdan qayta yuklanadi.
     ConfirmedTicketsCubit.clearCache();
@@ -41,7 +50,7 @@ class PaymentHelper {
       context,
       BottomNavBarPage.routeName,
       (route) => false,
-      arguments: 0,
+      arguments: tab,
     );
   }
 

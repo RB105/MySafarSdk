@@ -46,6 +46,7 @@ mixin RequestConfig<T> {
     required AuthMode authMode,
     String? contentType,
     CancelToken? cancelToken,
+    bool retryable = false,
   }) async {
     try {
       final response = await DioClient.main.request(
@@ -58,6 +59,7 @@ mixin RequestConfig<T> {
           extra: {
             'authMode': authMode,
             if (contentType != null) 'contentType': contentType,
+            if (retryable) 'retryable': true,
           },
         ),
       );
@@ -71,12 +73,16 @@ mixin RequestConfig<T> {
     }
   }
 
+  /// [retryable] — faqat ma'lumot o'qiydigan POST'lar (qidiruv, tarif) uchun
+  /// `true`: 502/503/504 da qayta yuboriladi. Bron/to'lov kabi yozadigan
+  /// so'rovlar uchun `false` qoldiring (takror bron xavfi).
   Future<NetworkResponse> postRequest({
     final bool? headers,
     final Map<String, dynamic>? params,
     final bool? partnerToken,
     required String endPoint,
     CancelToken? cancelToken,
+    bool retryable = false,
   }) {
     return _send(
       'POST',
@@ -84,6 +90,7 @@ mixin RequestConfig<T> {
       data: params,
       authMode: _authMode(headers: headers, partnerToken: partnerToken),
       cancelToken: cancelToken,
+      retryable: retryable,
     );
   }
 

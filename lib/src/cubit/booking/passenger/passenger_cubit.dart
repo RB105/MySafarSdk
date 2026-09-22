@@ -2,15 +2,14 @@ import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mysafar_sdk/src/core/tools/phone_format.dart';
 import 'package:mysafar_sdk/src/model/local/passenger_model.dart';
+import 'package:mysafar_sdk/src/model/local/passenger_rules.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_model.dart'
     show FlightPrice;
 import 'package:mysafar_sdk/src/model/remote/profile/profile_model.dart';
 import 'package:mysafar_sdk/src/model/remote/profile/users_model.dart';
 import 'package:mysafar_sdk/src/service/passenger/passenger_storage_service.dart';
 import 'package:mysafar_sdk/src/service/profile/profile_cache.dart';
-import 'package:mysafar_sdk/src/core/tools/phone_format.dart' show kMinPhoneDigits;
 import 'passenger_state.dart';
-
 
 class PassengerCubit extends Cubit<PassengerState> {
   final PassengerStorageService _storageService;
@@ -20,12 +19,19 @@ class PassengerCubit extends Cubit<PassengerState> {
   final String trId;
   final FlightPrice? price;
 
+  /// Birinchi uchish / oxirgi qo'nish — yosh toifasi va pasport muddati
+  /// shular bo'yicha tekshiriladi ([PassengerRules]).
+  final DateTime? firstFlightDate;
+  final DateTime? lastFlightDate;
+
   PassengerCubit({
     required this.adultCount,
     required this.childCount,
     required this.infantCount,
     required this.trId,
     required this.price,
+    this.firstFlightDate,
+    this.lastFlightDate,
     PassengerStorageService? storageService,
   })  : _storageService = storageService ?? PassengerStorageService(),
         super(const PassengerInitial());
@@ -45,7 +51,6 @@ class PassengerCubit extends Cubit<PassengerState> {
       return PassengerModel(age: ageType);
     });
 
-
     String email = '';
     String phone = '';
 
@@ -55,11 +60,12 @@ class PassengerCubit extends Cubit<PassengerState> {
       phone = normalizePhoneDigits(profileData.phoneNumber ?? '');
     }
 
-
-    final updatedPassengers = passengers.map((p) => p.copyWith(
-      email: email,
-      phone: phone,
-    )).toList();
+    final updatedPassengers = passengers
+        .map((p) => p.copyWith(
+              email: email,
+              phone: phone,
+            ))
+        .toList();
 
     emit(PassengerLoaded(
       passengers: updatedPassengers,
@@ -104,9 +110,8 @@ class PassengerCubit extends Cubit<PassengerState> {
   void updateEmail(String email) {
     final currentState = state;
     if (currentState is PassengerLoaded) {
-      final updatedPassengers = currentState.passengers
-          .map((p) => p.copyWith(email: email))
-          .toList();
+      final updatedPassengers =
+          currentState.passengers.map((p) => p.copyWith(email: email)).toList();
       emit(currentState.copyWith(
         passengers: updatedPassengers,
         email: email,
@@ -139,7 +144,8 @@ class PassengerCubit extends Cubit<PassengerState> {
     }
   }
 
-  PassengerModel _updateField(PassengerModel passenger, String field, String value) {
+  PassengerModel _updateField(
+      PassengerModel passenger, String field, String value) {
     switch (field) {
       case 'firstname':
         return passenger.copyWith(firstname: sanitizeName(value));
@@ -276,6 +282,24 @@ class PassengerCubit extends Cubit<PassengerState> {
         return;
       }
 
+      // Aviakompaniya qoidalari (yosh toifasi, pasport muddati, lotin ism) —
+      // server bronni rad etishidan oldin.
+      for (int i = 0; i < currentState.passengers.length; i++) {
+        final issues = PassengerRules.invalidFields(
+          currentState.passengers[i],
+          firstFlight: firstFlightDate,
+          lastFlight: lastFlightDate,
+        );
+        if (issues.isEmpty) continue;
+        emit(PassengerValidationError(
+          message: issues.first.$2.tr(),
+          passengerIndex: i,
+          fieldName: issues.first.$1,
+        ));
+        emit(currentState.copyWith(showErrors: true));
+        return;
+      }
+
       emit(const PassengerSaving());
 
       _storageService.savePassengerFields(
@@ -320,5 +344,5 @@ class PassengerCubit extends Cubit<PassengerState> {
 
   /// Ism maydonlaridan raqam va bo'sh joylarni olib tashlaydi.
   static String sanitizeName(String? value) =>
-      (value ?? '').replaceAll(RegExp(r'[\d\s]'), '').toUpperCase();
+      PassengerRules.normalizeName(value);
 }

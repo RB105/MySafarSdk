@@ -7,20 +7,20 @@ class FlightPrice {
 
   FlightPrice({required this.rub, required this.uzs, required this.usd});
 
+  /// RUB/USD bloklari kelmasa `null` qoladi (ilgari "0" qo'yilardi va
+  /// foydalanuvchi "0 USD" ko'rardi) — ko'rsatishda UZS summasiga UZS belgisi
+  /// bilan qaytiladi (`CurrencyProvider.getElementPrice`). UZS bloki esa
+  /// avvalgidek majburiy (saralash/to'lov unga tayanadi).
   factory FlightPrice.fromJson(Map<String, dynamic> json) => FlightPrice(
         rub: json["RUB"] is Map<String, dynamic>
             ? FluffyRub.fromJson(json["RUB"])
-            : FluffyRub(
-                amount: "0",
-              ),
+            : null,
         uzs: json['UZS'] is Map<String, dynamic>
             ? FluffyUzs.fromJson(json['UZS'])
             : FluffyUzs(amount: "0"),
         usd: json["USD"] is Map<String, dynamic>
             ? FluffyRub.fromJson(json["USD"])
-            : FluffyRub(
-                amount: "0",
-              ),
+            : null,
       );
 }
 

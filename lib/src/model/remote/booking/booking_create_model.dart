@@ -55,8 +55,9 @@ class BookingCreateModel {
     isDeleted = json['is_deleted'];
     deletedAt = json['deleted_at'] ?? "";
     amount = json['amount'];
-    currency = json['currency'];
-    trId = json['tr_id'];
+    // Valyuta kodi son yoki matn ("860") bo'lib kelishi mumkin.
+    currency = _toInt(json['currency']);
+    trId = json['tr_id']?.toString();
     type = json['type'] ?? "";
     status = json['status'];
     statusType = json['status_type'];
@@ -69,10 +70,26 @@ class BookingCreateModel {
     mysafarCommission = json['mysafar_commission']?.toString() ?? "0.0";
     isUsed = json['is_used'];
     message = json['message'] ?? "";
-    billingId = json['billing_id'].toString();
+    // `billing_id` bo'lmasa "null" matni emas, null qoladi.
+    billingId = json['billing_id']?.toString();
     expire = json['expire'] ?? "";
     hotel = json['hotel'];
   }
+
+  /// ISO 4217 raqamli kod → harfli: 860 UZS, 643 RUB, 840 USD.
+  /// Noma'lum yoki yo'q bo'lsa `null`.
+  static String? currencyLabelFor(int? code) => switch (code) {
+        860 => 'UZS',
+        643 => 'RUB',
+        840 => 'USD',
+        _ => null,
+      };
+
+  /// Bron valyutasi (`UZS` / `RUB` / `USD`) yoki `null`.
+  String? get currencyLabel => currencyLabelFor(currency);
+
+  static int? _toInt(dynamic value) =>
+      value is int ? value : int.tryParse('${value ?? ''}'.trim());
 
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> data = <String, dynamic>{};

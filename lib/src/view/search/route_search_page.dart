@@ -326,7 +326,10 @@ class _RouteSearchViewState extends State<_RouteSearchView>
 
     // MySafar'ga mos: best offers bosilganda aynan o'sha eng arzon kunni
     // state'da tanlaymiz va TicketInfoPage uchun request params'ni
-    // `ProjectUtils.params`ga o'rnatamiz.
+    // `ProjectUtils.params`ga o'rnatamiz. Takliflar aynan shu yo'lovchilar,
+    // klass va filtrlar bilan qidirilgan (RouteSearchCubit._loadBestOffers;
+    // ular o'zgarsa takliflar qayta yuklanadi) — reys id/narxi bron
+    // parametrlariga mos.
     final day = _cubit.state.offersDate ?? _cubit.state.date;
     final safeDay = day ?? DateTime.now();
     _cubit.pickDay(safeDay);

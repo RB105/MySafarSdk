@@ -1,3 +1,4 @@
+import 'package:mysafar_sdk/src/model/local/passenger_rules.dart';
 import 'package:mysafar_sdk/src/model/remote/profile/users_model.dart';
 
 /// Yo'lovchi ma'lumotlari modeli
@@ -158,10 +159,11 @@ class PassengerModel {
     );
   }
 
-  /// Ism maydonlaridan raqam va bo'sh joylarni olib tashlaydi
-  /// (`PassengerCubit.sanitizeName` bilan bir xil qoida).
+  /// Ismni aviachipta ko'rinishiga keltiradi (lotin A–Z, kirill o'giriladi,
+  /// apostrof/raqam/bo'sh joy tashlanadi) — `PassengerCubit.sanitizeName`
+  /// bilan bir xil qoida.
   static String _sanitizeName(String? value) =>
-      (value ?? '').replaceAll(RegExp(r'[\d\s]'), '').toUpperCase();
+      PassengerRules.normalizeName(value);
 
   /// Bron sahifasidagi slotda ko'rsatiladigan "FAMILIYA ISM".
   String get displayName => '$lastname $firstname'.trim();

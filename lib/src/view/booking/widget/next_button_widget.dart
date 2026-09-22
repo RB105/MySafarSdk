@@ -72,35 +72,39 @@ class NextButtonWidget extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                "total_price_label".tr(namedArgs: {"count": "$passenger"}),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontFamily: "packages/mysafar_sdk/Gilroy",
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: muted,
-                ),
-              ),
-              const SizedBox(height: 2),
-              // Uzun summa (masalan so'mda) bir qatorga sig'masa kichrayadi.
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  currencyProvider.getElementPrice(price!),
+              // Narx hali yo'q bo'lsa (null) narx qatori ko'rsatilmaydi —
+              // faqat tugma qoladi.
+              if (price != null) ...[
+                Text(
+                  "total_price_label".tr(namedArgs: {"count": "$passenger"}),
                   maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontFamily: "packages/mysafar_sdk/Gilroy",
-                    fontWeight: FontWeight.w800,
-                    fontSize: 22,
-                    color: priceColor,
-                    height: 1.15,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: muted,
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
+                const SizedBox(height: 2),
+                // Uzun summa (masalan so'mda) bir qatorga sig'masa kichrayadi.
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    currencyProvider.getElementPrice(price),
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontFamily: "packages/mysafar_sdk/Gilroy",
+                      fontWeight: FontWeight.w800,
+                      fontSize: 22,
+                      color: priceColor,
+                      height: 1.15,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               SizedBox(
                 height: 52,
                 child: DecoratedBox(

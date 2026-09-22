@@ -2,8 +2,11 @@ import 'dart:convert' show jsonDecode;
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
+import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:mysafar_sdk/src/core/widgets/edge_swipe_back.dart';
+import 'package:mysafar_sdk/src/core/widgets/sdk_dialog.dart';
 import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
+import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/view/booking/support/webview_compat.dart';
 import 'package:mysafar_sdk/src/view/booking/support/webview_debug.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -17,7 +20,11 @@ import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart'
 class WebViewScreen extends StatefulWidget {
   final String url;
 
-  const WebViewScreen({super.key, required this.url});
+  /// To'lov sahifasi: yopishdan oldin tasdiqlash so'raladi (to'lov o'rtasida
+  /// tasodifan chiqib ketmaslik uchun). Oddiy sahifalarda (oferta) — yo'q.
+  final bool confirmClose;
+
+  const WebViewScreen({super.key, required this.url, this.confirmClose = false});
 
   @override
   State<WebViewScreen> createState() => _WebViewScreenState();
@@ -47,6 +54,9 @@ class WebViewScreen extends StatefulWidget {
 class _WebViewScreenState extends State<WebViewScreen> {
   late final WebViewController _controller;
   bool isLoading = true;
+
+  /// Yopishni tasdiqlash dialogi ochiq — ikkinchisi ochilmasin.
+  bool _closeDialogOpen = false;
 
   /// Android: navigatsiya delegati o'rnatilmaydi — WebView sahifalarni Chrome
   /// kabi o'zi ochadi. (`onNavigationRequest` berilsa plagin har bir asosiy
@@ -92,6 +102,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
           onPageStarted: (String url) {
             _log('page started: $url');
             _injectCompatShim();
+            if (!mounted) return;
             setState(() {
               isLoading = true;
             });
@@ -100,6 +111,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
             _log('page finished: $url');
             _injectCompatShim();
             _injectDebugHooks();
+            if (!mounted) return;
             setState(() {
               isLoading = false;
             });
@@ -109,6 +121,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 '(${error.isForMainFrame == true ? 'main' : 'sub'}): '
                 '${error.description} — ${error.url}');
             _openAppSchemeFromError(error);
+            if (!mounted) return;
             setState(() {
               isLoading = false;
             });
@@ -320,22 +333,51 @@ class _WebViewScreenState extends State<WebViewScreen> {
   }
 
   /// Tizim back va chetdan swipe: avval WebView ichida ortga, oxirida
-  /// sahifani yopadi. (AppBar'dagi tugma esa sahifani darhol yopadi.)
+  /// sahifani yopadi. (AppBar'dagi tugma esa tarixsiz, darhol yopishga
+  /// o'tadi.)
   Future<void> _handleBack() async {
     if (await _controller.canGoBack()) {
       _controller.goBack();
-    } else if (mounted) {
-      Navigator.of(context).pop();
+    } else {
+      await _close();
     }
+  }
+
+  /// Sahifani yopadi; to'lov sahifasida avval tasdiqlash so'raladi. Yopilgach
+  /// to'lov holatini chaqiruvchi sahifa o'zi tekshiradi.
+  Future<void> _close() async {
+    if (!mounted || _closeDialogOpen) return;
+    if (widget.confirmClose) {
+      _closeDialogOpen = true;
+      final shouldClose = await showSdkAlert<bool>(
+        context: context,
+        icon: Assets.iconsDialogWarningIcon,
+        tone: SdkDialogTone.warning,
+        title: 'payment_close_title'.tr(),
+        message: 'payment_close_message'.tr(),
+        actions: [
+          SdkDialogAction(label: 'exit_payment_continue'.tr(), value: false),
+          SdkDialogAction(
+            label: 'close'.tr(),
+            value: true,
+            variant: SdkDialogButtonVariant.dangerSoft,
+          ),
+        ],
+      );
+      _closeDialogOpen = false;
+      if (shouldClose != true || !mounted) return;
+    }
+    Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
         appBar: AppBar(
-          // AppBar'dagi orqaga tugmasi to'lov sahifasini darhol yopadi
-          // (tizim back / chetdan swipe esa avval WebView tarixida ortga).
-          leading: BackButton(onPressed: () => Navigator.of(context).pop()),
+          // AppBar'dagi orqaga tugmasi WebView tarixisiz yopishga o'tadi
+          // (to'lov sahifasida — tasdiqlash bilan); tizim back / chetdan
+          // swipe esa avval WebView tarixida ortga.
+          leading: BackButton(onPressed: _close),
           actions: [
             if (WebViewDebug.enabled)
               PopupMenuButton<String>(

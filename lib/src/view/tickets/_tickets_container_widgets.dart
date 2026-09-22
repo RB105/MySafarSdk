@@ -987,3 +987,53 @@ class _MultipleDateFlightContainer extends StatelessWidget {
         showEconomBadge: showEconomBadge,
       );
 }
+
+/// ═══════════════════════════════════════════════════════════════════
+///  NATIJA YO'Q / XATO HOLATI — boshi berk ko'cha bo'lmasin.
+/// ═══════════════════════════════════════════════════════════════════
+
+/// "Bilet topilmadi" yoki xato holati: [_TicketsEmptyView] (ikonka, sarlavha,
+/// izoh) + ostida joriy dialoglardagi [SdkDialogButton] juftligi — asosiy va
+/// ikkilamchi amal (masalan, "Qidiruvni o'zgartirish" / "Qayta qidirish").
+class _NoResultsView extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final String primaryLabel;
+  final VoidCallback onPrimary;
+  final String secondaryLabel;
+  final VoidCallback onSecondary;
+
+  const _NoResultsView({
+    required this.title,
+    this.subtitle,
+    required this.primaryLabel,
+    required this.onPrimary,
+    required this.secondaryLabel,
+    required this.onSecondary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _TicketsEmptyView(title: title, subtitle: subtitle),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SdkDialogButton(label: primaryLabel, onPressed: onPrimary),
+              const SizedBox(height: 10),
+              SdkDialogButton(
+                label: secondaryLabel,
+                onPressed: onSecondary,
+                variant: SdkDialogButtonVariant.secondary,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}

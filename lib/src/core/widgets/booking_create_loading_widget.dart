@@ -10,41 +10,58 @@ class LoadingDialog {
     if (_isDialogShowing) return;
     _isDialogShowing = true;
 
-    showDialog(useRootNavigator: false, 
+    showDialog(
+      useRootNavigator: false,
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.black.withAlpha(50),
       builder: (BuildContext context) {
-        return Center(
-          child:SizedBox(
-            width: context.width*0.8,
-            child: DecoratedBox(
-
-            decoration: BoxDecoration(
-              color: context.color.primaryContainer,
-              borderRadius: BorderRadius.circular(20),
+        // Bron yaratilayotganda tizim "orqaga" oynani yopmasin: aks holda
+        // javob kelganda dismiss() oyna o'rniga bron sahifasining o'zini
+        // yopib yuborardi va foydalanuvchi qayta "Davom etish"ni bosib ikkinchi
+        // bron yaratishi mumkin edi.
+        return PopScope(
+          canPop: false,
+          child: Center(
+            child: SizedBox(
+              width: context.width * 0.8,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: context.color.primaryContainer,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 152,
+                      height: 152,
+                      child: Lottie.asset(
+                        'packages/mysafar_sdk/assets/img/booking/airplane.json',
+                        repeat: true,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                    Padding(
+                      padding:
+                          const EdgeInsets.only(bottom: 16, right: 16, left: 16),
+                      child: Text(
+                        "booking_in_progress_notice".tr(),
+                        style: context.textTheme.bodyMedium
+                            ?.copyWith(fontSize: 16),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            child:Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [ SizedBox(
-                width: 152,
-                height: 152,
-                child: Lottie.asset(
-              'packages/mysafar_sdk/assets/img/booking/airplane.json',
-              repeat: true,
-              fit: BoxFit.contain,
-
-            )
-            ),Padding(padding: EdgeInsets.only(bottom: 16,right: 16,left: 16),child:  Text("booking_in_progress_notice".tr(),
-              style: context.textTheme.bodyMedium?.copyWith(fontSize: 16),
-              textAlign: TextAlign.center,),
-
-                )]),
-
           ),
-        ));
+        );
       },
-    );
+      // Oyna qanday yopilmasin (dismiss yoki route bilan birga) — holat
+      // tozalanadi, keyingi show() o'tkazib yuborilmaydi.
+    ).whenComplete(() => _isDialogShowing = false);
   }
 
   static void dismiss(BuildContext context) {

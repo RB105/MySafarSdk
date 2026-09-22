@@ -15,6 +15,7 @@ import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/cubit/booking/passenger/passenger_cubit.dart';
 import 'package:mysafar_sdk/src/cubit/booking/passenger/passenger_state.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart';
+import 'package:mysafar_sdk/src/model/local/passenger_rules.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_model.dart'
     show FlightElement;
 import 'package:mysafar_sdk/src/view/booking/booking_create_page.dart';
@@ -58,6 +59,8 @@ class _PassengerInformationPageState extends State<PassengerInformationPage> {
       infantCount: widget.inf,
       trId: widget.element.id,
       price: widget.element.price,
+      firstFlightDate: _firstFlightDate(widget.element),
+      lastFlightDate: _lastFlightDate(widget.element),
     )..initialize();
   }
 
@@ -299,9 +302,12 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
     if (key != null) {
       _scrollToField(key);
     }
-    // Yo'lovchi maydonlari alohida sahifada — bu yerda umumiy xabar.
-    _showSnackBar(state.passengerIndex != null
-        ? "incomplete_passenger_data".tr()
+    // Yo'lovchi maydonlari alohida sahifada — qaysi yo'lovchi va nima xato
+    // ekani aniq aytiladi.
+    final index = state.passengerIndex;
+    _showSnackBar(index != null
+        ? "${"passenger_number".tr(namedArgs: {"number": "${index + 1}"})}: "
+            "${state.message.isNotEmpty ? state.message : "incomplete_passenger_data".tr()}"
         : state.message);
   }
 
@@ -581,7 +587,12 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
   ) {
     final passenger = state.passengers[index];
     final bool filled = passenger.displayName.isNotEmpty;
-    final bool complete = passenger.isValid;
+    final bool complete = passenger.isValid &&
+        PassengerRules.invalidFields(
+          passenger,
+          firstFlight: _firstFlightDate(widget.element),
+          lastFlight: _lastFlightDate(widget.element),
+        ).isEmpty;
     final bool hasError = state.showErrors && !complete;
     final bool isDark = context.isDarkMode;
     final brand = ProjectTheme.brandColor;
@@ -697,6 +708,8 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
           adultCount: widget.adt,
           childCount: widget.chd,
           initialSaveToProfile: current.saveToProfile.contains(index),
+          firstFlightDate: _firstFlightDate(widget.element),
+          lastFlightDate: _lastFlightDate(widget.element),
         ),
       ),
     );
@@ -879,4 +892,19 @@ class _SectionTitle extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Birinchi uchish sanasi (yosh toifasi shu kun bo'yicha).
+DateTime? _firstFlightDate(FlightElement element) {
+  final segments = element.segments ?? const [];
+  if (segments.isEmpty) return null;
+  return PassengerRules.parseFlightDate(segments.first.dep.date);
+}
+
+/// Oxirgi qo'nish sanasi (pasport safar tugaguncha amal qilishi kerak).
+DateTime? _lastFlightDate(FlightElement element) {
+  final segments = element.segments ?? const [];
+  if (segments.isEmpty) return null;
+  return PassengerRules.parseFlightDate(segments.last.arr.date) ??
+      PassengerRules.parseFlightDate(segments.last.dep.date);
 }

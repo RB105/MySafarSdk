@@ -1,7 +1,8 @@
 import 'dart:async' show Completer;
 
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
+import 'package:flutter/foundation.dart'
+    show debugPrint, kDebugMode, visibleForTesting;
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/core/config/app_config.dart' show AppConfig;
 import 'package:mysafar_sdk/src/core/constants/end_points.dart' show EndPoints;
@@ -12,9 +13,10 @@ enum AuthMode { none, bearer, partner }
 bool _validateStatus(int? code) => code != null && code >= 200 && code < 300;
 
 BaseOptions _baseOptions() => BaseOptions(
-      // Reduced from 120s. Long enough for slow payment/PDF responses,
-      // short enough to fail fast on dead connections.
-      connectTimeout: const Duration(seconds: 60),
+      // Ulanish (TCP/TLS) uchun 20s yetarli — o'lik ulanishda foydalanuvchi
+      // retry bilan ~3 daqiqa kutib qolmasin. Javob kutish (receive) uzunroq:
+      // qidiruv va to'lov javoblari sekin kelishi mumkin.
+      connectTimeout: const Duration(seconds: 20),
       receiveTimeout: const Duration(seconds: 90),
       sendTimeout: const Duration(seconds: 90),
       validateStatus: _validateStatus,
@@ -66,6 +68,13 @@ class DioClient {
 
 /// 502/503/504 (va qisqa tarmoq uzilishi) uchun engil retry — max 2 marta,
 /// exponential backoff. Bekor qilingan so'rov va `skipRetry` qayta yuborilmaydi.
+///
+/// Faqat takrorlash xavfsiz so'rovlar qayta yuboriladi: GET/HEAD/OPTIONS/PUT/
+/// DELETE va `retryable` deb belgilangan POST'lar (qidiruv, tarif, narxlar).
+/// Bron/to'lov POST'lari 502/504 da qayta yuborilmaydi — server so'rovni
+/// bajargan bo'lishi mumkin, takror yuborish ikkinchi bron yoki to'lov
+/// yaratardi. Ular faqat ulanib bo'lmaganda (so'rov serverga yetmagan)
+/// qayta yuboriladi.
 class _RetryInterceptor extends Interceptor {
   static const int _maxRetries = 2;
 
@@ -75,7 +84,7 @@ class _RetryInterceptor extends Interceptor {
     final retryCount = (extra['retryCount'] as int?) ?? 0;
     final skipRetry = extra['skipRetry'] == true;
 
-    if (skipRetry || retryCount >= _maxRetries || !_shouldRetry(err)) {
+    if (skipRetry || retryCount >= _maxRetries || !shouldRetryRequest(err)) {
       handler.next(err);
       return;
     }
@@ -109,18 +118,33 @@ class _RetryInterceptor extends Interceptor {
       handler.next(e);
     }
   }
+}
 
-  bool _shouldRetry(DioException err) {
-    if (err.type == DioExceptionType.cancel) return false;
-    final code = err.response?.statusCode;
-    if (code == 502 || code == 503 || code == 504) return true;
-    // Qisqa tarmoq uzilishi — qayta urinish foydali.
-    if (err.type == DioExceptionType.connectionError ||
-        err.type == DioExceptionType.connectionTimeout) {
-      return true;
-    }
-    return false;
-  }
+const Set<String> _idempotentMethods = {
+  'GET',
+  'HEAD',
+  'OPTIONS',
+  'PUT',
+  'DELETE',
+};
+
+/// Xato bo'lgan so'rovni qayta yuborish mumkinmi ([_RetryInterceptor] qoidasi).
+@visibleForTesting
+bool shouldRetryRequest(DioException err) {
+  if (err.type == DioExceptionType.cancel) return false;
+  // Ulanib bo'lmadi — so'rov serverga yetib bormagan, har qanday metod
+  // uchun qayta yuborish xavfsiz.
+  if (err.type == DioExceptionType.connectionTimeout) return true;
+  final options = err.requestOptions;
+  final safeToRepeat =
+      _idempotentMethods.contains(options.method.toUpperCase()) ||
+          options.extra['retryable'] == true;
+  if (!safeToRepeat) return false;
+  final code = err.response?.statusCode;
+  if (code == 502 || code == 503 || code == 504) return true;
+  // Qisqa tarmoq uzilishi — qayta urinish foydali.
+  if (err.type == DioExceptionType.connectionError) return true;
+  return false;
 }
 
 /// Refreshes the access token at most once at a time. Concurrent 401s share a
@@ -249,7 +273,8 @@ class _MainAuthInterceptor extends Interceptor {
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
-    final mode = err.requestOptions.extra['authMode'] as AuthMode? ?? AuthMode.none;
+    final mode =
+        err.requestOptions.extra['authMode'] as AuthMode? ?? AuthMode.none;
     final alreadyRetried = err.requestOptions.extra['authRetry'] == true;
     final token = MySafarSdk.tokens.accessToken ?? '';
 

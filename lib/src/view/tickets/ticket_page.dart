@@ -23,8 +23,10 @@ import 'package:mysafar_sdk/src/core/tools/project_assets.dart'
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart' show Assets;
 import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart'
-    show ErrorDialogAction, ProjectDialogs;
+    show ErrorDialogAction, ErrorDialogKind, ProjectDialogs;
 import 'package:mysafar_sdk/src/core/tools/sdk_sheets.dart';
+import 'package:mysafar_sdk/src/core/widgets/sdk_dialog.dart'
+    show SdkDialogButton, SdkDialogButtonVariant;
 import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart'
     show AppMessageType;
 import 'package:mysafar_sdk/src/cubit/tickets/tickets_cubit.dart';
@@ -351,6 +353,22 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
     }
   }
 
+  /// "Bilet topilmadi" / xato holatidan qidiruv formasiga (oldingi ekranga)
+  /// qaytish — sana, yo'nalish yoki yo'lovchilarni o'zgartirish uchun.
+  void _changeSearch(String source) {
+    AnalyticsService()
+        .trackButtonTap('tickets_change_search', extra: {'source': source});
+    Navigator.of(context).maybePop();
+  }
+
+  /// "Bilet topilmadi" / xato holatidan xuddi shu parametrlar bilan qayta
+  /// qidirish.
+  void _retrySearch(String source) {
+    AnalyticsService()
+        .trackButtonTap('tickets_search_again', extra: {'source': source});
+    _searchAgain();
+  }
+
   /// API'dan HAR QANDAY xato kelganda (tarmoq, timeout, 4xx, 5xx, noma'lum)
   /// shu dialog ko'rsatiladi — sarlavha xato turiga qarab o'zgaradi.
   /// "Qayta urinish" bosilsa — joriy parametrlar bilan yangi so'rov,
@@ -381,6 +399,16 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
       // Yopish — bitta oldingi ekranga (qidiruv formasiga) qaytamiz.
       Navigator.of(context).maybePop();
     }
+  }
+
+  /// Xato holati izohi — dialogdagi qoida bilan bir xil: server matni bo'sh
+  /// yoki sarlavhaning o'zi bo'lsa, xato turiga mos tayyor matn.
+  static String _errorSubtitle(TicketErrorState state) {
+    final kind = ErrorDialogKind.fromErrorType(state.errorType);
+    final message = state.errorMsg.trim();
+    return (message.isEmpty || message == kind.title)
+        ? kind.fallbackMessage
+        : message;
   }
 
   @override
@@ -600,13 +628,38 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
                                                   1,
                                         ),
                                       ),
-                                    TicketEmptyState() => _TicketsEmptyView(
+                                    // Boshi berk ko'cha emas: qidiruvni
+                                    // o'zgartirish yoki qayta qidirish.
+                                    TicketEmptyState() => _NoResultsView(
                                         title: "not_found_tickets".tr(),
-                                        subtitle: "found_other_tickets".tr(),
+                                        // "Boshqa sanalarda topdik" izohi faqat
+                                        // sana-narx lentasi ko'rinsa ma'noli.
+                                        subtitle: _showDateStrip
+                                            ? "found_other_tickets".tr()
+                                            : null,
+                                        primaryLabel: "change_search".tr(),
+                                        onPrimary: () =>
+                                            _changeSearch('empty'),
+                                        secondaryLabel: "search_again".tr(),
+                                        onSecondary: () =>
+                                            _retrySearch('empty'),
                                       ),
-                                    // Xato dialog orqali ko'rsatiladi —
-                                    // sahifa tanasida takrorlanmasin.
-                                    TicketErrorState() => const SizedBox(),
+                                    // Xato asosan dialog orqali ko'rsatiladi;
+                                    // dialog chiqmagan hollarda (sahifa o'sha
+                                    // payt ko'rinmagan) sahifa bo'sh qolmasin —
+                                    // xuddi shu matn va "Qayta urinish".
+                                    TicketErrorState() => _NoResultsView(
+                                        title: ErrorDialogKind.fromErrorType(
+                                                state.errorType)
+                                            .title,
+                                        subtitle: _errorSubtitle(state),
+                                        primaryLabel: "retry_search".tr(),
+                                        onPrimary: () =>
+                                            _retrySearch('error'),
+                                        secondaryLabel: "change_search".tr(),
+                                        onSecondary: () =>
+                                            _changeSearch('error'),
+                                      ),
                                     _ => const SizedBox(),
                                   },
                                 ),

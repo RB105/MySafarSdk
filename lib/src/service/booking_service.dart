@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:mysafar_sdk/src/core/config/request_config.dart';
 import 'package:mysafar_sdk/src/core/config/response_config.dart'
-    show NetworkErrorResponse, NetworkResponse, NetworkSuccessResponse;
+    show ErrorType, NetworkErrorResponse, NetworkResponse, NetworkSuccessResponse;
 import 'package:mysafar_sdk/src/core/constants/end_points.dart' show EndPoints;
 import 'package:mysafar_sdk/src/core/constants/end_points.dart';
 import 'package:mysafar_sdk/src/core/enum/currency.dart';
 import 'package:mysafar_sdk/src/core/tools/currency_provider.dart'
     show CurrencyProvider;
+import 'package:mysafar_sdk/src/core/tools/lang_helper.dart' show dataLang;
 import 'package:mysafar_sdk/src/core/tools/phone_format.dart';
 import 'package:mysafar_sdk/src/model/remote/booking/booking_create_model.dart';
 import 'package:mysafar_sdk/src/model/remote/booking/payment_type_model.dart';
@@ -43,11 +44,15 @@ class BookingService with RequestConfig {
         partnerToken: true,
         endPoint: EndPoints.avia_booking_create,
         params: {
-          "lang": "en",
+          // Server xabarlari foydalanuvchi tilida kelsin (uz/ru/en).
+          "lang": dataLang(),
           "tid": tid,
           "is_health_declaration_checked": 1,
           "accompanying_adult": [],
           // "bonus_card": "",
+          // Backend faqat UZS va RUB'da bron qiladi — USD tanlangan bo'lsa
+          // ham bron RUB'da yaratiladi (to'lov sahifasi bron valyutasini
+          // ko'rsatadi).
           "currency": currencyProvider.currency.label == "UZS" ? "UZS" : "RUB",
           "client_email": clientEmail,
           "payer_name": firstName,
@@ -55,12 +60,22 @@ class BookingService with RequestConfig {
           "passengers": normalizedPassengers
         });
     if (response is NetworkSuccessResponse) {
-      if (response.data["tr_id"] != null) {
-        final bookingModel = BookingCreateModel.fromJson(response.data);
-        return NetworkSuccessResponse(data: bookingModel);
-      } else {
-        return NetworkErrorResponse(error: response.data["data"]["message"]);
+      final data = response.data;
+      final trId = data is Map ? data["tr_id"] : null;
+      if (trId != null && '$trId'.isNotEmpty) {
+        try {
+          final bookingModel =
+              BookingCreateModel.fromJson(Map<String, dynamic>.from(data));
+          return NetworkSuccessResponse(data: bookingModel);
+        } catch (e) {
+          debugPrint('MySafarSdk: booking-create javobi o\'qilmadi ($e)');
+        }
       }
+      // `tr_id` yo'q (yoki javobni o'qib bo'lmadi): butun javob beriladi —
+      // serverning o'z xabari bo'lsa getError() uni foydalanuvchi tilida
+      // chiqaradi, bo'lmasa "Buyurtmalarim"ni tekshirish haqida xabar.
+      return NetworkErrorResponse(
+          error: data, errorType: ErrorType.bookingMissingTrId);
     } else if (response is NetworkErrorResponse) {
       return NetworkErrorResponse(
           error: response.getError(), errorType: response.errorType);
@@ -168,18 +183,26 @@ class BookingService with RequestConfig {
         endPoint: EndPoints.avia_booking_confirm,
         params: params);
     if (response is NetworkSuccessResponse) {
-      if (response.data['status'] != null && response.data['status'] == false) {
-        return NetworkErrorResponse(
-            error: response.data["error"]["message"]["uz"]);
-      } else {
-        return NetworkSuccessResponse(data: response.data);
-      }
+      return _confirmResult(response.data);
     } else if (response is NetworkErrorResponse) {
       return NetworkErrorResponse(
           error: response.error, errorType: response.errorType);
     } else {
       return response;
     }
+  }
+
+  /// `booking-confirm` 200 javobi: `status: false` — xato. Butun javob
+  /// beriladi — getError() `error.message.{uz|ru|en}` dan foydalanuvchi
+  /// tilidagisini o'zi tanlaydi; shakl boshqacha bo'lsa ham yiqilmaydi.
+  NetworkResponse _confirmResult(dynamic data) {
+    if (data is! Map) {
+      return NetworkErrorResponse(error: data, errorType: ErrorType.other);
+    }
+    if (data['status'] == false) {
+      return NetworkErrorResponse(error: data);
+    }
+    return NetworkSuccessResponse(data: Map<String, dynamic>.from(data));
   }
 
   Future<NetworkResponse> getCardInfo({
@@ -320,12 +343,7 @@ class BookingService with RequestConfig {
         endPoint: "/centrum-payment-create",
         params: params);
     if (response is NetworkSuccessResponse) {
-      if (response.data['status'] != null && response.data['status'] == false) {
-        return NetworkErrorResponse(
-            error: response.data["error"]["message"]["uz"]);
-      } else {
-        return NetworkSuccessResponse(data: response.data);
-      }
+      return _confirmResult(response.data);
     } else if (response is NetworkErrorResponse) {
       return NetworkErrorResponse(
           error: response.error, errorType: response.errorType);

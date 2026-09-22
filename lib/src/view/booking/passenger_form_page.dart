@@ -13,6 +13,7 @@ import 'package:mysafar_sdk/src/core/widgets/switch_button_widget.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/cubit/booking/passenger/passenger_cubit.dart';
 import 'package:mysafar_sdk/src/model/local/passenger_model.dart';
+import 'package:mysafar_sdk/src/model/local/passenger_rules.dart';
 import 'package:mysafar_sdk/src/model/remote/profile/users_model.dart';
 import 'package:mysafar_sdk/src/service/passenger/passenger_storage_service.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/booking_form_fields.dart'
@@ -53,6 +54,11 @@ class PassengerFormPage extends StatefulWidget {
   final int childCount;
   final bool initialSaveToProfile;
 
+  /// Birinchi uchish va oxirgi qo'nish sanalari — yosh toifasi va pasport
+  /// amal qilish muddati shular bo'yicha tekshiriladi.
+  final DateTime? firstFlightDate;
+  final DateTime? lastFlightDate;
+
   const PassengerFormPage({
     super.key,
     required this.initial,
@@ -60,6 +66,8 @@ class PassengerFormPage extends StatefulWidget {
     required this.adultCount,
     required this.childCount,
     this.initialSaveToProfile = false,
+    this.firstFlightDate,
+    this.lastFlightDate,
   });
 
   @override
@@ -250,8 +258,27 @@ class _PassengerFormPageState extends State<PassengerFormPage> {
 
   /// Bo'sh maydon bo'lsa — xatolar maydon ostida ko'rsatiladi, birinchi
   /// bo'sh maydonga suriladi va (matn maydoni bo'lsa) fokus beriladi.
+  /// Aviakompaniya qoidasi xatosi (tarjima qilingan) yoki `null`.
+  String? _ruleError(String field, String value) => PassengerRules.fieldError(
+        field,
+        value,
+        ageType: _passenger.age,
+        firstFlight: widget.firstFlightDate,
+        lastFlight: widget.lastFlightDate,
+      )?.tr();
+
   void _submit() {
-    final empty = _passenger.emptyRequiredFields;
+    // Bo'sh maydonlar va qoidaga zid qiymatlar (sana formati, yosh toifasi,
+    // pasport muddati, lotin ism) — hammasi serverga yuborishdan oldin.
+    final empty = {
+      ..._passenger.emptyRequiredFields,
+      for (final (field, _) in PassengerRules.invalidFields(
+        _passenger,
+        firstFlight: widget.firstFlightDate,
+        lastFlight: widget.lastFlightDate,
+      ))
+        field,
+    }.toList();
     if (empty.isNotEmpty) {
       setState(() => _showErrors = true);
       final first = _firstEmptyInFormOrder(empty);
@@ -404,6 +431,7 @@ class _PassengerFormPageState extends State<PassengerFormPage> {
                 onFieldChanged: _updateField,
                 onUserSelected: _applyUser,
                 onScanTap: _openDocumentScanner,
+                ruleError: _ruleError,
                 onCitizenTap: _showCitizenPicker,
                 onDocexpCalendarTap: () => _showDatePicker(isDocexp: true),
                 onBirthdateCalendarTap: () => _showDatePicker(isDocexp: false),

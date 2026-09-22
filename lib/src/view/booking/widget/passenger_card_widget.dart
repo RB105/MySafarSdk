@@ -8,6 +8,8 @@ import 'package:mysafar_sdk/src/core/styles/theme.dart';
 import 'package:mysafar_sdk/src/core/tools/lang_helper.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/model/local/passenger_model.dart';
+import 'package:mysafar_sdk/src/model/local/passenger_rules.dart'
+    show PassengerNameFormatter;
 import 'package:mysafar_sdk/src/model/remote/profile/users_model.dart';
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart'
     show AnalyticsService;
@@ -18,10 +20,10 @@ import 'package:mysafar_sdk/src/view/booking/widget/save_passenger_information.d
 import 'package:mysafar_sdk/src/view/booking/widget/support_widget.dart'
     show BookingCard;
 
-/// Ism/familiya/otasini ismi maydonlarida raqam va bo'sh joy kiritilishini
-/// bloklaydi (aviabilet hujjatidagi yozuvga mos).
+/// Ism/familiya/otasining ismi: faqat lotin A–Z va `-` (aviachipta talabi).
+/// Kirill avtomatik lotinga o'giriladi, apostrof/raqam/bo'sh joy tashlanadi.
 final List<TextInputFormatter> passengerNameInputFormatters = [
-  FilteringTextInputFormatter.deny(RegExp(r'[\d\s]')),
+  const PassengerNameFormatter(),
 ];
 
 String? _validateBookingDate(String? value, {required String emptyMessage}) {
@@ -59,6 +61,11 @@ class PassengerCardWidget extends StatelessWidget {
   final VoidCallback onBirthdateCalendarTap;
   final VoidCallback onNextField;
   final VoidCallback onScanTap;
+
+  /// Aviakompaniya qoidasi bo'yicha xato (tarjima qilingan matn) yoki `null`
+  /// — masalan pasport safar tugaguncha amal qilmasa. Bo'sh maydonlar bu yerga
+  /// kelmaydi. Berilmasa faqat format tekshiriladi (profil formasi).
+  final String? Function(String field, String value)? ruleError;
   final MaskTextInputFormatter docexpFormatter;
   final MaskTextInputFormatter birthdateFormatter;
 
@@ -86,6 +93,7 @@ class PassengerCardWidget extends StatelessWidget {
     required this.onBirthdateCalendarTap,
     required this.onNextField,
     required this.onScanTap,
+    this.ruleError,
     required this.docexpFormatter,
     required this.birthdateFormatter,
     required this.citizenKey,
@@ -271,7 +279,9 @@ class PassengerCardWidget extends StatelessWidget {
       showError: showErrors,
       textCapitalization: TextCapitalization.characters,
       inputFormatters: passengerNameInputFormatters,
-      validator: error == null ? null : (v) => _validateRequired(v, error),
+      validator: (v) =>
+          (error == null ? null : _validateRequired(v, error)) ??
+          (v.trim().isEmpty ? null : ruleError?.call(field, v)),
       onChanged: (value) => onFieldChanged(field, value),
       onSubmitted: onNextField,
       suggestions: getSuggestions(field),
@@ -298,7 +308,9 @@ class PassengerCardWidget extends StatelessWidget {
       showError: showErrors,
       keyboardType: TextInputType.number,
       inputFormatters: [formatter],
-      validator: (v) => _validateBookingDate(v, emptyMessage: emptyMessage),
+      validator: (v) =>
+          _validateBookingDate(v, emptyMessage: emptyMessage) ??
+          ruleError?.call(field, v),
       onChanged: (value) => onFieldChanged(field, value),
       onSubmitted: onNextField,
       suggestions: getSuggestions(field),

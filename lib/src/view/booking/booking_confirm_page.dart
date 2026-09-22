@@ -15,6 +15,8 @@ import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/api/user_data.dart' show MySafarUzsCard;
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
+import 'package:mysafar_sdk/src/core/tools/currency_provider.dart'
+    show CurrencyProvider;
 import 'package:mysafar_sdk/src/core/tools/formatters.dart';
 import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart';
 import 'package:mysafar_sdk/src/core/widgets/edge_swipe_back.dart';
@@ -31,6 +33,7 @@ import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_m
 import 'package:mysafar_sdk/src/core/config/response_config.dart'
     show NetworkSuccessResponse;
 import 'package:mysafar_sdk/src/model/remote/booking/booking_create_model.dart';
+import 'package:mysafar_sdk/src/model/remote/booking/booking_payment_status.dart';
 import 'package:mysafar_sdk/src/model/remote/booking/payment_type_model.dart'
     show Result;
 import 'package:mysafar_sdk/src/model/remote/payment/payment_type_config.dart';
@@ -40,15 +43,18 @@ import 'package:mysafar_sdk/src/service/payment/payment_type_repository.dart';
 import 'package:mysafar_sdk/src/service/payment/card_token_encoder.dart';
 import 'package:mysafar_sdk/src/view/booking/support/payment_helper.dart';
 import 'package:mysafar_sdk/src/view/booking/support/webview_debug.dart';
+import 'package:mysafar_sdk/src/view/booking/ticket_pdf_page.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/booking_form_fields.dart'
     show BookingFieldError, BookingFormStyle;
 import 'package:mysafar_sdk/src/view/booking/widget/next_button_widget.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/payment_countdown_card.dart';
+import 'package:mysafar_sdk/src/view/booking/widget/payment_status_card.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/payment_type_card.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/saved_cards_sheet.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/support_widget.dart';
 import 'package:mysafar_sdk/src/view/tickets/ticket_page.dart'
     show RecommendationsTicketPage;
+import 'package:provider/provider.dart' show ChangeNotifierProvider;
 
 class BookingConfirmPage extends StatefulWidget {
   static const routeName = '/bookingConfirm';
@@ -102,6 +108,21 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
 
   /// Host `card_token` qaytarishi uchun maksimal kutish.
   static const Duration _cardTokenTimeout = Duration(seconds: 20);
+
+  /// To'lov sahifasi bosqichi — `idle` dan boshqasida to'lov tugmasi o'chadi
+  /// va vaqt tugashi foydalanuvchini sahifadan chiqarib yubormaydi.
+  _PaymentPhase _phase = _PaymentPhase.idle;
+
+  /// Oxirgi `ticket-data` javobi (narx o'zgarishi, chipta PDF'i uchun).
+  BookingPaymentStatus? _ticketData;
+
+  /// `transaction_paid` / revenue faqat bir marta yuboriladi.
+  bool _paidTracked = false;
+
+  /// Pastki panelda bron valyutasi belgisini ko'rsatish uchun.
+  _BookingCurrencyProvider? _currencyOverride;
+
+  bool get _paymentBusy => _phase != _PaymentPhase.idle;
 
   @override
   void initState() {
@@ -303,6 +324,9 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
   /// qaytgach ishlaydi.
   void _onTimeExpired() {
     if (!mounted || _leavingAfterExpiry) return;
+    // To'lov sahifasi ochiq, to'lov tekshirilmoqda yoki to'langan —
+    // chiqarib yubormaymiz. "To'lanmagan" natijasidan so'ng qayta chaqiriladi.
+    if (_paymentBusy) return;
     final route = ModalRoute.of(context);
     if (route == null || !route.isCurrent) {
       _expiryTimer?.cancel();
@@ -315,7 +339,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
   }
 
   void _leaveAfterExpiry() {
-    if (!mounted) return;
+    if (!mounted || _paymentBusy) return;
     final route = ModalRoute.of(context);
     // Kutish paytida dialog ochilgan bo'lsa — yopilishini kutamiz.
     if (route == null || !route.isCurrent) {
@@ -340,6 +364,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
     _expiryTimer?.cancel();
     _copyResetTimer?.cancel();
     _remainingNotifier.dispose();
+    _currencyOverride?.dispose();
     super.dispose();
   }
 
@@ -380,6 +405,12 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
   /// Ortga qaytish — back tugmasi, system back va chetdan swipe uchun bir
   /// xil: avval chiqishni tasdiqlash dialogi, tasdiqlansa bosh sahifaga.
   Future<void> _handleBack(BuildContext context) async {
+    // To'langan yoki to'lov tekshirilayotgan bo'lsa "to'lovdan chiqish"
+    // ogohlantirishi ma'nosiz — chipta "Buyurtmalar"da chiqadi.
+    if (_paymentBusy) {
+      PaymentHelper.navigateToHome(context);
+      return;
+    }
     final shouldExit = await _showExitConfirmDialog(context);
     if (shouldExit && context.mounted) {
       PaymentHelper.navigateToHome(context);
@@ -427,7 +458,17 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
       );
       ResponseState.errorState(state.error, context);
     } else if (state is BookingConfirmChangeAmountSuccessState) {
+      setState(() =>
+          _ticketData = BookingPaymentStatus.fromTicketData(state.data));
       _handlePriceChange(context, state);
+    } else if (state is BookingConfirmPaymentCheckingState) {
+      setState(() => _phase = _PaymentPhase.checking);
+    } else if (state is BookingConfirmPaidState) {
+      _onPaid(context, state);
+    } else if (state is BookingConfirmNotPaidState) {
+      _onNotPaid(context, state.status);
+    } else if (state is BookingConfirmPaymentPendingState) {
+      _onPaymentPending(context, state.status);
     }
   }
 
@@ -438,17 +479,19 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
     final savedCard = _pendingSavedCard;
     _pendingSavedCard = null;
 
-    String? url;
+    final String urlKey;
     switch (type) {
       case PaymentConstants.paygine: // PAYGINE — QR sahifasi
-        url = data['paygine_qr_url'] as String?;
+        urlKey = 'paygine_qr_url';
         break;
       case PaymentConstants.visa: // VISA — ecom sahifasi
-        url = data['visa_ecom'] as String?;
+        urlKey = 'visa_ecom';
         break;
       default:
-        url = data['payment_url'] as String?;
+        urlKey = 'payment_url';
     }
+    final rawUrl = data[urlKey];
+    String? url = rawUrl is String && rawUrl.trim().isNotEmpty ? rawUrl : null;
 
     if (WebViewDebug.enabled) {
       WebViewDebug.log('== confirm javobi: type=$type '
@@ -460,12 +503,203 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
       }
       WebViewDebug.log('   tanlangan url: $url');
     }
-    if (url == null) return;
+    if (url == null) {
+      _onPaymentUrlMissing(context, type, urlKey);
+      return;
+    }
     if (type == PaymentConstants.mysafarpay && savedCard != null) {
       url = await _withCardToken(url, savedCard);
       if (!context.mounted) return;
     }
-    PaymentHelper.openInWebView(context, url);
+    await _openPaymentPage(context, url);
+  }
+
+  /// Server kutilgan to'lov havolasini qaytarmadi — jim qolmasdan xato
+  /// ko'rsatamiz (buyurtma ID'si nusxalanadi) va analitikaga yozamiz.
+  void _onPaymentUrlMissing(BuildContext context, String type, String urlKey) {
+    final billingId = widget.bookingCreateModel.billingId ?? '';
+    AnalyticsService().trackPaymentFailed(
+      trId: widget.bookingCreateModel.trId ?? '',
+      billingId: billingId,
+      errorMessage: 'payment_url_missing: $urlKey',
+      paymentMethod: type,
+    );
+    ResponseState.errorState(
+      'payment_url_missing'.tr(),
+      context,
+      copyableId: billingId,
+    );
+  }
+
+  /// To'lov sahifasini ochib, yopilishini kutadi — so'ng (to'lagan-
+  /// to'lamaganidan qat'i nazar) to'lov holati tekshiriladi.
+  Future<void> _openPaymentPage(BuildContext context, String url) async {
+    final cubit = context.read<BookingConfirmCubit>();
+    setState(() => _phase = _PaymentPhase.inWebView);
+    await PaymentHelper.openInWebView(context, url);
+    if (!mounted) return;
+    _checkPayment(cubit);
+  }
+
+  /// To'lov holatini `ticket-data` orqali (qayta) tekshiradi.
+  void _checkPayment(BookingConfirmCubit cubit) {
+    // Sahifa ochilgandagi tekshiruv allaqachon "to'langan" degan bo'lishi mumkin.
+    if (!mounted || _phase == _PaymentPhase.paid) return;
+    final billingId = widget.bookingCreateModel.billingId ?? '';
+    if (billingId.isEmpty) {
+      // Tekshirib bo'lmaydi — avvalgidek to'lash imkoniyatiga qaytamiz.
+      setState(() => _phase = _PaymentPhase.idle);
+      if (_remainingSeconds <= 0) _onTimeExpired();
+      return;
+    }
+    setState(() => _phase = _PaymentPhase.checking);
+    cubit.checkPaymentStatus(billingId: billingId);
+  }
+
+  /// To'lov tasdiqlandi: taymer to'xtaydi ("vaqt tugadi" endi chiqmaydi),
+  /// to'lov tugmasi o'rniga chipta / "Buyurtmalar"ga o'tish.
+  void _onPaid(BuildContext context, BookingConfirmPaidState state) {
+    _timer?.cancel();
+    _expiryTimer?.cancel();
+    setState(() {
+      _phase = _PaymentPhase.paid;
+      _ticketData = state.status;
+      _leavingAfterExpiry = false;
+    });
+    // Buyurtmalar ro'yxati eskirdi — keyingi ochilishda qayta yuklanadi.
+    ConfirmedTicketsCubit.clearCache();
+    if (!state.isNew) return;
+    _trackPaid(state.status);
+    HapticFeedback.lightImpact();
+    _showPaidDialog(context);
+  }
+
+  /// `transaction_paid` + revenue (`BookingService.confirmPayment` bilan bir
+  /// xil event'lar) — bir marta. Summa: bron summasi va valyutasi;
+  /// noma'lum bo'lsa (buyurtmalardan kelinganda) sahifaga berilgan UZS narxi.
+  void _trackPaid(BookingPaymentStatus status) {
+    if (_paidTracked) return;
+    _paidTracked = true;
+    final booking = widget.bookingCreateModel;
+    final display = _displayAmount();
+    final num? amount = display?.amount ?? _toDouble(widget.price?.uzs?.amount);
+    final String currency = display?.currency ?? 'UZS';
+    final billingId = (booking.billingId ?? '').isNotEmpty
+        ? booking.billingId
+        : status.billingNumber;
+    final analytics = AnalyticsService();
+    if (billingId != null && billingId.isNotEmpty) {
+      analytics.trackTransactionPaid(
+        trId: booking.trId ?? '',
+        billingNumber: billingId,
+        amount: amount != null && amount > 0 ? amount : null,
+        currency: amount != null && amount > 0 ? currency : null,
+      );
+    }
+    if (amount != null && amount > 0) {
+      analytics.trackRevenue(
+        amount: amount,
+        currency: currency,
+        orderId: billingId,
+      );
+    }
+  }
+
+  Future<void> _showPaidDialog(BuildContext context) async {
+    final hasTicket = _paidTicketArgs != null;
+    final go = await showSdkAlert<bool>(
+      context: context,
+      icon: Assets.iconsDialogSuccessIcon,
+      tone: SdkDialogTone.success,
+      title: 'payment_success'.tr(),
+      message: 'payment_paid_hint'.tr(),
+      actions: [
+        SdkDialogAction(
+          label: hasTicket ? 'download_e_ticket'.tr() : 'go_to_my_orders'.tr(),
+          value: true,
+        ),
+        SdkDialogAction(
+          label: 'close'.tr(),
+          value: false,
+          variant: SdkDialogButtonVariant.secondary,
+        ),
+      ],
+    );
+    if (go == true && context.mounted) _openPaidResult(context);
+  }
+
+  /// Chipta PDF'i tayyor bo'lsa — `TicketPdfPage` argumentlari.
+  Map<String, dynamic>? get _paidTicketArgs {
+    final status = _ticketData;
+    if (status == null || (status.ticketReceiptUrl ?? '').isEmpty) return null;
+    return status.ticketPdfArguments;
+  }
+
+  /// To'langandan keyingi yo'l: chipta tayyor bo'lsa — PDF sahifasi, aks
+  /// holda "Buyurtmalar" (chipta berilgach shu yerda chiqadi).
+  void _openPaidResult(BuildContext context) {
+    final args = _paidTicketArgs;
+    if (args != null) {
+      Navigator.pushNamed(context, TicketPdfPage.routeName, arguments: args);
+    } else {
+      PaymentHelper.navigateToOrders(context);
+    }
+  }
+
+  /// To'lanmagan / bekor qilingan: vaqt qolgan bo'lsa qayta to'lash mumkin.
+  void _onNotPaid(BuildContext context, BookingPaymentStatus? status) {
+    setState(() {
+      _phase = _PaymentPhase.idle;
+      if (status != null) _ticketData = status;
+    });
+    AnalyticsService().trackPaymentFailed(
+      trId: widget.bookingCreateModel.trId ?? '',
+      billingId: widget.bookingCreateModel.billingId ?? '',
+      errorMessage: 'not_paid: ${status?.sign ?? 'unknown'}',
+      paymentMethod: _selectedPaymentType,
+    );
+    if (_remainingSeconds <= 0) {
+      // Tekshiruv paytida vaqt tugagan — odatiy "vaqt tugadi" oqimi.
+      _onTimeExpired();
+      return;
+    }
+    ProjectDialogs.showCustomToast(
+      context,
+      'payment_not_completed'.tr(),
+      type: AppMessageType.warning,
+    );
+  }
+
+  /// ~1 daqiqada tasdiq kelmadi: to'lov o'chiq qoladi (ikki marta to'lamasin),
+  /// "Qayta tekshirish" va "Buyurtmalar" taklif qilinadi.
+  Future<void> _onPaymentPending(
+      BuildContext context, BookingPaymentStatus? status) async {
+    setState(() {
+      _phase = _PaymentPhase.pending;
+      if (status != null) _ticketData = status;
+    });
+    final cubit = context.read<BookingConfirmCubit>();
+    final checkAgain = await showSdkAlert<bool>(
+      context: context,
+      icon: Assets.iconsDialogHourglassIcon,
+      tone: SdkDialogTone.warning,
+      title: 'payment_pending_title'.tr(),
+      message: 'payment_pending_message'.tr(),
+      actions: [
+        SdkDialogAction(label: 'payment_check_again'.tr(), value: true),
+        SdkDialogAction(
+          label: 'go_to_my_orders'.tr(),
+          value: false,
+          variant: SdkDialogButtonVariant.secondary,
+        ),
+      ],
+    );
+    if (checkAgain == null || !mounted || !context.mounted) return;
+    if (checkAgain) {
+      _checkPayment(cubit);
+    } else {
+      PaymentHelper.navigateToOrders(context);
+    }
   }
 
   /// Saqlangan karta bilan to'lov — "Unired → MySafar card_token" hujjati
@@ -659,10 +893,19 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: PaymentCountdownCard(
-            remaining: _remainingNotifier,
-            researching: _leavingAfterExpiry,
-          ),
+          // To'lov sahifasi yopilgach taymer o'rnida to'lov holati.
+          child: switch (_phase) {
+            _PaymentPhase.idle => PaymentCountdownCard(
+                remaining: _remainingNotifier,
+                researching: _leavingAfterExpiry,
+              ),
+            _PaymentPhase.inWebView || _PaymentPhase.checking =>
+              const PaymentStatusCard(kind: PaymentStatusKind.checking),
+            _PaymentPhase.pending =>
+              const PaymentStatusCard(kind: PaymentStatusKind.pending),
+            _PaymentPhase.paid =>
+              const PaymentStatusCard(kind: PaymentStatusKind.paid),
+          },
         ),
         Expanded(child: _buildScrollableContent(context)),
       ],
@@ -680,7 +923,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
             key: _methodsKey,
             // Vaqt tugagach usul tanlashning ma'nosi yo'q — ro'yxat xiralashadi.
             child: _PaymentMethodsLock(
-              locked: _remainingSeconds <= 0,
+              locked: _remainingSeconds <= 0 || _paymentBusy,
               child: PaymentMethodList(
                 items: _paymentTypeItems,
                 isLoading: _paymentTypesLoading,
@@ -886,53 +1129,105 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
   }
 
   Widget _buildBottomButton(BuildContext context, BookingConfirmStates state) {
-    final isLoading =
-        state is BookingConfirmLoadingState || _preparingCardToken;
-    // Tugma faqat vaqt tugaganda o'chadi. To'lov usuli tanlanmagan bo'lsa
-    // bosilganda sababini ko'rsatamiz (jim o'chirilgan tugma o'rniga).
-    final canProceed = _remainingSeconds > 0 && !_paymentTypesLoading;
+    final display = _displayPrice();
+    final Widget button;
+    switch (_phase) {
+      case _PaymentPhase.paid:
+        final hasTicket = _paidTicketArgs != null;
+        button = NextButtonWidget(
+          nextTittle: hasTicket ? 'download_e_ticket_short' : 'go_to_my_orders',
+          analyticsId:
+              hasTicket ? 'booking_paid_ticket' : 'booking_paid_orders',
+          isLoading: false,
+          passenger: widget.passengerNumber,
+          price: display.price,
+          showButton: true,
+          onPressed: () => _openPaidResult(context),
+        );
+      case _PaymentPhase.pending:
+        button = NextButtonWidget(
+          nextTittle: 'payment_check_again',
+          analyticsId: 'booking_payment_recheck',
+          isLoading: false,
+          passenger: widget.passengerNumber,
+          price: display.price,
+          showButton: true,
+          onPressed: () => _checkPayment(context.read<BookingConfirmCubit>()),
+        );
+      case _PaymentPhase.idle:
+      case _PaymentPhase.inWebView:
+      case _PaymentPhase.checking:
+        final checking = _phase != _PaymentPhase.idle;
+        final isLoading = state is BookingConfirmLoadingState ||
+            _preparingCardToken ||
+            checking;
+        // Tugma faqat vaqt tugaganda o'chadi. To'lov usuli tanlanmagan bo'lsa
+        // bosilganda sababini ko'rsatamiz (jim o'chirilgan tugma o'rniga).
+        final canProceed =
+            _remainingSeconds > 0 && !_paymentTypesLoading && !checking;
+        button = NextButtonWidget(
+          nextTittle: 'proceed_to_payment',
+          analyticsId: 'booking_confirm_continue',
+          isLoading: isLoading,
+          passenger: widget.passengerNumber,
+          price: display.price,
+          showButton: true,
+          // Tekshiruv paytida tugma baribir bosilmaydi (yuklanish holati) —
+          // `null` berilsa spinner xira fonda ko'rinmay qoladi.
+          onPressed: canProceed
+              ? () => _onPaymentPressed(context, state)
+              : (checking ? () {} : null),
+        );
+    }
+    return _withBookingCurrency(display.currency, button);
+  }
 
-    return NextButtonWidget(
-      nextTittle: 'proceed_to_payment',
-      analyticsId: 'booking_confirm_continue',
-      isLoading: isLoading,
-      passenger: widget.passengerNumber,
-      price: _formatPrice(_getDisplayPrice(state)),
-      showButton: true,
-      onPressed: canProceed ? () => _onPaymentPressed(context, state) : null,
+  BookingDisplayAmount? _displayAmount() => BookingDisplayAmount.resolve(
+        bookingAmount: widget.bookingCreateModel.amount,
+        bookingCurrency: widget.bookingCreateModel.currencyLabel,
+        ticketData: _ticketData,
+      );
+
+  /// Pastki paneldagi summa: bron summasi va valyutasi (qidiruv narxi emas —
+  /// narx oshgan bo'lishi mumkin), qarang [BookingDisplayAmount.resolve].
+  /// Aniqlanmasa — sahifaga berilgan narx (masalan buyurtmalardan kelinganda).
+  ({FlightPrice? price, String? currency}) _displayPrice() {
+    final resolved = _displayAmount();
+    if (resolved == null) {
+      return (price: _formatPrice(widget.price), currency: null);
+    }
+    // `FluffyRub/FluffyUzs.amount` — String?; int berilsa
+    // "int is not a subtype of type 'String?'" runtime xatosi chiqadi,
+    // shuning uchun har uchala valyutaga ham matn beramiz.
+    final amountStr = _formatAmount(resolved.amount.toString());
+    return (
+      price: FlightPrice(
+        rub: FluffyRub(amount: amountStr),
+        uzs: FluffyUzs(amount: amountStr),
+        usd: FluffyRub(amount: amountStr),
+      ),
+      currency: resolved.currency,
     );
   }
 
-  FlightPrice? _getDisplayPrice(BookingConfirmStates state) {
-    if (state is BookingConfirmChangeAmountSuccessState) {
-      final bookData = state.data['data']?['book'];
-      if (bookData != null) {
-        final isPriceChanged = bookData['is_search_price_changed'] == true ||
-            bookData['is_price_changed'] == true;
-
-        if (isPriceChanged) {
-          final newPrice = _toDouble(bookData['agent_mode_prices']
-              ?['total_amount_for_active_agent_mode']);
-          final oldPrice = _toDouble(widget.bookingCreateModel.amount);
-
-          // Faqat summa haqiqatan o'zgargandagina yangi narxni ko'rsatamiz;
-          // aks holda to'liq asl narx obyektini (widget.price) qaytaramiz.
-          if (newPrice != null &&
-              (oldPrice == null || (oldPrice - newPrice).abs() >= 0.5)) {
-            // `FluffyRub/FluffyUzs.amount` — String?; int berilsa
-            // "int is not a subtype of type 'String?'" runtime xatosi chiqadi,
-            // shuning uchun har uchala valyutaga ham matn beramiz.
-            final amountStr = newPrice.toStringAsFixed(0);
-            return FlightPrice(
-              rub: FluffyRub(amount: amountStr),
-              uzs: FluffyUzs(amount: amountStr),
-              usd: FluffyRub(amount: amountStr),
-            );
-          }
-        }
+  /// [NextButtonWidget] summani foydalanuvchi tanlagan valyuta belgisi bilan
+  /// chiqaradi, bron esa boshqa valyutada bo'lishi mumkin (USD tanlanganda
+  /// backend RUB'da bron qiladi) — tugma uchun belgini bron valyutasiga
+  /// almashtiramiz.
+  Widget _withBookingCurrency(String? currency, Widget child) {
+    if (currency == null) return child;
+    var provider = _currencyOverride;
+    if (provider == null || provider.label != currency) {
+      final old = provider;
+      provider = _currencyOverride = _BookingCurrencyProvider(currency);
+      if (old != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
       }
     }
-    return widget.price;
+    return ChangeNotifierProvider<CurrencyProvider>.value(
+      value: provider,
+      child: child,
+    );
   }
 
   /// Pastki paneldagi summa uchun nusxa: `4870000` → `4 870 000`.
@@ -969,6 +1264,9 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
   }
 
   void _onPaymentPressed(BuildContext context, BookingConfirmStates state) {
+    // To'lov sahifasi ochilgan / tekshirilmoqda / to'langan — ikki marta
+    // to'lanmasin.
+    if (_paymentBusy) return;
     if (!_isSelectionActive()) {
       HapticFeedback.mediumImpact();
       setState(() => _showSelectionError = true);
@@ -1005,6 +1303,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
   Future<void> _openSavedCardsSheet(BuildContext context) async {
     if (_savedCardsSheetOpen ||
         _preparingCardToken ||
+        _paymentBusy ||
         _remainingSeconds <= 0 ||
         context.read<BookingConfirmCubit>().state
             is BookingConfirmLoadingState) {
@@ -1019,6 +1318,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
     if (choice == null || !mounted || !context.mounted) return;
     // Sheet ochiq turganda vaqt tugagan yoki boshqa usul tanlangan bo'lishi mumkin.
     if (_remainingSeconds <= 0 ||
+        _paymentBusy ||
         _selectedPaymentType != PaymentConstants.mysafarpay) {
       return;
     }
@@ -1031,8 +1331,9 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
   }
 
   void _submitPayment(BuildContext context) {
-    if (context.read<BookingConfirmCubit>().state
-        is BookingConfirmLoadingState) {
+    if (_paymentBusy ||
+        context.read<BookingConfirmCubit>().state
+            is BookingConfirmLoadingState) {
       return;
     }
     // Tanlangan tur ID'si allaqachon API nomi (MYSAFARPAY / PAYME / PAYGINE /
@@ -1083,4 +1384,33 @@ class _PaymentMethodsLock extends StatelessWidget {
       ),
     );
   }
+}
+
+/// To'lov sahifasi (WebView) bilan bog'liq bosqich.
+enum _PaymentPhase {
+  /// To'lov boshlanmagan yoki to'lanmagan — to'lash mumkin.
+  idle,
+
+  /// To'lov sahifasi ochiq.
+  inWebView,
+
+  /// Sahifa yopildi — to'lov holati tekshirilmoqda.
+  checking,
+
+  /// Tekshiruv tugadi, lekin to'lov hali tasdiqlanmadi.
+  pending,
+
+  /// To'langan.
+  paid,
+}
+
+/// Faqat [NextButtonWidget] uchun: summa bron valyutasi belgisi bilan.
+class _BookingCurrencyProvider extends CurrencyProvider {
+  _BookingCurrencyProvider(this.label);
+
+  final String label;
+
+  @override
+  String getElementPrice(FlightPrice? price) =>
+      '${price?.uzs?.amount ?? ''} $label';
 }

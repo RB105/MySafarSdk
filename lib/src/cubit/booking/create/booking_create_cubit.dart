@@ -16,16 +16,17 @@ class BookingcreateCubit extends Cubit<BookingcreateStates> with NetworkCancel {
       required String phoneNumber,
       required BuildContext context}) async {
     emit(BookingcreateLoadingState());
-    // token verify
-    await withNetworkCancel(
-      () => _bookingService.createBooking(
-          context: context,
-          passenger: passenger,
-          tid: tid,
-          clientEmail: email,
-          firstName: firstName,
-          clientPhoneNum: phoneNumber),
-    ).then((NetworkResponse? response) {
+    try {
+      // token verify
+      final NetworkResponse response = await withNetworkCancel(
+        () => _bookingService.createBooking(
+            context: context,
+            passenger: passenger,
+            tid: tid,
+            clientEmail: email,
+            firstName: firstName,
+            clientPhoneNum: phoneNumber),
+      );
       if (isClosed) return;
       if (response is NetworkSuccessResponse) {
         // Voronka 2-bosqichi — booking yaratildi (to'lovdan oldingi qadam).
@@ -36,8 +37,15 @@ class BookingcreateCubit extends Cubit<BookingcreateStates> with NetworkCancel {
         emit(BookingcreateSuccessState(response.data));
       } else if (response is NetworkErrorResponse) {
         emit(BookingcreateErrorState(response.getError()));
+      } else {
+        emit(BookingcreateErrorState('error_other'.tr()));
       }
-    });
+    } catch (e) {
+      // Kutilmagan xato — yuklanish dialogi qotib qolmasin.
+      debugPrint('MySafarSdk: booking-create xatosi ($e)');
+      if (isClosed) return;
+      emit(BookingcreateErrorState('error_other'.tr()));
+    }
   }
 
   @override

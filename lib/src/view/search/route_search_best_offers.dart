@@ -80,16 +80,18 @@ class _OfferCard extends StatelessWidget {
           .where((s) => s.direction == 0)
           .toList();
 
-  String _priceText(AppCurrency currency) {
-    final p = flight.price;
-    final String? raw = switch (currency) {
-      AppCurrency.uzs => p?.uzs?.amount,
-      AppCurrency.rub => p?.rub?.amount,
-      AppCurrency.usd => p?.usd?.amount,
-    };
-    final v = double.tryParse(raw ?? '');
-    if (v == null) return '—';
-    return ElementFormatter.formatNumberWithSpaces(v);
+  /// Narx matni va uning valyutasi. UZS summasi bo'shliqlar bilan keladi
+  /// ("2 751 009") — shuning uchun `double.tryParse` emas, umumiy
+  /// `ElementFormatter.parsePrice` orqali o'qiymiz. Tanlangan valyuta bloki
+  /// bo'lmasa UZS summasi UZS belgisi bilan ko'rsatiladi.
+  (String, AppCurrency) _priceText(AppCurrency currency) {
+    final resolved =
+        CurrencyProvider.resolveElementPrice(flight.price, currency);
+    if (resolved == null) return ('—', currency);
+    return (
+      ElementFormatter.formatNumberWithSpaces(resolved.value),
+      resolved.currency,
+    );
   }
 
   @override
@@ -295,6 +297,7 @@ class _OfferCard extends StatelessWidget {
   }
 
   Widget _footer(BuildContext context, bool isDark, AppCurrency currency) {
+    final (String priceText, AppCurrency priceCurrency) = _priceText(currency);
     return Column(
       children: [
         Divider(
@@ -310,7 +313,7 @@ class _OfferCard extends StatelessWidget {
                 TextSpan(
                   children: [
                     TextSpan(
-                      text: _priceText(currency),
+                      text: priceText,
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
@@ -320,7 +323,7 @@ class _OfferCard extends StatelessWidget {
                       ),
                     ),
                     TextSpan(
-                      text: " ${currency.label}",
+                      text: " ${priceCurrency.label}",
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,

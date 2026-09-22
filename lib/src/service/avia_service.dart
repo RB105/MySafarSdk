@@ -25,20 +25,18 @@ class AviaService with RequestConfig {
       {required String part, String? lang}) async {
     // sorov yuboriladi success bolsa AirPortsModelga parse qilinadi
     NetworkResponse response = await postRequest(
+      retryable: true,
       partnerToken: true,
       endPoint: EndPoints.avia_airports,
       params: {"lang": lang ?? "ru", "part": part},
     );
-    
-    if (response is NetworkSuccessResponse) {
 
+    if (response is NetworkSuccessResponse) {
       if (response.data['success'] == true) {
         final data = response.data['data'];
         if (data is List && data.isEmpty) {
-
           return NetworkErrorResponse(error: "nothingFound".tr());
         } else if (data is Map && data['cities'] is Map) {
-        
           return NetworkSuccessResponse(
               data: (data['cities'] as Map)
                   .values
@@ -47,13 +45,12 @@ class AviaService with RequestConfig {
         }
       }
 
-      
       return const NetworkErrorResponse(
         error: "Unexpected airports response",
         errorType: ErrorType.other,
       );
     }
-    if(response is NetworkErrorResponse) {
+    if (response is NetworkErrorResponse) {
       debugPrint(response.error);
     }
     return response;
@@ -63,6 +60,7 @@ class AviaService with RequestConfig {
   Future<NetworkResponse> getRecommendations(
       {required Map<String, dynamic> params, String? endPoint}) async {
     NetworkResponse response = await postRequest(
+        retryable: true,
         endPoint: endPoint ?? EndPoints.avia_recommendatins,
         params: params,
         partnerToken: true);
@@ -105,7 +103,7 @@ class AviaService with RequestConfig {
     }
 
     NetworkResponse response =
-        await postRequest(endPoint: EndPoints.main_pop_cities);
+        await postRequest(retryable: true, endPoint: EndPoints.main_pop_cities);
 
     if (response is NetworkSuccessResponse) {
       final result =
@@ -191,6 +189,7 @@ class AviaService with RequestConfig {
     };
 
     final response = await postRequest(
+      retryable: true,
       partnerToken: true,
       endPoint: EndPoints.ticket_price_by_month,
       params: params,
@@ -235,6 +234,7 @@ class AviaService with RequestConfig {
   /// amaldagi token. Bron sahifasiga aynan shu yangi element uzatilishi kerak.
   Future<NetworkResponse> getFlightInfo(String tid, {String? lang}) async {
     final response = await postRequest(
+      retryable: true,
       partnerToken: true,
       endPoint: EndPoints.avia_get_flight_info,
       params: {"lang": lang ?? "ru", "tid": tid},
@@ -272,6 +272,7 @@ class AviaService with RequestConfig {
 
   Future<NetworkResponse> getTariff(String tid) async {
     final response = await postRequest(
+        retryable: true,
         partnerToken: true,
         endPoint: EndPoints.avia_get_tariff,
         params: {"lang": "ru", "tid": tid});
@@ -304,6 +305,7 @@ class AviaService with RequestConfig {
   Future<NetworkResponse> getCentrumRecommedations(
       {required Map<String, dynamic> params}) async {
     NetworkResponse response = await postRequest(
+        retryable: true,
         endPoint: EndPoints.centrum_recommendatins,
         params: params,
         partnerToken: true);

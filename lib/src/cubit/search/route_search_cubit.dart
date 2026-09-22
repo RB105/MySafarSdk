@@ -38,10 +38,14 @@ class RouteSearchCubit extends Cubit<RouteSearchState> with NetworkCancel {
   final AviaService _avia;
   final FornexRepository _fornex;
 
-  /// Joriy yo'nalish kaliti — async yuklash tugaganda natija hali dolzarbmi
-  /// (foydalanuvchi shahar almashtirmadimi) tekshirish uchun.
+  /// Joriy so'rov kaliti — async yuklash tugaganda natija hali dolzarbmi
+  /// (foydalanuvchi shahar, yo'lovchilar, klass yoki filtrlarni
+  /// almashtirmadimi) tekshirish uchun. Oylik narxlar ham, takliflar ham shu
+  /// parametrlar bilan so'raladi.
   String get _routeKey =>
-      '${state.from.cityIataCode}-${state.to.cityIataCode}';
+      '${state.from.cityIataCode}-${state.to.cityIataCode}'
+      '|${state.adt}-${state.chd}-${state.inf}-${state.klass}'
+      '|${state.direct}-${state.baggage}';
 
   // ── Forma tanlovlari ──────────────────────────────────────────────────
 
@@ -81,7 +85,16 @@ class RouteSearchCubit extends Cubit<RouteSearchState> with NetworkCancel {
     required int inf,
     required String klass,
   }) {
+    if (state.adt == adt &&
+        state.chd == chd &&
+        state.inf == inf &&
+        state.klass == klass) {
+      return;
+    }
     emit(state.copyWith(adt: adt, chd: chd, inf: inf, klass: klass));
+    // Narxlar va "Eng yaxshi takliflar" yo'lovchilar soni va klassga bog'liq —
+    // eski (boshqa tarkib uchun topilgan) takliflar bron qilinmasin.
+    _loadMonthPrices();
   }
 
   /// Filtr kalitlari — narxlar kalendari ham shu filtrlar bilan qayta so'raladi
@@ -159,7 +172,16 @@ class RouteSearchCubit extends Cubit<RouteSearchState> with NetworkCancel {
   Future<void> _loadMonthPrices() async {
     refreshNetworkCancel();
     final key = _routeKey;
-    emit(state.copyWith(monthLoading: true, clearMonthPrices: true));
+    // Eski takliflar ham darhol olib tashlanadi: ular boshqa yo'nalish /
+    // yo'lovchilar uchun topilgan, bosilsa noto'g'ri parametrlar bilan
+    // bronga ketardi.
+    emit(state.copyWith(
+      monthLoading: true,
+      clearMonthPrices: true,
+      offersLoading: true,
+      offers: const [],
+      clearOffersDate: true,
+    ));
     try {
       final response = await withNetworkCancel(
         () => _avia.getPriceByMonth(
@@ -207,10 +229,14 @@ class RouteSearchCubit extends Cubit<RouteSearchState> with NetworkCancel {
     final key = _routeKey;
     emit(state.copyWith(offersLoading: true, offers: const []));
     try {
+      // Takliflar foydalanuvchining AYNAN o'z yo'lovchilari, klassi va
+      // filtrlari bilan qidiriladi: taklif bosilganda shu reys (id/narx)
+      // `buildRequest()` parametrlari bilan bronga ketadi — 1 kattalik
+      // narx/id N yo'lovchiga bron qilinmasligi kerak.
       final body = RecommendationRequestBody(
-        adt: 1,
-        chd: 0,
-        inf: 0,
+        adt: state.adt,
+        chd: state.chd,
+        inf: state.inf,
         segments: [
           RecommendationReqBodySegment(
             from: state.from,
@@ -219,7 +245,9 @@ class RouteSearchCubit extends Cubit<RouteSearchState> with NetworkCancel {
           ),
         ],
         flight_Type: 0,
-        klass: 'a',
+        klass: state.klass,
+        isDirectOnly: state.direct ? 1 : 0,
+        isBaggage: state.baggage,
       );
       final params = body.toJson();
       final List<String> endpoints =

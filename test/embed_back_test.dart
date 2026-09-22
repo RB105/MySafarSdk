@@ -142,6 +142,33 @@ void main() {
     expect(find.byType(MySafarEmbed), findsNothing);
   });
 
+  testWidgets(
+      'system back respects PopScope(canPop: false) on inner route '
+      '(payment page guard)', (tester) async {
+    await openEmbed(tester);
+
+    var guardCalls = 0;
+    NavigationService.navigatorKey.currentState!.push(
+      MaterialPageRoute<void>(
+        builder: (_) => PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop) guardCalls++;
+          },
+          child: const Scaffold(body: Text('Guarded Payment Page')),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await triggerSystemBack(tester);
+
+    expect(guardCalls, 1, reason: 'page guard must receive the back event');
+    expect(find.text('Guarded Payment Page'), findsOneWidget,
+        reason: 'guarded route must not be popped directly');
+    expect(MySafarSdk.isEmbedded, isTrue);
+  });
+
   testWidgets('SdkEmbedBackHandler.handleBack exits at Main', (tester) async {
     await openEmbed(tester);
 

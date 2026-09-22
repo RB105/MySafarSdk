@@ -146,19 +146,10 @@ class RecommendationRequestBody {
     data['gds_black_list'] = gdsBlackList ?? [];
     data['gds_white_list'] = gdsWhiteList ?? [];
     data['is_direct_only'] = isDirectOnly ?? 0;
-    final temp_arr = filterAirlines
-        ?.where(
-          (element) => element.isChosed ?? false,
-        )
-        .toList();
-
-    // Filter out empty strings
-    final airlinesList = temp_arr
-            ?.map((e) => e.toJson())
-            .where((e) => e.toString().isNotEmpty)
-            .toList() ??
-        <String>[];
-    data['filter_airlines'] = airlinesList;
+    // Faqat foydalanuvchi filtrda AYNAN tanlagan aviakompaniyalar yuboriladi.
+    // Tanlov bo'lmasa bo'sh ro'yxat — server barcha aviakompaniyalarni
+    // qidiradi (oldingi natijadagi kompaniyalar bilan cheklanmaydi).
+    data['filter_airlines'] = chosenAirlineCodes;
     data['count'] = 30;
     return data;
   }
@@ -213,12 +204,28 @@ class RecommendationRequestBody {
     return "$date, ${getPassCount()}., ${getKlassName()}";
   }
 
+  /// Foydalanuvchi filtrda aniq tanlagan aviakompaniya kodlari. Bo'sh
+  /// bo'lsa — aviakompaniya filtri yo'q (barcha kompaniyalar so'raladi).
+  List<String> get chosenAirlineCodes => [
+        for (final a in filterAirlines ?? const <RequestBodyAirlineModel>[])
+          if ((a.isChosed ?? false) && (a.code ?? '').isNotEmpty) a.code!,
+      ];
+
+  /// So'rov aviakompaniya bo'yicha cheklanganmi (foydalanuvchi tanlovi).
+  bool get hasAirlineFilter => chosenAirlineCodes.isNotEmpty;
+
+  /// Natijadagi aviakompaniyalardan filter ro'yxatini tuzadi (sheet'da
+  /// ko'rsatish uchun). Foydalanuvchi oldin tanlaganlari saqlanadi, qolganlari
+  /// TANLANMAGAN bo'ladi — aks holda keyingi qidiruvlar (sana lentasi, qayta
+  /// qidirish) faqat oldingi natijadagi kompaniyalarni so'rab, sekin yoki
+  /// xato bergan manbadagi reyslar qaytib kelmay qolardi.
   void setFilterAirlinesFromItems(List<FilterAirLineItemsModel> items) {
+    final chosen = chosenAirlineCodes.toSet();
     filterAirlines = items.map((item) {
       return RequestBodyAirlineModel(
         code: item.code,
         name: item.title,
-        isChosed: true, // or false, depending on logic
+        isChosed: chosen.contains(item.code),
       );
     }).toList();
   }
@@ -288,11 +295,10 @@ class RecommendationRequestBody {
     arrOrder = null;
     durationOrder = null;
     isBaggage = null;
-    filterAirlines
-        ?.map(
-          (e) => e.isChosed = true,
-        )
-        .toList();
+    // Standart holat — aviakompaniya filtri yo'q (hech biri tanlanmagan).
+    for (final e in filterAirlines ?? const <RequestBodyAirlineModel>[]) {
+      e.isChosed = false;
+    }
     isDirectOnly = 0;
     klass = "a";
   }

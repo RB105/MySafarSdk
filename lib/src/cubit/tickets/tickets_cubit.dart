@@ -78,9 +78,12 @@ class TicketCubit extends Bloc<TicketEvent, TicketsState> with NetworkCancel {
     GetRecommendationResModel? accumulated;
     bool anyShown = false;
     NetworkErrorResponse? lastError;
+    // Manba umuman javob bera olmagan (timeout, ulanish, 5xx) oxirgi xato —
+    // bunda "reys yo'q" deyish noto'g'ri bo'ladi, qayta urinish kerak.
+    NetworkErrorResponse? lastTransientError;
     // Kamida bitta manba "bu yo'nalish/sanada reys yo'q" deb javob berdi.
-    // Bu — xato emas, yo'nalish haqidagi haqiqiy javob; shuning uchun boshqa
-    // manbaning xatosidan USTUN turadi (pastdagi yakuniy tanlovga qarang).
+    // Bu — xato emas, yo'nalish haqidagi haqiqiy javob (pastdagi yakuniy
+    // tanlovga qarang: [resolveNoResultsOutcome]).
     bool anyEmpty = false;
 
     bool isStale() => isClosed || generation != _requestGeneration;
@@ -160,14 +163,12 @@ class TicketCubit extends Bloc<TicketEvent, TicketsState> with NetworkCancel {
             : _mergeRecommendations(accumulated!, model);
         overAllData = accumulated;
 
-        // Foydalanuvchi qo'lda filter qo'llamagan bo'lsa, filter
-        // aviakompaniyalarini jamlangan (manbalar birlashmasi) ro'yxatdan
-        // sinxronlaymiz.
-        if (!isFiltered) {
-          filterReqBody.setFilterAirlinesFromItems(
-            accumulated?.filterAirLineItems ?? [],
-          );
-        }
+        // DIQQAT: natijadagi aviakompaniyalar so'rovga (`filterReqBody`)
+        // YOZILMAYDI. Ilgari hammasi "tanlangan" deb `filter_airlines`ga
+        // qo'shilardi va keyingi qidiruvlar (sana lentasi, qayta qidirish)
+        // faqat oldingi natijadagi kompaniyalarni so'rardi — birinchi safar
+        // sekin/xato bergan manbaning reyslari qaytib kelmasdi. Filtr sheet'i
+        // aviakompaniyalar ro'yxatini `overAllData`dan oladi.
 
         anyShown = true;
       } else if (response is NetworkErrorResponse) {
@@ -179,6 +180,9 @@ class TicketCubit extends Bloc<TicketEvent, TicketsState> with NetworkCancel {
           // Qisman xato — userga ko'rsatilmaydi. Faqat saqlaymiz; hech qaysi
           // manba javob bermasa, oxirida chiqaramiz.
           lastError = response;
+          if (isTransientSearchError(response.errorType)) {
+            lastTransientError = response;
+          }
         }
       }
 
@@ -204,24 +208,67 @@ class TicketCubit extends Bloc<TicketEvent, TicketsState> with NetworkCancel {
     if (isStale()) return;
 
     // Hech qaysi manba reys bermadi — endi (faqat shu holatda) xato yoki bo'sh
-    // holatni ko'rsatamiz. Tartib muhim:
-    //   1) kamida bitta manba "reys yo'q" dedi → "bilet topilmadi" (xato dialogi
-    //      chiqmaydi; boshqa manbaning xatosi bu javobni bekor qilmaydi);
-    //   2) hech kim javob bermadi, faqat xatolar → xato dialogi;
-    //   3) kutilmagan istisno → umumiy xato;
-    //   4) qolgan hollarda → "bilet topilmadi".
+    // holatni ko'rsatamiz (tartib: [resolveNoResultsOutcome]).
     if (!anyShown) {
-      if (anyEmpty) {
-        emit(TicketEmptyState());
-      } else if (lastError != null) {
-        emit(TicketErrorState(lastError!.getError(),
-            errorType: lastError!.errorType));
-      } else if (unexpectedError != null) {
-        emit(TicketErrorState("error_other".tr()));
-      } else {
-        emit(TicketEmptyState());
+      switch (resolveNoResultsOutcome(
+        anyEmpty: anyEmpty,
+        hasError: lastError != null,
+        hasTransientError: lastTransientError != null,
+        hasUnexpectedError: unexpectedError != null,
+      )) {
+        case TicketNoResultsOutcome.empty:
+          emit(const TicketEmptyState());
+        case TicketNoResultsOutcome.error:
+          // Vaqtinchalik xato bo'lsa o'shani ko'rsatamiz — dialog sarlavhasi
+          // ("Ulanishda muammo" / "Server xatosi") aynan shunga mos.
+          final error = lastTransientError ?? lastError!;
+          emit(TicketErrorState(error.getError(), errorType: error.errorType));
+        case TicketNoResultsOutcome.unexpectedError:
+          emit(TicketErrorState("error_other".tr()));
       }
     }
+  }
+
+  /// Manba umuman javob bera olmagan (qayta urinish yordam berishi mumkin)
+  /// xato turlarimi: timeout, ulanish uzilishi, 5xx.
+  @visibleForTesting
+  static bool isTransientSearchError(ErrorType? type) => switch (type) {
+        ErrorType.connectTimeout ||
+        ErrorType.receiveTimeout ||
+        ErrorType.sendTimeout ||
+        ErrorType.connectionError ||
+        ErrorType.dio_error ||
+        ErrorType.internalServer_500 ||
+        ErrorType.badGateway_502 ||
+        ErrorType.serviceUnavailable_503 ||
+        ErrorType.gatewayTimeout_504 ||
+        ErrorType.serverError_5xx =>
+          true,
+        _ => false,
+      };
+
+  /// Hech qaysi manba reys bermaganda qaysi holat ko'rsatilishini tanlaydi.
+  /// Tartib muhim:
+  ///   1) kamida bitta manba javob bera olmadi (timeout/ulanish/5xx) → xato +
+  ///      "Qayta urinish". Boshqa manba "reys yo'q" desa ham — javob bermagan
+  ///      manbada reys bo'lishi mumkin, "bilet topilmadi" deyish noto'g'ri;
+  ///   2) kamida bitta manba "reys yo'q" dedi → "bilet topilmadi" (boshqa
+  ///      manbaning biznes/4xx xatosi bu javobni bekor qilmaydi);
+  ///   3) faqat xatolar → xato dialogi;
+  ///   4) kutilmagan istisno → umumiy xato;
+  ///   5) qolgan hollarda → "bilet topilmadi".
+  @visibleForTesting
+  static TicketNoResultsOutcome resolveNoResultsOutcome({
+    required bool anyEmpty,
+    required bool hasError,
+    required bool hasTransientError,
+    required bool hasUnexpectedError,
+  }) {
+    if (hasTransientError) return TicketNoResultsOutcome.error;
+    if (anyEmpty) return TicketNoResultsOutcome.empty;
+    if (hasError) return TicketNoResultsOutcome.error;
+    if (hasUnexpectedError) return TicketNoResultsOutcome.unexpectedError;
+    return TicketNoResultsOutcome.empty;
   }
 
   /// Ikki manba natijasini birlashtiradi: `base` reyslari ustiga `extra`
