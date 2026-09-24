@@ -17,6 +17,8 @@ import 'package:mysafar_sdk/src/model/remote/profile/users_model.dart';
 import 'package:mysafar_sdk/src/service/passenger/passenger_storage_service.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/booking_form_fields.dart'
     show BookingFieldError, BookingFormStyle;
+import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
+import 'package:mysafar_sdk/src/view/booking/widget/host_identification_sheet.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/passenger_card_widget.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/passenger_controller.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/passenger_date_picker.dart';
@@ -161,6 +163,18 @@ class _PassengerFormPageState extends State<PassengerFormPage> {
   void _applyUser(UsersModel user) {
     setState(() => _passenger = _passenger.copyFromUser(user));
     _fillControllers();
+  }
+
+  Future<void> _applyHostIdentification() async {
+    final id = MySafarSdk.userData.identification;
+    if (id == null || !id.hasUsefulData) return;
+    _dismissKeyboard();
+    final confirmed = await showHostIdentificationConfirmSheet(
+      context: context,
+      identification: id,
+    );
+    if (!mounted || !confirmed) return;
+    _applyUser(usersModelFromHostIdentification(id));
   }
 
   /// Sheet/sahifa ochishdan oldin fokusni butunlay olib tashlaydi.
@@ -403,6 +417,9 @@ class _PassengerFormPageState extends State<PassengerFormPage> {
                 getSuggestions: _suggestions,
                 onFieldChanged: _updateField,
                 onUserSelected: _applyUser,
+                onMyDataTap: MySafarSdk.userData.hasIdentification
+                    ? _applyHostIdentification
+                    : null,
                 onScanTap: _openDocumentScanner,
                 onCitizenTap: _showCitizenPicker,
                 onDocexpCalendarTap: () => _showDatePicker(isDocexp: true),

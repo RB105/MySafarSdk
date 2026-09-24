@@ -54,6 +54,8 @@ class PassengerCardWidget extends StatelessWidget {
   final List<String> Function(String key) getSuggestions;
   final Function(String field, String value) onFieldChanged;
   final Function(UsersModel) onUserSelected;
+  /// Host myid bersa "Ozimning malumotim" chiqadi
+  final VoidCallback? onMyDataTap;
   final VoidCallback onCitizenTap;
   final VoidCallback onDocexpCalendarTap;
   final VoidCallback onBirthdateCalendarTap;
@@ -81,6 +83,7 @@ class PassengerCardWidget extends StatelessWidget {
     required this.getSuggestions,
     required this.onFieldChanged,
     required this.onUserSelected,
+    this.onMyDataTap,
     required this.onCitizenTap,
     required this.onDocexpCalendarTap,
     required this.onBirthdateCalendarTap,
@@ -212,44 +215,89 @@ class PassengerCardWidget extends StatelessWidget {
     );
   }
 
-  /// Tezkor to'ldirish: hujjatni skanerlash va (bo'lsa) saqlangan
-  /// yo'lovchini tanlash — ikonka, sarlavha va izohli kartalar.
+  /// Tezkor toldirish: skaner, myid (bolsa), saqlangan yolovchi
   Widget _buildQuickFill(BuildContext context) {
     final hasSavedPassengers = cachedUsers.isNotEmpty;
+    final hasMyData = onMyDataTap != null;
+
     final scan = _QuickFillCard(
       iconAsset: Assets.iconsScanFrameIcon,
       title: "scan_short".tr(),
       subtitle: "quick_scan_subtitle".tr(),
-      compact: hasSavedPassengers,
+      compact: hasSavedPassengers || hasMyData,
       onTap: onScanTap,
     );
-    if (!hasSavedPassengers) return scan;
 
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(child: scan),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _QuickFillCard(
-              iconAsset: Assets.iconsScanSavedPassengersIcon,
-              title: "select_passenger_short".tr(),
-              subtitle: "quick_saved_subtitle".tr(),
-              compact: true,
-              onTap: () {
-                // Sheet yopilganda klaviatura oxirgi maydonga qaytib
-                // ochilmasin.
-                FocusManager.instance.primaryFocus?.unfocus();
-                showPassengerPickerBottomSheet(
-                  context: context,
-                  onSelected: onUserSelected,
-                );
-              },
-            ),
+    final myData = hasMyData
+        ? _QuickFillCard(
+            iconAsset: Assets.iconsScanIdCardIcon,
+            title: "use_my_data_short".tr(),
+            subtitle: "quick_my_data_subtitle".tr(),
+            compact: true,
+            onTap: () {
+              FocusManager.instance.primaryFocus?.unfocus();
+              onMyDataTap!();
+            },
+          )
+        : null;
+
+    final saved = hasSavedPassengers
+        ? _QuickFillCard(
+            iconAsset: Assets.iconsScanSavedPassengersIcon,
+            title: "select_passenger_short".tr(),
+            subtitle: "quick_saved_subtitle".tr(),
+            compact: true,
+            onTap: () {
+              // Sheet yopilganda klaviatura oxirgi maydonga qaytib
+              // ochilmasin.
+              FocusManager.instance.primaryFocus?.unfocus();
+              showPassengerPickerBottomSheet(
+                context: context,
+                onSelected: onUserSelected,
+              );
+            },
+          )
+        : null;
+
+    // Yolovchi tanlash oldida myid tugmasi
+    final secondary = <Widget>[
+      if (myData != null) myData,
+      if (saved != null) saved,
+    ];
+
+    if (secondary.isEmpty) return scan;
+
+    // bitta qoshimcha bolsa skaner yoniga
+    if (secondary.length == 1) {
+      return IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: scan),
+            const SizedBox(width: 10),
+            Expanded(child: secondary.first),
+          ],
+        ),
+      );
+    }
+
+    // skaner tepada, pastda myid + yolovchi tanlash
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        scan,
+        const SizedBox(height: 10),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: secondary[0]),
+              const SizedBox(width: 10),
+              Expanded(child: secondary[1]),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 

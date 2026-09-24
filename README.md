@@ -63,23 +63,36 @@ MySafarConfig(
 
 ### Foydalanuvchi ma'lumotlari (email, kartalar) — ixtiyoriy
 
-Host o'z user'ining emaili va kartalarini `init`ga berishi mumkin. Hech narsa
-berilmasa (yoki ro'yxatlar bo'sh bo'lsa) SDK odatdagidek ishlaydi. So'mdagi
-kartalar va boshqa valyutadagi kartalar alohida ro'yxatda qabul qilinadi:
+Host oz userining email, myid malumoti va kartalarini init ga berishi mumkin.
+Hech narsa bermasa SDK odatdagidek ishlaydi:
 
 ```dart
 await MySafarSdk.init(
   config: ...,
   userData: MySafarUserData(
     email: 'user@example.com',
+    // myid malumot — bersa "Ozimning malumotim" chiqadi
+    identification: MySafarUserIdentification(
+      firstName: 'VALI',
+      lastName: 'ALIYEV',
+      middleName: 'VALIYEVICH',
+      birthDate: '15.03.1990', // yoki 1990-03-15
+      passSeries: 'AA1234567',
+      passSeriesMask: 'AA*******',
+      passExpiry: '15.03.2030',
+      pinfl: '30103901234567',
+      pinflMask: '30103********',
+      address: 'Toshkent sh.',
+      isResident: true,
+    ),
     uzsCards: [
       MySafarUzsCard(
         cardNumber: '8600123412341234', // 16 raqam
         expire: '2812',                 // YYMM (12/2028)
         cardMask: '8600 **** **** 1234', // ixtiyoriy — berilmasa raqamdan hosil qilinadi
         owner: 'ALIYEV VALI',           // ixtiyoriy
-        balance: 1250000,               // ixtiyoriy, so'mda (tiyinda emas)
-        cardLogoUrl: 'https://.../uzcard.svg', // ixtiyoriy, to'liq URL (.svg / .png)
+        balance: 1250000,               // ixtiyoriy, somda (tiyinda emas)
+        cardLogoUrl: 'https://.../uzcard.svg', // ixtiyoriy, toliq URL (.svg / .png)
       ),
     ],
     foreignCards: [
@@ -93,15 +106,17 @@ await MySafarSdk.init(
   ),
 );
 
-// Karta qo'shildi / balans o'zgardi / boshqa user kirdi:
+// Karta qoshildi / balans ozgardi / boshqa user kirdi:
 MySafarSdk.updateUserData(MySafarUserData(...));
 // Host'dan chiqildi:
 MySafarSdk.clearUserData();
 ```
 
-- Karta ma'lumotlari faqat xotirada turadi — diskka, keshga, analytics'ga
+- `identification` bersa yolovchi formasida "Ozimning malumotim" chiqadi.
+  Ozi toldirilmaydi — user korib tasdiqlasa shunda yoziladi.
+- Karta malumotlari faqat xotirada turadi — diskka, keshga, analytics'ga
   yozilmaydi; `toString()` karta raqamini maskalaydi.
-- Yaroqsiz kartalar (16 raqamsiz, `YYMM` bo'lmagan muddat, bo'sh token) jim
+- Yaroqsiz kartalar (16 raqamsiz, `YYMM` bolmagan muddat, bo'sh token) jim
   tashlab yuboriladi — init yiqilmaydi.
 - `MySafarEmbed.email` berilmasa `userData.email` ishlatiladi.
 
