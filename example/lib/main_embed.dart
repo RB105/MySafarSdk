@@ -43,10 +43,22 @@ Future<void> main() async {
       //   description: 'bilan parvoz qiling',
       // ),
     ),
-    // Ixtiyoriy: host user emaili va kartalari. Berilmasa SDK odatdagidek
-    // ishlaydi. Keyin o'zgarsa: MySafarSdk.updateUserData(...).
-    // userData: MySafarUserData(
-    //   email: 'user@example.com',
+    // Host berishi mumkin: email, myid malumot, kartalar.
+    userData: MySafarUserData(
+      email: 'user@example.com',
+      identification: MySafarUserIdentification(
+        firstName: 'VALI',
+        lastName: 'ALIYEV',
+        middleName: 'VALIYEVICH',
+        birthDate: '15.03.1990', // yoki 1990-03-15
+        passSeries: 'AA1234567',
+        passSeriesMask: 'AA*******',
+        passExpiry: '15.03.2030',
+        pinfl: '30103901234567',
+        pinflMask: '30103********',
+        address: 'Toshkent sh.',
+        isResident: true,
+      ),
     //   uzsCards: [
     //     MySafarUzsCard(
     //       cardNumber: '8600123412341234',
@@ -74,7 +86,7 @@ Future<void> main() async {
     //     expire: request.card.expire, // YYMM
     //     trId: request.trId,
     //   ),
-    // ),
+     ),
   );
 
   // Back diagnostikasi: tizim back'i Flutter'ga yetib keladimi.
