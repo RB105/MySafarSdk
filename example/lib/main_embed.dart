@@ -44,29 +44,29 @@ Future<void> main() async {
       // ),
     ),
     // Host berishi mumkin: email, myid malumot, kartalar.
-    userData: MySafarUserData(
-      email: 'user@example.com',
-      identification: MySafarUserIdentification(
-        firstName: 'VALI',
-        lastName: 'ALIYEV',
-        middleName: 'VALIYEVICH',
-        birthDate: '15.03.1990', // yoki 1990-03-15
-        passSeries: 'AA1234567',
-        passSeriesMask: 'AA*******',
-        passExpiry: '15.03.2030',
-        pinfl: '30103901234567',
-        pinflMask: '30103********',
-        address: 'Toshkent sh.',
-        isResident: true,
-      ),
+    // userData: MySafarUserData(
+    //   email: 'user@example.com',
+    //   identification: MySafarUserIdentification(
+    //     firstName: 'VALI',
+    //     lastName: 'ALIYEV',
+    //     middleName: 'VALIYEVICH',
+    //     birthDate: '15.03.1990', // yoki 1990-03-15
+    //     passSeries: 'AA1234567',
+    //     passSeriesMask: 'AA*******',
+    //     passExpiry: '15.03.2030',
+    //     pinfl: '30103901234567',
+    //     pinflMask: '30103********',
+    //     address: 'Toshkent sh.',
+    //     isResident: true,
+    //   ),
     //   uzsCards: [
     //     MySafarUzsCard(
     //       cardNumber: '8600123412341234',
     //       expire: '2812', // YYMM
     //       cardMask: '8600 **** **** 1234',
     //       owner: 'ALIYEV VALI',
-    //       balance: 1250000, // so'mda
-    //       cardLogoUrl: 'https://example.com/logo/uzcard.svg', // to'liq URL
+    //       balance: 1250000, // somda
+    //       cardLogoUrl: 'https://example.com/logo/uzcard.svg',
     //     ),
     //   ],
     //   foreignCards: [
@@ -86,7 +86,7 @@ Future<void> main() async {
     //     expire: request.card.expire, // YYMM
     //     trId: request.trId,
     //   ),
-     ),
+    // ),
   );
 
   // Back diagnostikasi: tizim back'i Flutter'ga yetib keladimi.
