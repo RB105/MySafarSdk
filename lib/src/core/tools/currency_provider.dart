@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:mysafar_sdk/src/core/enum/currency.dart'
     show AppCurrency, AppCurrencyExtension;
+import 'package:mysafar_sdk/src/core/tools/formatters.dart'
+    show ElementFormatter;
 import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_model.dart'
     show FlightPrice;
 import 'package:mysafar_sdk/src/model/remote/avia/top_city_model.dart'
@@ -40,19 +42,36 @@ class CurrencyProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Reys narxi joriy valyutada ("2 751 009 UZS", "385.5 USD"). Tanlangan
+  /// valyuta bloki kelmagan (yoki summasi 0) bo'lsa — UZS summasi UZS belgisi
+  /// bilan; narx umuman bo'lmasa "—".
   String getElementPrice(FlightPrice? price) {
-    switch (_currency) {
-      case AppCurrency.uzs:
-        return "${price?.uzs?.amount} ${currency.label}";
-      case AppCurrency.rub:
-        return price?.rub != null
-            ? "${price?.rub?.amount} ${currency.label}"
-            : "${price?.uzs?.amount} ${currency.label}";
-      case AppCurrency.usd:
-        return price?.usd != null
-            ? "${price?.usd?.amount} ${currency.label}"
-            : "${price?.uzs?.amount} ${currency.label}";
+    final resolved = resolveElementPrice(price, _currency);
+    if (resolved == null) return "—";
+    return "${resolved.raw} ${resolved.currency.label}";
+  }
+
+  /// [price]dan [currency] valyutasidagi summani tanlaydi. Shu valyuta bloki
+  /// yo'q yoki summasi yaroqsiz/0 bo'lsa — UZS summasiga qaytadi va natijada
+  /// valyuta ham UZS bo'ladi (UZS summasi RUB/USD belgisi bilan chiqmasin).
+  /// Hech qaysi summa bo'lmasa `null`.
+  static ({String raw, double value, AppCurrency currency})?
+      resolveElementPrice(FlightPrice? price, AppCurrency currency) {
+    final String? selected = switch (currency) {
+      AppCurrency.uzs => price?.uzs?.amount,
+      AppCurrency.rub => price?.rub?.amount,
+      AppCurrency.usd => price?.usd?.amount,
+    };
+    final double? selectedValue = ElementFormatter.parsePrice(selected);
+    if (selectedValue != null) {
+      return (raw: selected!.trim(), value: selectedValue, currency: currency);
     }
+    final String? uzs = price?.uzs?.amount;
+    final double? uzsValue = ElementFormatter.parsePrice(uzs);
+    if (uzsValue != null) {
+      return (raw: uzs!.trim(), value: uzsValue, currency: AppCurrency.uzs);
+    }
+    return null;
   }
 
 

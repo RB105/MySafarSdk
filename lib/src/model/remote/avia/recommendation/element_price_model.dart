@@ -7,20 +7,20 @@ class FlightPrice {
 
   FlightPrice({required this.rub, required this.uzs, required this.usd});
 
+  /// RUB/USD bloklari kelmasa `null` qoladi (ilgari "0" qo'yilardi va
+  /// foydalanuvchi "0 USD" ko'rardi) — ko'rsatishda UZS summasiga UZS belgisi
+  /// bilan qaytiladi (`CurrencyProvider.getElementPrice`). UZS bloki esa
+  /// avvalgidek majburiy (saralash/to'lov unga tayanadi).
   factory FlightPrice.fromJson(Map<String, dynamic> json) => FlightPrice(
         rub: json["RUB"] is Map<String, dynamic>
             ? FluffyRub.fromJson(json["RUB"])
-            : FluffyRub(
-                amount: "0",
-              ),
+            : null,
         uzs: json['UZS'] is Map<String, dynamic>
             ? FluffyUzs.fromJson(json['UZS'])
             : FluffyUzs(amount: "0"),
         usd: json["USD"] is Map<String, dynamic>
             ? FluffyRub.fromJson(json["USD"])
-            : FluffyRub(
-                amount: "0",
-              ),
+            : null,
       );
 }
 
@@ -56,14 +56,14 @@ class FluffyUzs {
 
   FluffyUzs.fromJson(Map<String, dynamic> json) {
     amount = "${json['amount']}";
-    passengersAmounts = json['passengers_amounts'] != null
-        ? PassengersAmounts.fromJson(json['passengers_amounts'])
+    passengersAmounts = _asMap(json['passengers_amounts']) != null
+        ? PassengersAmounts.fromJson(_asMap(json['passengers_amounts'])!)
         : null;
-    agentModePrices = json['agent_mode_prices'] != null
-        ? AgentModePrices.fromJson(json['agent_mode_prices'])
+    agentModePrices = _asMap(json['agent_mode_prices']) != null
+        ? AgentModePrices.fromJson(_asMap(json['agent_mode_prices'])!)
         : null;
-    comsa = json['comsa'];
-    partnerAffiliateFee = json['partner_affiliate_fee'];
+    comsa = _intOrNull(json['comsa']);
+    partnerAffiliateFee = _intOrNull(json['partner_affiliate_fee']);
     startPrice = _getDouble(json['start_price']);
     if (json['passengers_amounts_details'] != null) {
       passengersAmountsDetails = <PassengersAmountsDetails>[];
@@ -99,7 +99,7 @@ class PassengersAmounts {
   PassengersAmounts({this.adult});
 
   PassengersAmounts.fromJson(Map<String, dynamic> json) {
-    adult = json['adult'];
+    adult = _intOrNull(json['adult']);
   }
 
   Map<String, dynamic> toJson() {

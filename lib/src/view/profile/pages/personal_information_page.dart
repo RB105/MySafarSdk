@@ -86,6 +86,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                 MainButtonWidget(
                   size: 48,
                   title: 'save'.tr(),
+                  analyticsId: 'personal_info_save',
                   onTap: () {
                     if (_key.currentState?.validate() ?? false) {
                       Navigator.of(context).pop(profileData.copyWith(

@@ -70,20 +70,34 @@ class OverAllData {
       );
     }
     return OverAllData(
-      search: Search.fromJson(json["search"]),
-      flights: json["flights"] != null
-          ? List<FlightElement>.from(
-              json["flights"].map((x) => FlightElement.fromJson(x)))
-          : [],
+      search: Search.fromJson(_asMap(json["search"]) ?? const {}),
+      flights: parseFlightsSafely(json["flights"]),
       segmentsComments: comments,
       healthDeclarationText: json["health_declaration_text"] ?? "",
-      predefinedAirlines: json["segments_comments"] != null
-          ? List<dynamic>.from(json["predefined_airlines"].map((x) => x))
-          : [],
-      excludedAirlines: json["excluded_airlines"] != null
-          ? List<dynamic>.from(json["excluded_airlines"].map((x) => x))
-          : [],
+      // Ilgari `segments_comments` tekshirilib `predefined_airlines` o'qilardi
+      // — u null bo'lsa butun javob qulardi.
+      predefinedAirlines: _asList(json["predefined_airlines"]),
+      excludedAirlines: _asList(json["excluded_airlines"]),
     );
+  }
+
+  /// Reyslarni BITTALAB o'qiydi: bitta reysda buzuq maydon bo'lsa faqat
+  /// o'sha reys tashlab yuboriladi (debug log bilan). Ilgari bitta xato butun
+  /// manba javobini `error_other` ga aylantirib, hamma reyslar yo'qolardi.
+  static List<FlightElement> parseFlightsSafely(dynamic raw) {
+    if (raw is! List) return <FlightElement>[];
+    final result = <FlightElement>[];
+    for (final item in raw) {
+      final map = _asMap(item);
+      if (map == null) continue;
+      try {
+        result.add(FlightElement.fromJson(map));
+      } catch (e) {
+        debugPrint('recommendation: buzuq reys o\'tkazib yuborildi '
+            '(id=${map["id"]}): $e');
+      }
+    }
+    return result;
   }
 }
 
@@ -122,25 +136,26 @@ class Search {
   });
 
   factory Search.fromJson(Map<String, dynamic> json) => Search(
-        inclusionCarriers:
-            List<dynamic>.from(json["inclusion_carriers"].map((x) => x) ?? []),
-        exclusionCarriers:
-            List<dynamic>.from(json["exclusion_carriers"].map((x) => x) ?? []),
+        // null kelsa ilgari `.map` NoSuchMethodError tashlardi.
+        inclusionCarriers: _asList(json["inclusion_carriers"]),
+        exclusionCarriers: _asList(json["exclusion_carriers"]),
         adt: _getInt(json["adt"]),
-        channel: json["channel"] ?? "",
-        chd: json["chd"] ?? 0,
-        searchClass: json["class"] ?? "",
-        inf: json["inf"] ?? 0,
-        partner: json["partner"] ?? "",
-        segments: json["segments"] != null
-            ? List<SearchSegment>.from(
-                json["segments"].map((x) => SearchSegment.fromJson(x)))
+        channel: "${json["channel"] ?? ""}",
+        chd: _getInt(json["chd"]),
+        searchClass: "${json["class"] ?? ""}",
+        inf: _getInt(json["inf"]),
+        partner: "${json["partner"] ?? ""}",
+        segments: json["segments"] is List
+            ? [
+                for (final x in json["segments"] as List)
+                  if (_asMap(x) != null) SearchSegment.fromJson(_asMap(x)!)
+              ]
             : [],
-        src: json["src"] ?? 0,
-        token: json["token"] ?? "",
-        type: json["type"] ?? "",
-        yth: json["yth"] ?? 0,
-        ins: json["ins"] ?? 0,
+        src: _getInt(json["src"]),
+        token: "${json["token"] ?? ""}",
+        type: "${json["type"] ?? ""}",
+        yth: _getInt(json["yth"]),
+        ins: _getInt(json["ins"]),
       );
 
   Map<String, dynamic> toJson() => {
@@ -268,10 +283,29 @@ double _getDouble(dynamic param) {
   }
 }
 
-int _getInt(dynamic param) {
-  try {
-    return int.parse("$param");
-  } catch (e) {
-    return 0;
+int _getInt(dynamic param) => _intOrNull(param) ?? 0;
+
+/// Bardoshli butun son: int, num (12.0), "12", "12.0" → 12; "" / null /
+/// boshqa tur → null. Backend ba'zan int o'rniga "" yoki satr yuboradi —
+/// ilgari `json["duration"] ?? ""` kabi yozuvlar TypeError tashlardi.
+int? _intOrNull(dynamic param) {
+  if (param is int) return param;
+  if (param is num) return param.isFinite ? param.toInt() : null;
+  if (param is String) {
+    final t = param.trim();
+    if (t.isEmpty) return null;
+    return int.tryParse(t) ?? double.tryParse(t)?.toInt();
   }
+  return null;
 }
+
+/// `Map` (har qanday kalit turi bilan) → `Map<String, dynamic>`, aks holda null.
+Map<String, dynamic>? _asMap(dynamic v) {
+  if (v is Map<String, dynamic>) return v;
+  if (v is Map) return v.map((k, val) => MapEntry("$k", val));
+  return null;
+}
+
+/// Ro'yxat bo'lsa nusxasi, aks holda (null / boshqa tur) — bo'sh ro'yxat.
+List<dynamic> _asList(dynamic v) =>
+    v is List ? List<dynamic>.from(v) : <dynamic>[];

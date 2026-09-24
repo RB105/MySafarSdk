@@ -2,7 +2,8 @@ import 'dart:async' show Timer;
 import 'dart:io' show Platform;
 
 import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator;
-import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart' show showToastMessage;
+import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart'
+    show showToastMessage, showToastTr;
 import 'package:mysafar_sdk/src/core/widgets/sdk_dialog.dart';
 import 'package:mysafar_sdk/src/view/auth/logic/bloc/auth_cubit.dart';
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
@@ -27,6 +28,7 @@ class _VerifyOtpWidgetState extends State<VerifyOtpWidget> {
   final ValueNotifier<int> timerNotifier = ValueNotifier<int>(120);
   Timer? timer;
   bool timerStarted = false;
+  ActionStatus _lastLoginStatus = ActionStatus.isInitial;
 
   void _startTimer() {
     if (timerStarted) return;
@@ -36,14 +38,41 @@ class _VerifyOtpWidgetState extends State<VerifyOtpWidget> {
 
     timer = Timer.periodic(const Duration(seconds: 1), (timerTick) {
       if (timerNotifier.value == 0) {
+        // №74: taymer tugashi yozilayotgan kodni o'chirmaydi — faqat
+        // "qayta yuborish" tugmasi faollashadi.
         timerStarted = false;
-        otpController.clear();
         timer?.cancel();
         if (mounted) setState(() {});
       } else {
         timerNotifier.value--;
       }
     });
+  }
+
+  /// Qayta yuborish muvaffaqiyatsiz — taymer to'xtatiladi, tugma darhol
+  /// yana bosiladigan bo'ladi.
+  void _stopTimer() {
+    timer?.cancel();
+    timerStarted = false;
+    timerNotifier.value = 0;
+    if (mounted) setState(() {});
+  }
+
+  /// №74: "Kodni qayta yuborish"dan keyin yangi otpToken cubit holatida —
+  /// tekshiruv aynan o'shani yuborishi kerak (eski token bekor bo'lgan).
+  String _currentOtpToken(AuthState state) =>
+      state.otpToken.isNotEmpty ? state.otpToken : widget.otpToken;
+
+  static String _resendErrorKey(String errorTypeName) {
+    const network = {
+      'connectTimeout',
+      'receiveTimeout',
+      'sendTimeout',
+      'connectionError',
+    };
+    return network.contains(errorTypeName)
+        ? 'no_internet_connection'
+        : 'otp_resend_failed';
   }
 
   @override
@@ -87,7 +116,20 @@ class _VerifyOtpWidgetState extends State<VerifyOtpWidget> {
     return BlocProvider(
         create: (context) => AuthCubit(),
         child: BlocConsumer<AuthCubit, AuthState>(
+            listenWhen: (prev, curr) =>
+                prev.verifyStatus != curr.verifyStatus ||
+                prev.loginAuthStatus != curr.loginAuthStatus,
             listener: (context, state) {
+              final loginChanged = state.loginAuthStatus != _lastLoginStatus;
+              _lastLoginStatus = state.loginAuthStatus;
+              if (loginChanged &&
+                  state.loginAuthStatus == ActionStatus.isError) {
+                // Qayta yuborish xatosi ko'rsatiladi (ilgari jim edi).
+                showToastTr(_resendErrorKey(state.authError));
+                _stopTimer();
+                return;
+              }
+              if (loginChanged) return;
               if (state.verifyStatus == ActionStatus.isSuccess) {
                 Navigator.of(context).pop(true);
               } else if (state.verifyStatus == ActionStatus.isError) {
@@ -99,6 +141,8 @@ class _VerifyOtpWidgetState extends State<VerifyOtpWidget> {
                   appBar: AppBar(
                     centerTitle: true,
                     leading: IconButton(
+                        tooltip:
+                            MaterialLocalizations.of(context).backButtonTooltip,
                         onPressed: () {
                           Navigator.of(context).pop();
                         },
@@ -140,7 +184,7 @@ class _VerifyOtpWidgetState extends State<VerifyOtpWidget> {
                                   setState(() {});
                                   context.read<AuthCubit>().verifyOtp(
                                       phone: widget.phone,
-                                      token: widget.otpToken,
+                                      token: _currentOtpToken(state),
                                       otp: otpController.text);
                                   focusNode.unfocus();
                                 } else {

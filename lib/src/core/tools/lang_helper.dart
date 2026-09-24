@@ -1,7 +1,12 @@
-import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
+import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 
 /// Language code currently selected for the app UI (matches the active locale).
-String currentLang() => sdkStorage().read('lang') ?? 'uz';
+///
+/// SDK'ning faol tilidan o'qiladi, storage'dan emas: embed rejimda host tili
+/// (`MySafarEmbed(locale:)`) storage'ga yozilmaydi (`save: false`), shuning
+/// uchun storage eski yoki standart `uz` bo'lib qolardi va rus tilidagi
+/// foydalanuvchiga server xabarlari, davlat nomlari o'zbekcha chiqardi.
+String currentLang() => SdkLocalization.locale.languageCode;
 
 /// Maps the selected UI language to a language code that the app's static and
 /// back-end data actually ship. Localized data (country names, destination

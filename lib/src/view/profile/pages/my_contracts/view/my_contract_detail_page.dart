@@ -81,7 +81,10 @@ class _MyContractDetailPageState extends State<MyContractDetailPage> {
     }
     final added = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(builder: (_) => AddCardPage(contractId: contractId)),
+      MaterialPageRoute(
+        settings: const RouteSettings(name: AddCardPage.routeName),
+        builder: (_) => AddCardPage(contractId: contractId),
+      ),
     );
     if (!mounted) return;
     // Karta muvaffaqiyatli qo'shildi — shartnomalar ro'yxatiga qaytamiz.

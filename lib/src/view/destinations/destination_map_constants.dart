@@ -60,9 +60,9 @@ class DestinationTicketHelper {
   static DateTime _getRandomDepartureDate() {
     final random = Random();
     final daysToAdd = DestinationMapConstants.minDaysFromNow +
-        random.nextInt(
-            DestinationMapConstants.maxDaysFromNow - DestinationMapConstants.minDaysFromNow + 1);
+        random.nextInt(DestinationMapConstants.maxDaysFromNow -
+            DestinationMapConstants.minDaysFromNow +
+            1);
     return DateTime.now().add(Duration(days: daysToAdd));
   }
 }
-

@@ -57,6 +57,10 @@ class _PassengerCountWidgetState extends State<PassengerCountWidget> {
       inf = widget.params['inf'] ?? 0;
       klass = widget.params['klass'] ?? 'a';
     }
+    // Chaqaloqlar kattalardan ko'p bo'lishi mumkin emas (har bir chaqaloq
+    // bitta kattaning tizzasida) — eski/noto'g'ri params kelsa ham to'g'rilanadi.
+    if (adt < 1) adt = 1;
+    if (inf > adt) inf = adt;
   }
 
   @override
@@ -65,7 +69,16 @@ class _PassengerCountWidgetState extends State<PassengerCountWidget> {
     super.dispose();
   }
 
-  bool get isMax => adt + chd + inf == _maxPassengers;
+  bool get isMax => adt + chd + inf >= _maxPassengers;
+
+  /// Chaqaloq qo'shish mumkinmi: umumiy limit + chaqaloqlar ≤ kattalar.
+  bool get _canAddInfant => !isMax && inf < adt;
+
+  /// Kattalar kamaytirilganda chaqaloqlar soni ham kattalarga tenglashtiriladi.
+  void _removeAdult() {
+    adt--;
+    if (inf > adt) inf = adt;
+  }
 
   bool get _isDefault => adt == 1 && chd == 0 && inf == 0 && klass == 'a';
 
@@ -145,7 +158,7 @@ class _PassengerCountWidgetState extends State<PassengerCountWidget> {
                     title: "above_12".tr(),
                     count: adt,
                     canRemove: adt > 1,
-                    onRemove: () => setState(() => adt--),
+                    onRemove: () => setState(_removeAdult),
                     onAdd: () => setState(() => adt++),
                   ),
                   _divider(),
@@ -161,9 +174,25 @@ class _PassengerCountWidgetState extends State<PassengerCountWidget> {
                     title: "under_2".tr(),
                     count: inf,
                     canRemove: inf > 0,
+                    canAdd: _canAddInfant,
                     onRemove: () => setState(() => inf--),
                     onAdd: () => setState(() => inf++),
                   ),
+                  // Chaqaloqlar kattalar soniga yetganda nega "+" o'chiqligini
+                  // tushuntiramiz — xato bron qadamida emas, shu yerda to'siladi.
+                  if (inf > 0 && inf >= adt)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        "infants_per_adult_hint".tr(),
+                        style: context.textTheme.bodyMedium?.copyWith(
+                          color: _secondaryColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w400,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 8),
                   Text(
                     "show_age_feedback_subtitle".tr(),
@@ -192,8 +221,9 @@ class _PassengerCountWidgetState extends State<PassengerCountWidget> {
   Widget _buildHeader(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
-      child: SizedBox(
-        height: 48,
+      // Qat'iy balandlik emas — katta shriftda sarlavha kesilmaydi (№32).
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
         child: Stack(
           alignment: Alignment.center,
           children: [
@@ -272,9 +302,10 @@ class _PassengerCountWidgetState extends State<PassengerCountWidget> {
           _hPadding,
           12 + context.bottomPadding,
         ),
-        child: SizedBox(
-          width: double.infinity,
-          height: 52,
+        child: ConstrainedBox(
+          // Katta shriftda matn sig'ishi uchun balandlik qat'iy emas (№32).
+          constraints:
+              const BoxConstraints(minWidth: double.infinity, minHeight: 52),
           child: ElevatedButton(
             onPressed: _apply,
             style: ProjectTheme.blueButtonStyle.copyWith(
@@ -319,11 +350,14 @@ class _PassengerCountWidgetState extends State<PassengerCountWidget> {
     required String title,
     required int count,
     required bool canRemove,
+    bool? canAdd,
     required VoidCallback onRemove,
     required VoidCallback onAdd,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      // Tugma bosish maydoni 44 dp bo'lgani uchun vertikal padding kamaygan —
+      // qator balandligi avvalgidek qoladi.
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
           Expanded(child: Text(title.trim(), style: _titleStyle)),
@@ -331,6 +365,7 @@ class _PassengerCountWidgetState extends State<PassengerCountWidget> {
             icon: Icons.remove_rounded,
             enabled: canRemove,
             onTap: onRemove,
+            semanticLabel: "${"a11y_decrease".tr()}: ${title.trim()}",
           ),
           SizedBox(
             width: 44,
@@ -346,8 +381,9 @@ class _PassengerCountWidgetState extends State<PassengerCountWidget> {
           ),
           _stepButton(
             icon: Icons.add_rounded,
-            enabled: !isMax,
+            enabled: canAdd ?? !isMax,
             onTap: onAdd,
+            semanticLabel: "${"a11y_increase".tr()}: ${title.trim()}",
           ),
         ],
       ),
@@ -355,28 +391,44 @@ class _PassengerCountWidgetState extends State<PassengerCountWidget> {
   }
 
   /// Hoshiyali dumaloq +/- tugma; o'chiq holatda xiralashadi.
+  /// Ko'rinadigan doira 36 dp, bosish maydoni esa 44 dp (≥44 tavsiya).
   Widget _stepButton({
     required IconData icon,
     required bool enabled,
     required VoidCallback onTap,
+    required String semanticLabel,
   }) {
-    return AnimatedOpacity(
-      duration: const Duration(milliseconds: 150),
-      opacity: enabled ? 1 : 0.35,
-      child: Material(
-        color: Colors.transparent,
-        shape: CircleBorder(side: BorderSide(color: _borderColor, width: 1)),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: semanticLabel,
+      excludeSemantics: true,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 150),
+        opacity: enabled ? 1 : 0.35,
+        child: InkResponse(
           onTap: enabled
               ? () {
                   HapticFeedback.selectionClick();
                   onTap();
                 }
               : null,
+          radius: 22,
+          customBorder: const CircleBorder(),
           child: SizedBox.square(
-            dimension: 36,
-            child: Icon(icon, size: 20, color: _textColor),
+            dimension: 44,
+            child: Center(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: _borderColor, width: 1),
+                ),
+                child: SizedBox.square(
+                  dimension: 36,
+                  child: Icon(icon, size: 20, color: _textColor),
+                ),
+              ),
+            ),
           ),
         ),
       ),

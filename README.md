@@ -61,38 +61,34 @@ MySafarConfig(
 )
 ```
 
-### Foydalanuvchi ma'lumotlari (email, kartalar) — ixtiyoriy
+### Foydalanuvchi ma'lumotlari (email, kartalar, xaridor) — ixtiyoriy
 
-Host oz userining email, myid malumoti va kartalarini init ga berishi mumkin.
-Hech narsa bermasa SDK odatdagidek ishlaydi:
+Host o'z user'ining emaili va kartalarini `init`ga berishi mumkin. Hech narsa
+berilmasa (yoki ro'yxatlar bo'sh bo'lsa) SDK odatdagidek ishlaydi. So'mdagi
+kartalar va boshqa valyutadagi kartalar alohida ro'yxatda qabul qilinadi:
 
 ```dart
 await MySafarSdk.init(
   config: ...,
   userData: MySafarUserData(
     email: 'user@example.com',
-    // myid malumot — bersa "Ozimning malumotim" chiqadi
-    identification: MySafarUserIdentification(
-      firstName: 'VALI',
-      lastName: 'ALIYEV',
-      middleName: 'VALIYEVICH',
-      birthDate: '15.03.1990', // yoki 1990-03-15
-      passSeries: 'AA1234567',
-      passSeriesMask: 'AA*******',
-      passExpiry: '15.03.2030',
-      pinfl: '30103901234567',
-      pinflMask: '30103********',
-      address: 'Toshkent sh.',
-      isResident: true,
-    ),
+    // Xaridor ma'lumotlari (hammasi ixtiyoriy) — bron formasida birinchi
+    // katta yoshli yo'lovchi shular bilan oldindan to'ldiriladi:
+    firstName: 'VALI',                  // pasportdagidek lotincha
+    lastName: 'ALIYEV',
+    birthDate: DateTime(1990, 3, 12),
+    gender: MySafarGender.male,
+    citizenship: 'UZ',                  // ISO 3166-1 alpha-2
+    documentNumber: 'AA1234567',
+    documentExpiry: DateTime(2031, 1, 1),
     uzsCards: [
       MySafarUzsCard(
         cardNumber: '8600123412341234', // 16 raqam
         expire: '2812',                 // YYMM (12/2028)
         cardMask: '8600 **** **** 1234', // ixtiyoriy — berilmasa raqamdan hosil qilinadi
         owner: 'ALIYEV VALI',           // ixtiyoriy
-        balance: 1250000,               // ixtiyoriy, somda (tiyinda emas)
-        cardLogoUrl: 'https://.../uzcard.svg', // ixtiyoriy, toliq URL (.svg / .png)
+        balance: 1250000,               // ixtiyoriy, so'mda (tiyinda emas)
+        cardLogoUrl: 'https://.../uzcard.svg', // ixtiyoriy, to'liq URL (.svg / .png)
       ),
     ],
     foreignCards: [
@@ -106,19 +102,22 @@ await MySafarSdk.init(
   ),
 );
 
-// Karta qoshildi / balans ozgardi / boshqa user kirdi:
+// Karta qo'shildi / balans o'zgardi / boshqa user kirdi:
 MySafarSdk.updateUserData(MySafarUserData(...));
 // Host'dan chiqildi:
 MySafarSdk.clearUserData();
 ```
 
-- `identification` bersa yolovchi formasida "Ozimning malumotim" chiqadi.
-  Ozi toldirilmaydi — user korib tasdiqlasa shunda yoziladi.
-- Karta malumotlari faqat xotirada turadi — diskka, keshga, analytics'ga
+- Karta ma'lumotlari faqat xotirada turadi — diskka, keshga, analytics'ga
   yozilmaydi; `toString()` karta raqamini maskalaydi.
-- Yaroqsiz kartalar (16 raqamsiz, `YYMM` bolmagan muddat, bo'sh token) jim
+- Yaroqsiz kartalar (16 raqamsiz, `YYMM` bo'lmagan muddat, bo'sh token) jim
   tashlab yuboriladi — init yiqilmaydi.
 - `MySafarEmbed.email` berilmasa `userData.email` ishlatiladi.
+- Xaridor maydonlari (ism, familiya, tug'ilgan sana, jins, fuqarolik, hujjat)
+  faqat formadagi BO'SH maydonlarni to'ldiradi — foydalanuvchi o'zgartira
+  oladi. Ular ham faqat xotirada turadi, `toString()` da ko'rsatilmaydi.
+  Noto'g'ri fuqarolik kodi (2 harfli bo'lmasa) jim tashlanadi.
+- `clearUserData()` bron formasining xotiradagi qoralamasini ham o'chiradi.
 
 ### Saqlangan UZS karta bilan to'lov (`card_token`) — ixtiyoriy
 
@@ -209,7 +208,100 @@ Deep-link (masalan `https://mysafar.uz/payment?billing_id=...`) hostda
 tinglanadi va SDK'ga uzatiladi: `MySafarSdk.handleLink(uri)`.
 
 > **Cheklov:** global navigator key tufayli bir vaqtda faqat bitta
-> `MySafarApp`/`MySafarEmbed` instance ishlaydi.
+> `MySafarApp`/`MySafarEmbed` instance ishlaydi. Host embed'ni ikki marta
+> ochsa (tugma ikki marta bosildi), ikkinchi nusxa hech narsa qurmaydi va
+> o'z route'ini yopadi — foydalanuvchi birinchisida qoladi. Jim ro'yxatdan
+> o'tish (`ensureRegistered`) ham bir vaqtda bitta so'rov yuboradi.
+
+### Ekran yo'nalishi
+
+`MySafarSdk.init()` host ilovaning yo'nalishiga TEGMAYDI. Portret faqat SDK
+ekranda turganda qulflanadi (`MySafarEmbed` ochilganda / `MySafarApp`).
+Embed yopilganda SDK host siyosatini tiklaydi:
+
+- `MySafarConfig.hostOrientations` berilgan bo'lsa — aynan shu ro'yxat;
+- berilmasa — bo'sh ro'yxat, ya'ni Info.plist / AndroidManifest'dagi default.
+
+Host yo'nalishni kodda (`SystemChrome.setPreferredOrientations`) o'rnatsa,
+o'sha qiymatni `hostOrientations` ga bering:
+
+```dart
+MySafarConfig(
+  ...
+  hostOrientations: const [DeviceOrientation.portraitUp],
+)
+```
+
+### Foydalanuvchi almashishi va chiqish
+
+- `ensureRegistered` / `MySafarEmbed(phoneNumber:)` ga BOSHQA raqam kelsa,
+  oldingi foydalanuvchining barcha SDK ma'lumoti o'chiriladi: tokenlar,
+  saqlangan yo'lovchilar, avtoto'ldirish ro'yxatlari, bron qoralamasi, so'nggi
+  qidiruvlar, profil/biletlar keshi, analytics profil ID. Host yangi user uchun
+  `updateUserData` chaqirmagan bo'lsa, xotiradagi karta/xaridor ma'lumotlari
+  ham o'chadi.
+- Host'dan chiqilganda `MySafarSdk.clearUserData()` chaqiring — yuqoridagilar
+  hammasi (SDK sessiyasi bilan birga) tozalanadi.
+- SDK ichidagi "Chiqish" / "Hisobni o'chirish" ham xuddi shunday tozalaydi.
+- Pasport raqami, amal muddati va tug'ilgan kun avtoto'ldirish uchun diskka
+  yozilmaydi (faqat ism, email, telefon eslab qolinadi).
+
+### Sessiya (token yangilash)
+
+Access token 401 bersa SDK refresh qiladi. Tarmoq uzilishi / server xatosida
+tokenlar saqlanadi va keyingi so'rovda qayta uriniladi. Server refresh'ni rad
+etsa (400/401/403) tokenlar o'chiriladi va — `ensureRegistered` bilan kirilgan
+bo'lsa — SDK jim qayta ro'yxatdan o'tadi (60 s ichida ko'pi bilan bir marta).
+Tiklab bo'lmasa `callbacks.onAuthRequired` chaqiriladi.
+
+### Hive
+
+SDK host'ning Hive sozlamasiga tegmaydi: `Hive.init` chaqirilmaydi, SDK
+box'lari alohida papkada (`<documents>/mysafar_sdk`) va `mysafar_` prefiksli
+nomlar bilan ochiladi — host'ning `profile_cache` kabi box'lari bilan
+to'qnashmaydi. Eski (prefikssiz) SDK kesh fayllari o'chirilmaydi — ular
+qayta yuklanadi.
+
+### iOS: CocoaPods va ruxsatlar (majburiy)
+
+SDK `permission_handler` orqali kamera (pasport skaneri) va mikrofon (ovozli
+qidiruv) ruxsatini so'raydi. CocoaPods ishlatadigan host'da
+`permission_handler` default holatda barcha ruxsatlarni O'CHIRIB kompilyatsiya
+qiladi — so'rov oynasi chiqmaydi, status darhol `permanentlyDenied`, iOS
+Sozlamalarida kamera tugmasi ham bo'lmaydi. Host `ios/Podfile` ning
+`post_install` blokiga qo'shing:
+
+```ruby
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+    target.build_configurations.each do |config|
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [
+        '$(inherited)',
+        'PERMISSION_CAMERA=1',      # pasport skaneri
+        'PERMISSION_MICROPHONE=1',  # ovozli (aqlli) qidiruv
+        # host o'zi permission_handler bilan boshqa ruxsat so'rasa,
+        # o'shalarni ham shu yerga qo'shing (PERMISSION_PHOTOS=1 va h.k.)
+      ]
+    end
+  end
+end
+```
+
+Keyin `cd ios && pod install`. (Swift Package Manager bilan ulangan
+build'larda bu kerak emas.) SDK joylashuvni `location` paketi, galereyani
+`image_picker` orqali oladi — ular uchun `PERMISSION_*` kerak emas.
+
+`Info.plist` usage-description'lari (bo'lmasa iOS ruxsat so'ralganda ilovani
+yopadi):
+
+| Kalit | Nima uchun |
+|---|---|
+| `NSCameraUsageDescription` | Pasport/ID skaneri |
+| `NSMicrophoneUsageDescription` | Ovozli qidiruv |
+| `NSPhotoLibraryUsageDescription` | Hujjat/profil rasmini galereyadan tanlash |
+| `NSLocationWhenInUseUsageDescription` | Yaqin aeroport / yo'nalish takliflari |
+| `NSCalendarsUsageDescription` | Chiptani kalendarga qo'shish |
 
 ## Host app zimmasida qoladiganlar
 
@@ -219,9 +311,40 @@ tinglanadi va SDK'ga uzatiladi: `MySafarSdk.handleLink(uri)`.
 - **Push (FCM)** — token `callbacks.getPushToken` orqali beriladi.
 - **Analytics** — `MySafarAnalytics` implementatsiyasi (masalan AppMetrica).
 - **Deep-link tinglash** (app_links) va **in-app review/update**.
+- Chiptani ulashish `share_plus` (`>=7.2.2 <14.0.0`) orqali — host o'z
+  versiyasini qotirgan bo'lsa ham diapazon ichida mos keladi; qo'shimcha
+  sozlash kerak emas.
 - Android manifest: INTERNET/LOCATION/CAMERA/RECORD_AUDIO ruxsatlari va Google
   Maps API key; iOS: Info.plist usage-description'lar (namuna: `example/`).
 - minSdk **26**.
+
+## Analytics eventlari
+
+SDK eventlarni host bergan `MySafarAnalytics.logEvent` orqali `mysafarsdk_`
+prefiksi bilan yuboradi. Har bir eventda `app_version`, `app_build`,
+`timestamp` bor.
+
+| Event | Qachon | Asosiy atributlar |
+|---|---|---|
+| `screen_view` | Har bir sahifa (`PageRoute`) ochilganda yoki unga qaytilganda; navbar tablari almashganda (`tab_home`, `tab_orders`, `tab_destinations`, `tab_profile`). Ekran o'zgarmasa takror yuborilmaydi (SDK qayta ochilganda birinchi ekran albatta yoziladi); dialog/bottom sheet ekran hisoblanmaydi | `screen` (route nomi, masalan `/bookingConfirm`) |
+| `ticket_searched` | Qidiruv natijalari sahifasi ochildi (3 s ichidagi takror tashlanadi) | `from`, `to`, `passengers`, `round_trip`, `class`, `source` |
+| `results_shown` / `no_results` | Qidiruv yakunlandi (hamma manba xato bersa `no_results` + `reason: error`) | `count`, `from`, `to`, `passengers`, `round_trip`, `reason`, `error_type` |
+| `flight_selected` | Natijadan reys tanlandi | `source`, `from`, `to`, `airline`, `amount`, `currency` |
+| `passenger_form_started` | Yo'lovchi ma'lumotlari sahifasi ochildi | `source` |
+| `passenger_form_completed` | Yo'lovchi formasi to'ldirilib bron so'rovi yuborildi (bitta forma sessiyasida bir marta) | `source`, `passengers` |
+| `booking_created` / `booking_failed` | Bron yaratildi / yaratilmadi | `tid`, `billing_number`, `passengers`, `amount`, `currency` / `message` |
+| `payment_started` | "To'lash" bosildi | `tr_id`, `payment_method`, `amount`, `currency` |
+| `transaction_paid` / `payment_failed` | To'lov natijasi (+ `trackRevenue`) | `tr_id`, `billing_number`, `amount`, `currency` / `message`, `payment_method` |
+| `button_tap` | Muhim tugmalar (filtr, qayta qidirish, `ticket_share` va h.k.) | `screen`, `button` |
+| `api_error` | API xatosi | `screen`, `endpoint`, `method`, `status_code`, `error_type`, `message` |
+| `user_registered` / `user_logged_in` | Ro'yxatdan o'tish / kirish. Jim `web_register` — faqat backend yangi hisob deganda `user_registered`, aks holda `user_logged_in` | `method` |
+
+Profil ID (`setUserId`) — faqat backend account ID (JWT `user_id` / profil
+`id`); telefon raqami hech qachon profil ID bo'lmaydi.
+
+Kanonik voronka: `ticket_searched → results_shown → flight_selected →
+passenger_form_started → passenger_form_completed → booking_created →
+payment_started → transaction_paid`.
 
 ## Example
 

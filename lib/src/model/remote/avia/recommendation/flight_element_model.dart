@@ -36,6 +36,59 @@ class FlightElement {
   AgeThresholds? ageThresholds;
   bool? isHealthDeclarationChecked;
 
+  // ── Saralash uchun narx (son) ─────────────────────────────────────────
+  // Narx matni ("2 751 009") ilgari har bir taqqoslashda qayta o'qilardi.
+  // Endi bir marta hisoblanib keshlanadi (odatda fon isolate'da, parse
+  // paytida). `price` boshqa obyektga almashtirilsa — qayta hisoblanadi.
+  FlightPrice? _sortPriceOf;
+  double _sortPrice = double.infinity;
+
+  /// Saralash/taqqoslash uchun narx (UZS). UZS bloki yo'q, faqat USD/RUB
+  /// bo'lgan reys UZS narxli reyslardan KEYIN turadi ([nonUzsSortBase]dan
+  /// katta qiymat). Noaniq/yo'q narx — `double.infinity` (ro'yxat oxiri).
+  double get sortPrice {
+    final p = price;
+    if (p == null) return double.infinity;
+    if (!identical(p, _sortPriceOf)) {
+      _sortPrice = computeSortPrice(p);
+      _sortPriceOf = p;
+    }
+    return _sortPrice;
+  }
+
+  /// Faqat USD/RUB narxli reyslar uchun saralash kalitining boshlanishi.
+  /// Ilgari xom USD/RUB soni UZS bilan solishtirilardi: "250 USD" reys
+  /// "3 000 000 UZS" dan oldin chiqib, "Eng arzon" belgisini olardi (№82).
+  /// Ilovada valyuta kursi yo'q — shuning uchun bunday reyslar UZS narxlilardan
+  /// keyin (o'zaro: avval USD, so'ng RUB, har biri o'z summasi bo'yicha).
+  static const double nonUzsSortBase = 1e13;
+  static const double _rubSortBase = 2e13;
+
+  static double computeSortPrice(FlightPrice? p) {
+    final uzs = parseSortAmount(p?.uzs?.amount);
+    if (uzs != double.infinity) return uzs;
+    final usd = parseSortAmount(p?.usd?.amount);
+    if (usd != double.infinity) return nonUzsSortBase + usd;
+    final rub = parseSortAmount(p?.rub?.amount);
+    if (rub != double.infinity) return _rubSortBase + rub;
+    return double.infinity;
+  }
+
+  /// Narx UZS'da ma'lummi — faqat shunday reys "Eng arzon" bo'la oladi.
+  bool get hasUzsSortPrice => sortPrice < nonUzsSortBase;
+
+  /// Narx satridan sonni ajratadi. `amount` formatlangan bo'lishi mumkin
+  /// ("1 500 000", "1,500,000" kabi) — raqam va nuqtadan boshqa barcha
+  /// belgilarni (bo'shliq, vergul, valyuta) olib tashlab parse qilamiz.
+  static double parseSortAmount(String? s) {
+    if (s == null) return double.infinity;
+    final cleaned = s.replaceAll(',', '').replaceAll(_nonNumeric, '');
+    final v = double.tryParse(cleaned);
+    return (v == null || v <= 0) ? double.infinity : v;
+  }
+
+  static final RegExp _nonNumeric = RegExp(r'[^0-9.]');
+
   FlightElement({
     required this.id,
     this.isTourOperator,
@@ -74,15 +127,17 @@ class FlightElement {
   });
 
   factory FlightElement.fromJson(Map<String, dynamic> json) => FlightElement(
-        id: json["id"] ?? "",
+        id: "${json["id"] ?? ""}",
         isTourOperator: json["is_tour_operator"] ?? false,
         tariff: json["tariff"] ?? "",
         tariffClass: json["tariff_class"] ?? "",
         fareFamilyType: json["fare_family_type"] ?? "",
         fareFamilyFlag: json["fare_family_flag"] ?? false,
         fareFamilyMarketingName: json["fare_family_marketing_name"],
-        duration: json["duration"] ?? "",
-        segmentsCount: json["segments_count"] ?? "",
+        // Backend ba'zan "" yoki "810" yuboradi — ilgari `?? ""` int? ga
+        // TypeError tashlab, butun manba reyslarini yo'qotardi (№77).
+        duration: _intOrNull(json["duration"]),
+        segmentsCount: _intOrNull(json["segments_count"]),
         type: json["type"] ?? "",
         isInnerFlight: json["is_inner_flight"] ?? false,
         isBaggage: json["is_baggage"] ?? false,
@@ -93,12 +148,7 @@ class FlightElement {
         bookUrl: json["book_url"] ?? "",
         citizenships: json["citizenships"] ?? "",
         isVtrip: json["is_vtrip"] ?? false,
-        provider: json["provider"] is Map<String, dynamic>
-            ? Provider.fromJson(json["provider"])
-            : Provider(
-                gds: 0,
-                name: "",
-                supplier: Supplier(id: 0, code: "", title: "")),
+        provider: Provider.fromJson(json["provider"]),
         officeId: json["office_id"] ?? "",
         price: json["price"] is Map<String, dynamic>
             ? FlightPrice.fromJson(json["price"])
@@ -123,14 +173,18 @@ class FlightElement {
                     handHeight: 0,
                     handWidth: 0,
                     handLength: 0)),
-        segments: json["segments"] != null
-            ? List<FlightSegment>.from(
-                json["segments"].map((x) => FlightSegment.fromJson(x)))
+        segments: json["segments"] is List
+            ? [
+                for (final x in json["segments"] as List)
+                  if (_asMap(x) != null) FlightSegment.fromJson(_asMap(x)!)
+              ]
             : [],
-        segmentsDirection: json["segments_direction"] != null
-            ? (json["segments_direction"] as List)
-                .map((innerList) => (innerList as List).cast<int>())
-                .toList()
+        // `cast<int>()` dangasa edi — "0" kabi satr keyinroq UI'da qulardi.
+        segmentsDirection: json["segments_direction"] is List
+            ? [
+                for (final inner in json["segments_direction"] as List)
+                  if (inner is List) [for (final v in inner) _getInt(v)]
+              ]
             : [],
         upgrades: json["upgrades"] != null
             ? List<Upgrade>.from(
@@ -307,9 +361,12 @@ class FlightElement {
       throw FormatException("Invalid date format. Expected dd.MM.yyyy");
     }
 
-    final day = int.parse(parts[0]);
+    // yyyy-MM-dd (ISO) ham qo'llab-quvvatlanadi — ilgari DateTime(30,9,2026)
+    // kabi noto'g'ri sana chiqardi.
+    final yearFirst = parts[0].trim().length == 4;
+    final day = int.parse(yearFirst ? parts[2].split('T').first : parts[0]);
     final month = int.parse(parts[1]);
-    final year = int.parse(parts[2]);
+    final year = int.parse(yearFirst ? parts[0] : parts[2]);
 
     return DateTime(year, month, day);
   }
@@ -562,11 +619,11 @@ class Limit {
   });
 
   factory Limit.fromJson(Map<String, dynamic> json) => Limit(
-        handWeight: json["hand_weight"] ?? 0,
-        holdWeight: json["hold_weight"] ?? 0,
-        handHeight: json["hand_height"] ?? 0,
-        handWidth: json["hand_width"] ?? 0,
-        handLength: json["hand_length"] ?? 0,
+        handWeight: _getInt(json["hand_weight"]),
+        holdWeight: _getInt(json["hold_weight"]),
+        handHeight: _getInt(json["hand_height"]),
+        handWidth: _getInt(json["hand_width"]),
+        handLength: _getInt(json["hand_length"]),
       );
 
   Map<String, dynamic> toJson() => {
@@ -645,13 +702,18 @@ class Provider {
     required this.supplier,
   });
 
-  factory Provider.fromJson(Map<String, dynamic> json) => Provider(
-        gds: json["gds"] ?? 0,
-        name: json["name"] ?? "",
-        supplier: json["supplier"] is Map<String, dynamic>
-            ? Supplier.fromJson(json["supplier"])
-            : Supplier(id: 0, code: "", title: ""),
-      );
+  /// `json` null yoki Map bo'lmasa — bo'sh provider (ilgari segmentda
+  /// `provider: null` butun reysni yiqitardi).
+  factory Provider.fromJson(dynamic raw) {
+    final json = _asMap(raw) ?? const <String, dynamic>{};
+    return Provider(
+      gds: _getInt(json["gds"]),
+      name: "${json["name"] ?? ""}",
+      supplier: _asMap(json["supplier"]) != null
+          ? Supplier.fromJson(_asMap(json["supplier"])!)
+          : Supplier(id: 0, code: "", title: ""),
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         "gds": gds,
@@ -674,10 +736,10 @@ class Supplier {
   });
 
   factory Supplier.fromJson(Map<String, dynamic> json) => Supplier(
-        id: json["id"] ?? 0,
-        code: json["code"] ?? "",
-        title: json["title"] ?? "",
-        shortTitle: json["short_title"] ?? "",
+        id: _getInt(json["id"]),
+        code: "${json["code"] ?? ""}",
+        title: "${json["title"] ?? ""}",
+        shortTitle: "${json["short_title"] ?? ""}",
       );
 
   Map<String, dynamic> toJson() => {
@@ -716,8 +778,8 @@ class Upgrade {
         fullPrice: json["full_price"] is Map<String, dynamic>
             ? IncreasePrice.fromJson(json["full_price"])
             : null,
-        weight: json['weight'] ?? 0,
-        piece: json['piece'] ?? 0,
+        weight: _getInt(json['weight']),
+        piece: _getInt(json['piece']),
       );
 
   Map<String, dynamic> toJson() => {

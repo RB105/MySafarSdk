@@ -75,16 +75,16 @@ class PassengerDatePicker {
   }
 
   /// Maydondagi `dd.MM.yyyy` qiymatidan boshlanadi; bo'sh/noto'g'ri bo'lsa
-  /// standart boshlang'ich (tug'ilgan sana: 1990, pasport muddati: bugun).
+  /// [initialDate] (yo'lovchi formasi yosh toifasiga mos sanani beradi),
+  /// u ham bo'lmasa standart (tug'ilgan sana: 1990, pasport muddati: bugun).
   static DateTime _resolveInitial({
     required TextEditingController controller,
     required bool isFutureOnly,
     required DateTime todayOnlyDate,
     DateTime? initialDate,
   }) {
-    DateTime initial = isFutureOnly
-        ? todayOnlyDate
-        : (initialDate ?? DateTime(1990, 1, 1));
+    DateTime initial =
+        isFutureOnly ? todayOnlyDate : (initialDate ?? DateTime(1990, 1, 1));
 
     try {
       final parsed =
@@ -171,6 +171,7 @@ class _PassengerDateSheet extends StatelessWidget {
                     ),
                     IconButton(
                       onPressed: onClose,
+                      tooltip: 'close'.tr(),
                       icon: Icon(
                         Icons.close_rounded,
                         color: isDark

@@ -8,15 +8,30 @@ class PassengerStorageService {
 
   PassengerStorageService() : _box = sdkStorage();
 
-  /// Yo'lovchi maydonlarini cache'ga saqlash
+  /// Avtoto'ldirish ro'yxatlari saqlanadigan kalitlar (ism/email/telefon).
+  static const List<String> suggestionKeys = [
+    'firstname',
+    'lastname',
+    'middlename',
+    'phone',
+    'email',
+  ];
+
+  /// №62: pasport raqami, amal muddati va tug'ilgan kun diskka (GetStorage)
+  /// ochiq yozilmaydi — ular uchun avtoto'ldirish ro'yxati yo'q. Eski
+  /// build'lar yozib qo'ygan qiymatlar [purgeSensitiveSuggestions] bilan
+  /// o'chiriladi.
+  static const List<String> sensitiveKeys = ['birthdate', 'docnum', 'docexp'];
+
+  /// Saqlangan yo'lovchilar keshi (`UsersDataCubit.cacheKey` bilan bir xil).
+  static const String cachedUsersKey = 'cached_users';
+
+  /// Yo'lovchi maydonlarini cache'ga saqlash (faqat ism/email/telefon).
   void savePassengerFields(List<PassengerModel> passengers, String phone) {
     for (final passenger in passengers) {
       _addIfNotExists('firstname', passenger.firstname);
       _addIfNotExists('lastname', passenger.lastname);
       _addIfNotExists('middlename', passenger.middlename);
-      _addIfNotExists('birthdate', passenger.birthdate);
-      _addIfNotExists('docnum', passenger.docnum);
-      _addIfNotExists('docexp', passenger.docexp);
       _addIfNotExists('phone', phone);
       _addIfNotExists('email', passenger.email);
     }
@@ -33,7 +48,27 @@ class PassengerStorageService {
 
   /// Cache'dan oldingi qiymatlarni olish
   List<String> getSuggestions(String key) {
-    return List<String>.from(_box.read(key) ?? []);
+    if (sensitiveKeys.contains(key)) return <String>[];
+    final raw = _box.read(key);
+    return raw is List ? List<String>.from(raw) : <String>[];
+  }
+
+  /// Eski build'lar yozgan pasport/tug'ilgan kun ro'yxatlarini o'chiradi
+  /// (SDK init'da bir marta).
+  static Future<void> purgeSensitiveSuggestions([GetStorage? box]) async {
+    final db = box ?? sdkStorage();
+    for (final key in sensitiveKeys) {
+      if (db.hasData(key)) await db.remove(key);
+    }
+  }
+
+  /// Foydalanuvchi almashganda / chiqishda: barcha avtoto'ldirish
+  /// ro'yxatlari va saqlangan yo'lovchilar keshi o'chiriladi.
+  static Future<void> clearUserScoped([GetStorage? box]) async {
+    final db = box ?? sdkStorage();
+    for (final key in [...suggestionKeys, ...sensitiveKeys, cachedUsersKey]) {
+      await db.remove(key);
+    }
   }
 
   /// Cached users ma'lumotlarini olish

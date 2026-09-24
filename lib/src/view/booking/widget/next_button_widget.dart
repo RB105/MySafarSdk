@@ -22,8 +22,24 @@ class NextButtonWidget extends StatelessWidget {
   /// Funnel analytics uchun barqaror tugma identifikatori.
   /// Berilmasa [nextTittle] (tarjima kaliti) ishlatiladi.
   final String? analyticsId;
+
+  /// Tugma ostidagi ixtiyoriy qator (masalan, oferta shartlari — №22).
+  final Widget? footer;
+
+  /// Narx bloki ko'rsatilsinmi (narx `null` bo'lsa baribir ko'rsatilmaydi).
+  final bool showPrice;
+
+  /// Tugma OSTIDAGI izoh: birinchi qator yashil (masalan "Bron qilish
+  /// bepul"), ikkinchisi sokin rangda (masalan narx ushlab turish sanog'i).
+  final String? noteHighlight;
+  final String? note;
+
   const NextButtonWidget(
       {super.key,
+      this.footer,
+      this.showPrice = true,
+      this.noteHighlight,
+      this.note,
       this.isLoading,
       required this.nextTittle,
       required this.passenger,
@@ -72,37 +88,43 @@ class NextButtonWidget extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                "total_price_label".tr(namedArgs: {"count": "$passenger"}),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontFamily: "packages/mysafar_sdk/Gilroy",
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: muted,
-                ),
-              ),
-              const SizedBox(height: 2),
-              // Uzun summa (masalan so'mda) bir qatorga sig'masa kichrayadi.
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  currencyProvider.getElementPrice(price!),
+              // Narx hali yo'q bo'lsa (null) narx qatori ko'rsatilmaydi —
+              // faqat tugma qoladi.
+              if (showPrice && price != null) ...[
+                Text(
+                  "total_price_label".tr(namedArgs: {"count": "$passenger"}),
                   maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontFamily: "packages/mysafar_sdk/Gilroy",
-                    fontWeight: FontWeight.w800,
-                    fontSize: 22,
-                    color: priceColor,
-                    height: 1.15,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: muted,
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 52,
+                const SizedBox(height: 2),
+                // Uzun summa (masalan so'mda) bir qatorga sig'masa kichrayadi.
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    currencyProvider.getElementPrice(price),
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontFamily: "packages/mysafar_sdk/Gilroy",
+                      fontWeight: FontWeight.w800,
+                      fontSize: 22,
+                      color: priceColor,
+                      height: 1.15,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              // Qat'iy balandlik emas — katta tizim shriftida matn
+              // sig'maganda tugma o'sadi (№32).
+              ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 52),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(14),
@@ -139,15 +161,16 @@ class NextButtonWidget extends StatelessWidget {
                                 ),
                               )
                             : Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 16),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 8),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Flexible(
                                       child: Text(
                                         nextTittle.tr(),
-                                        maxLines: 1,
+                                        maxLines: 2,
+                                        textAlign: TextAlign.center,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
                                           fontFamily:
@@ -174,6 +197,37 @@ class NextButtonWidget extends StatelessWidget {
                   ),
                 ),
               ),
+              if (noteHighlight != null || note != null) ...[
+                const SizedBox(height: 10),
+                if (noteHighlight != null)
+                  Text(
+                    noteHighlight!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontFamily: "packages/mysafar_sdk/Gilroy",
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF3FD07D),
+                    ),
+                  ),
+                if (note != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    note!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontFamily: "packages/mysafar_sdk/Gilroy",
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: muted,
+                    ),
+                  ),
+                ],
+              ],
+              if (footer != null) ...[
+                const SizedBox(height: 8),
+                footer!,
+              ],
             ],
           ),
         ),

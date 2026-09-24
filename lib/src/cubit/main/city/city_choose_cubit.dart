@@ -186,7 +186,8 @@ class CityChooseCubit extends Cubit<CityChooseStates> with NetworkCancel {
     } catch (e) {
       debugPrint("CityChooseCubit getAirportsByCountry error: $e");
       if (isClosed || seq != _searchSeq) return;
-      emit(CityChooseErrorState(e.toString()));
+      // Xom istisno matni (e.toString()) foydalanuvchiga ko'rsatilmaydi.
+      emit(CityChooseErrorState('city_search_failed'.tr()));
     }
   }
 
@@ -253,7 +254,8 @@ class CityChooseCubit extends Cubit<CityChooseStates> with NetworkCancel {
     } catch (e) {
       debugPrint("CityChooseCubit getAirports error: $e");
       if (isClosed || seq != _searchSeq) return;
-      emit(CityChooseErrorState(e.toString()));
+      // Xom istisno matni (e.toString()) foydalanuvchiga ko'rsatilmaydi.
+      emit(CityChooseErrorState('city_search_failed'.tr()));
     }
   }
 

@@ -114,10 +114,10 @@ class _UpdatePhoneAndEmailPageState extends State<UpdatePhoneAndEmailPage> {
 
   String? validateForm() {
     if (emailController.text.trim().isEmpty) {
-      return "Email kiritilmadi";
+      return "email_required".tr();
     }
     if (phoneNumController.text.trim().isEmpty) {
-      return "Phone kiritilmadi";
+      return "phone_required".tr();
     }
 
     return null;
@@ -133,7 +133,8 @@ class _UpdatePhoneAndEmailPageState extends State<UpdatePhoneAndEmailPage> {
             if (isDelete) {
               ProjectDialogs.showDeleteDialog(context);
             } else {
-              showDialog(useRootNavigator: false, 
+              showDialog(
+                useRootNavigator: false,
                 context: context,
                 barrierDismissible: false,
                 builder: (context) => const Center(
@@ -160,11 +161,12 @@ class _UpdatePhoneAndEmailPageState extends State<UpdatePhoneAndEmailPage> {
             child: Scaffold(
               appBar: AppBar(
                 title: Text(
-                  "Aloqa ma'lumotlarim",
+                  "contact_info".tr(),
                   style: context.textTheme.bodyMedium
                       ?.copyWith(fontSize: 16, fontWeight: FontWeight.w500),
                 ),
                 leading: IconButton(
+                  tooltip: MaterialLocalizations.of(context).backButtonTooltip,
                   onPressed: () {
                     Navigator.pop(context, false);
                     clearForm();
@@ -246,7 +248,7 @@ class _UpdatePhoneAndEmailPageState extends State<UpdatePhoneAndEmailPage> {
                                       textStyle: context.textTheme.bodyMedium,
                                       onChanged: (CountryCode code) {
                                         updateMask(code);
-            
+
                                         setState(() {});
                                       },
                                     ),

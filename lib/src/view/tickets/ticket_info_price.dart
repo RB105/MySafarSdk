@@ -33,110 +33,6 @@ class _TiCard extends StatelessWidget {
   }
 }
 
-/// "Tarif qoidalari": joylar, qo'l yuki, bagaj, qaytarish, almashtirish —
-/// ikki ustunli sokin ro'yxat. Narx bu yerda takrorlanmaydi (pastdagi
-/// tugmada bor). Ostida (bo'lsa) "Boshqa tarifni tanlash" qatori.
-class _FareRulesCard extends StatelessWidget {
-  final int seatCount;
-  final bool withCBaggage;
-  final String? cBaggage;
-  final bool isRefund;
-  final bool isBaggage;
-  final String baggageLabel;
-  final bool isExchangeable;
-  final Widget tariffSection;
-
-  const _FareRulesCard({
-    required this.seatCount,
-    required this.withCBaggage,
-    required this.cBaggage,
-    required this.isRefund,
-    required this.isBaggage,
-    required this.baggageLabel,
-    required this.isExchangeable,
-    required this.tariffSection,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final rules = <(String, String, bool)>[
-      (
-        Assets.ticketsSeatIcon,
-        "seat_count".tr(namedArgs: {"count": "$seatCount"}),
-        true,
-      ),
-      (
-        withCBaggage
-            ? Assets.ticketsLuggageIcon
-            : Assets.ticketsLuggageNegativeIcon,
-        withCBaggage
-            ? "luggage_size".tr(namedArgs: {"count": cBaggage ?? ""})
-            : "no_luggage".tr(),
-        withCBaggage,
-      ),
-      (
-        isBaggage
-            ? Assets.ticketsBaggagePositiveIcon
-            : Assets.ticketsBaggageNegativeIcon,
-        baggageLabel,
-        isBaggage,
-      ),
-      (
-        isRefund ? Assets.ticketsReturnSuccessIcon : Assets.ticketsReturnIcon,
-        isRefund ? "refundable".tr() : "unrefundable".tr(),
-        isRefund,
-      ),
-      (
-        isExchangeable
-            ? Assets.ticketsReplaceGreenIcon
-            : Assets.ticketsReplaceRedIcon,
-        isExchangeable ? "exchangeable".tr() : "unexchangeable".tr(),
-        isExchangeable,
-      ),
-    ];
-
-    return _TiCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-            child: Text(
-              "filter_tariff_title".tr(),
-              style: context.textTheme.bodyLarge
-                  ?.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                const gap = 12.0;
-                final itemWidth = (constraints.maxWidth - gap) / 2;
-                return Wrap(
-                  spacing: gap,
-                  children: [
-                    for (final (icon, label, positive) in rules)
-                      SizedBox(
-                        width: itemWidth,
-                        child: _FareRuleItem(
-                          iconAsset: icon,
-                          label: label,
-                          positive: positive,
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
-          ),
-          tariffSection,
-        ],
-      ),
-    );
-  }
-}
-
 class _FareRuleItem extends StatelessWidget {
   final String iconAsset;
   final String label;
@@ -155,11 +51,8 @@ class _FareRuleItem extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 20,
-            height: 20,
-            child: SvgPicture.asset(iconAsset),
-          ),
+          // Shart yo'q bo'lsa ikonka ustidan qizil chiziq tortiladi.
+          FareStatusIcon(asset: iconAsset, positive: positive),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -177,84 +70,6 @@ class _FareRuleItem extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// Kartaning pastki qatori — "Boshqa tarifni tanlash" ›.
-class _TariffPickerTile extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _TariffPickerTile({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = context.isDarkMode;
-    final Color accent = isDark ? Colors.white : ProjectTheme.brandColor;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Divider(
-          height: 1,
-          thickness: 1,
-          indent: 16,
-          endIndent: 16,
-          color: context.color.outline.withValues(alpha: 0.6),
-        ),
-        InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    "choose_other_tariff".tr(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: context.textTheme.bodyMedium?.copyWith(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: accent,
-                    ),
-                  ),
-                ),
-                SvgPicture.asset(
-                  Assets.iconsBookingChevronRightIcon,
-                  width: 20,
-                  height: 20,
-                  colorFilter: ColorFilter.mode(accent, BlendMode.srcIn),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Tariflar yuklanayotganda karta ostidagi ixcham shimmer qator.
-class _TariffPickerSkeleton extends StatelessWidget {
-  const _TariffPickerSkeleton();
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = context.isDarkMode;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-      child: Shimmer.fromColors(
-        baseColor: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
-        highlightColor: isDark ? Colors.grey.shade700 : Colors.grey.shade100,
-        child: Container(
-          height: 20,
-          margin: const EdgeInsets.only(right: 140),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(6),
-          ),
-        ),
       ),
     );
   }

@@ -1,4 +1,7 @@
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:mysafar_sdk/src/core/config/response_config.dart';
+import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
+import 'package:mysafar_sdk/src/model/remote/booking/booking_payment_status.dart';
 import 'package:mysafar_sdk/src/service/booking_service.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mysafar_sdk/src/core/config/network_request_scope.dart'
@@ -39,4 +42,38 @@ class BookingConfirmOtpSuccessState extends BookingConfirmStates {
 class BookingConfirmErrorState extends BookingConfirmStates {
   final String error;
   const BookingConfirmErrorState(this.error);
+}
+
+/// To'lov sahifasi (WebView) yopildi — to'lov holati tekshirilmoqda.
+class BookingConfirmPaymentCheckingState extends BookingConfirmStates {
+  const BookingConfirmPaymentCheckingState();
+}
+
+/// Birinchi tekshiruv "to'langan" demadi (to'lanmagan / javob yo'q) —
+/// sahifa bloklanmaydi (foydalanuvchi boshqa usul bilan to'lay oladi),
+/// tekshiruv esa fonda davom etadi: kechikkan to'lov kelsa
+/// [BookingConfirmPaidState] chiqadi.
+class BookingConfirmPaymentBackgroundCheckState extends BookingConfirmStates {
+  const BookingConfirmPaymentBackgroundCheckState();
+}
+
+/// To'lov tasdiqlandi. [isNew] — shu tekshiruvda aniqlandi (analitika va
+/// natija dialogi uchun); `false` — sahifa ochilganda allaqachon to'langan.
+class BookingConfirmPaidState extends BookingConfirmStates {
+  final BookingPaymentStatus status;
+  final bool isNew;
+  const BookingConfirmPaidState(this.status, {this.isNew = true});
+}
+
+/// To'lov o'tmadi (bron hali to'lanmagan yoki bekor qilingan).
+class BookingConfirmNotPaidState extends BookingConfirmStates {
+  final BookingPaymentStatus? status;
+  const BookingConfirmNotPaidState(this.status);
+}
+
+/// Tekshiruv tugadi, lekin to'lov hali tasdiqlanmadi (bank/shlyuz javobi
+/// kechikmoqda yoki holatni olib bo'lmadi).
+class BookingConfirmPaymentPendingState extends BookingConfirmStates {
+  final BookingPaymentStatus? status;
+  const BookingConfirmPaymentPendingState(this.status);
 }

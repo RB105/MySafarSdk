@@ -2,13 +2,15 @@ import 'package:flutter/foundation.dart';
 import 'package:mysafar_sdk/src/core/config/request_config.dart';
 import 'package:mysafar_sdk/src/core/config/response_config.dart';
 import 'package:mysafar_sdk/src/core/constants/end_points.dart';
+import 'package:mysafar_sdk/src/service/payment/sensitive_log.dart';
 import 'my_application_model.dart';
 
 class MyApplicationsService with RequestConfig {
   Future<NetworkResponse> getMyApplications({
     required String pinfl,
   }) async {
-    debugPrint("Applications pinfl: $pinfl");
+    // JShShIR log'ga ochiq yozilmaydi (№63).
+    SensitiveLog.debug('Applications pinfl: ${SensitiveLog.maskTail(pinfl)}');
 
     final response = await postRequest(
       partnerToken: true,

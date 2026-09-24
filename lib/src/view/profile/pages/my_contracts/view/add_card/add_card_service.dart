@@ -2,14 +2,18 @@ import 'package:flutter/foundation.dart';
 import 'package:mysafar_sdk/src/core/config/request_config.dart';
 import 'package:mysafar_sdk/src/core/config/response_config.dart';
 import 'package:mysafar_sdk/src/core/constants/end_points.dart';
+import 'package:mysafar_sdk/src/service/payment/sensitive_log.dart';
 
 class AddCardService with RequestConfig {
   Future<NetworkResponse> getCardInfo({
     required String cardNumber,
   }) async {
-    debugPrint("get-card-info card=$cardNumber");
+    // Karta ma'lumotlari faqat debug'da va niqoblangan (№63).
+    SensitiveLog.debug(
+        'get-card-info card=${SensitiveLog.maskTail(cardNumber)}');
 
     final response = await postRequest(
+      retryable: true,
       headers: false,
       partnerToken: true,
       endPoint: EndPoints.get_card_info,
@@ -21,8 +25,8 @@ class AddCardService with RequestConfig {
         return NetworkSuccessResponse(data: response.data);
       }
       return response;
-    } on Exception catch (e) {
-      debugPrint(e.toString());
+    } catch (e) {
+      debugPrint('MySafarSdk: add-card xatosi (${e.runtimeType})');
       return response;
     }
   }
@@ -33,8 +37,9 @@ class AddCardService with RequestConfig {
     required String cardType,
     required String phone,
   }) async {
-    debugPrint(
-        "send-card-otp card=$cardNumber expire=$expire type=$cardType phone=$phone");
+    SensitiveLog.debug('send-card-otp card=${SensitiveLog.maskTail(cardNumber)} '
+        'expire=${SensitiveLog.hide(expire)} type=$cardType '
+        'phone=${SensitiveLog.maskTail(phone)}');
 
     final response = await postRequest(
       partnerToken: true,
@@ -52,8 +57,8 @@ class AddCardService with RequestConfig {
         return NetworkSuccessResponse(data: response.data);
       }
       return response;
-    } on Exception catch (e) {
-      debugPrint(e.toString());
+    } catch (e) {
+      debugPrint('MySafarSdk: add-card xatosi (${e.runtimeType})');
       return response;
     }
   }
@@ -63,7 +68,8 @@ class AddCardService with RequestConfig {
     required String code,
     required String cardType,
   }) async {
-    debugPrint("verify-card-otp id=$id code=$code type=$cardType");
+    SensitiveLog.debug(
+        'verify-card-otp id=$id code=${SensitiveLog.hide(code)} type=$cardType');
 
     final response = await postRequest(
       partnerToken: true,
@@ -80,8 +86,8 @@ class AddCardService with RequestConfig {
         return NetworkSuccessResponse(data: response.data);
       }
       return response;
-    } on Exception catch (e) {
-      debugPrint(e.toString());
+    } catch (e) {
+      debugPrint('MySafarSdk: add-card xatosi (${e.runtimeType})');
       return response;
     }
   }
@@ -90,7 +96,7 @@ class AddCardService with RequestConfig {
     required String cardUuid,
     required int contractId,
   }) async {
-    debugPrint("card-link uuid=$cardUuid contract=$contractId");
+    SensitiveLog.debug('card-link contract=$contractId');
 
     final response = await postRequest(
       partnerToken: true,
@@ -106,8 +112,8 @@ class AddCardService with RequestConfig {
         return NetworkSuccessResponse(data: response.data);
       }
       return response;
-    } on Exception catch (e) {
-      debugPrint(e.toString());
+    } catch (e) {
+      debugPrint('MySafarSdk: add-card xatosi (${e.runtimeType})');
       return response;
     }
   }

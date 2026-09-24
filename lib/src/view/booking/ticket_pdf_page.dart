@@ -7,10 +7,9 @@ import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
 import 'package:mysafar_sdk/src/core/tools/project_assets.dart';
 import 'package:mysafar_sdk/src/core/widgets/response_state.dart';
-import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/model/local/ticket_data.dart';
 import 'package:mysafar_sdk/src/cubit/profile/tickets/confirmed_tickets_cubit.dart';
-import 'package:mysafar_sdk/src/service/pdf/pdf_download_service.dart';
+import 'package:mysafar_sdk/src/service/pdf/ticket_pdf_actions.dart';
 import 'package:mysafar_sdk/src/view/navbar/bottom_nav_bar.dart';
 
 /// Chipta PDF sahifasi
@@ -31,6 +30,7 @@ class TicketPdfPage extends StatefulWidget {
 class _TicketPdfPageState extends State<TicketPdfPage> {
   late final TicketData _ticketData;
   bool _isDownloading = false;
+  bool _isSharing = false;
 
   @override
   void initState() {
@@ -38,29 +38,38 @@ class _TicketPdfPageState extends State<TicketPdfPage> {
     _ticketData = TicketData.fromJson(widget.data);
   }
 
+  /// Yuklab ochish; ko'ruvchi bo'lmasa/ochilmasa — brauzerda ochish
+  /// taklifi ([TicketPdfActions], №30).
   Future<void> _downloadTicket() async {
-    final url = _ticketData.ticketReceiptUrl;
-    if (url == null || url.isEmpty) {
-      _showError('ticket_url_not_found'.tr());
-      return;
-    }
-
+    if (_isDownloading) return;
     setState(() => _isDownloading = true);
 
-    final result = await PdfDownloadService.downloadAndOpen(
+    await TicketPdfActions.downloadAndOpen(
+      context,
+      url: _ticketData.ticketReceiptUrl,
       fileName: _ticketData.fileName,
-      pdfUrl: url,
     );
 
-    setState(() => _isDownloading = false);
-
-    if (!result.isSuccess && mounted) {
-      _showError('file_open_error'.tr());
-    }
+    if (mounted) setState(() => _isDownloading = false);
   }
 
-  void _showError(String message) {
-    showErrorMessage(message, context: context);
+  /// Tizim "Ulashish" oynasi (share_plus, №30). [buttonContext] — iPad'da
+  /// popover shu tugma ustidan chiqishi uchun.
+  Future<void> _shareTicket(BuildContext buttonContext) async {
+    if (_isSharing) return;
+    setState(() => _isSharing = true);
+    await TicketPdfActions.share(
+      context,
+      url: _ticketData.ticketReceiptUrl,
+      fileName: _ticketData.fileName,
+      originContext: buttonContext,
+    );
+    if (mounted) setState(() => _isSharing = false);
+  }
+
+  /// Zaxira: chiptani brauzerda ochish (ko'ruvchi/ulashish ishlamasa).
+  void _openInBrowser() {
+    TicketPdfActions.openInBrowser(context, _ticketData.ticketReceiptUrl);
   }
 
   void _navigateToHome() {
@@ -80,8 +89,10 @@ class _TicketPdfPageState extends State<TicketPdfPage> {
       body: SafeArea(
         top: Platform.isAndroid,
         bottom: Platform.isAndroid,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        // Kichik ekran / katta shriftda kontent pastdagi suzuvchi tugmalar
+        // ostida qolmasin — aylantiriladi, pastda tugmalar uchun joy.
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 160),
           child: _buildContent(context),
         ),
       ),
@@ -135,6 +146,12 @@ class _TicketPdfPageState extends State<TicketPdfPage> {
           ),
           context.szBoxHeight16,
           _buildDownloadTicketButton(context),
+          if ((_ticketData.ticketReceiptUrl ?? '').isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _buildShareButton(context),
+            const SizedBox(height: 4),
+            _buildOpenInBrowserButton(context),
+          ],
         ],
       ),
     );
@@ -148,40 +165,101 @@ class _TicketPdfPageState extends State<TicketPdfPage> {
     );
   }
 
-  Widget _buildDownloadTicketButton(BuildContext context) {
+  Widget _buildShareButton(BuildContext context) {
     return SizedBox(
-      height: 48,
       width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: _isDownloading ? null : _downloadTicket,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: context.color.primaryContainer,
-          shape: RoundedRectangleBorder(
-            side: BorderSide(color: ProjectTheme.brandColor, width: 1.5),
-            borderRadius: BorderRadius.circular(8),
+      child: Builder(
+        builder: (buttonContext) => ElevatedButton.icon(
+          onPressed: _isSharing ? null : () => _shareTicket(buttonContext),
+          style: ElevatedButton.styleFrom(
+            minimumSize: const Size.fromHeight(48),
+            backgroundColor: context.color.primaryContainer,
+            shape: RoundedRectangleBorder(
+              side: BorderSide(color: ProjectTheme.brandColor, width: 1.5),
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          icon: Icon(Icons.ios_share_rounded,
+              size: 22, color: ProjectTheme.brandColor),
+          label: _isSharing
+              ? SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: ProjectTheme.brandColor,
+                  ),
+                )
+              : Text(
+                  'share_ticket'.tr(),
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: ProjectTheme.brandColor,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOpenInBrowserButton(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: TextButton.icon(
+        onPressed: _openInBrowser,
+        style: TextButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+        icon: Icon(Icons.open_in_browser_rounded,
+            size: 20, color: ProjectTheme.brandColor),
+        label: Text(
+          'open_in_browser'.tr(),
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: ProjectTheme.brandColor,
           ),
         ),
-        icon: Icon(
-          Icons.document_scanner_outlined,
-          size: 24,
-          color: ProjectTheme.brandColor,
+      ),
+    );
+  }
+
+  Widget _buildDownloadTicketButton(BuildContext context) {
+    // Qat'iy balandlik o'rniga minimal — katta shriftda matn sig'adi (№32).
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 48),
+      child: SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          onPressed: _isDownloading ? null : _downloadTicket,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: context.color.primaryContainer,
+            shape: RoundedRectangleBorder(
+              side: BorderSide(color: ProjectTheme.brandColor, width: 1.5),
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          icon: Icon(
+            Icons.document_scanner_outlined,
+            size: 24,
+            color: ProjectTheme.brandColor,
+          ),
+          label: _isDownloading
+              ? SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: ProjectTheme.brandColor,
+                  ),
+                )
+              : Text(
+                  'download_ticket'.tr(),
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: ProjectTheme.brandColor,
+                  ),
+                ),
         ),
-        label: _isDownloading
-            ? SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: ProjectTheme.brandColor,
-                ),
-              )
-            : Text(
-                'download_ticket'.tr(),
-                style: TextStyle(
-                  fontSize: 16,
-                  color: ProjectTheme.brandColor,
-                ),
-              ),
       ),
     );
   }
@@ -201,8 +279,8 @@ class _TicketPdfPageState extends State<TicketPdfPage> {
   }
 
   Widget _buildReceiptButton(BuildContext context) {
-    return SizedBox(
-      height: 48,
+    return Container(
+      constraints: const BoxConstraints(minHeight: 48),
       width: double.infinity,
       child: ElevatedButton.icon(
         onPressed: () {
@@ -237,8 +315,8 @@ class _TicketPdfPageState extends State<TicketPdfPage> {
   }
 
   Widget _buildHomeButton(BuildContext context) {
-    return SizedBox(
-      height: 48,
+    return Container(
+      constraints: const BoxConstraints(minHeight: 48),
       width: double.infinity,
       child: ElevatedButton(
         onPressed: _navigateToHome,

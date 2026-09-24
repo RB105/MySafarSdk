@@ -9,6 +9,8 @@ import 'package:mysafar_sdk/src/core/styles/theme.dart';
 import 'package:mysafar_sdk/src/core/tools/formatters.dart'
     show ElementFormatter;
 import 'package:mysafar_sdk/src/cubit/main/datePicker/date_picker_cubit.dart';
+export 'package:mysafar_sdk/src/cubit/main/datePicker/date_picker_cubit.dart'
+    show MonthPriceParams;
 import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/airports_model.dart'
     show AirPortsModel;
@@ -29,9 +31,25 @@ class DateCalendarWidget extends StatefulWidget {
   final AirPortsModel? fromDir;
   final AirPortsModel? toDir;
 
+  /// Narxlar so'rovi parametrlari (yo'lovchilar/klass/filtrlar) — chaqiruvchi
+  /// sahifadagi bilan bir xil bo'lsa, narxlar keshdan olinadi.
+  final MonthPriceParams priceParams;
+
   /// Sheet'ning `DraggableScrollableSheet` controller'i — ro'yxat eng tepada
   /// bo'lganda pastga tortib yopish shu orqali ishlaydi.
   final ScrollController? scrollController;
+
+  /// Tasdiqlash tugmasi matni (berilmasa — "Bajarildi"). Qidiruv oqimida
+  /// "Bilet izlash" — tasdiqlash shu zahoti qidiruvni boshlaydi (№24).
+  final String? confirmLabel;
+
+  /// Tugma ustidagi yo'lovchilar/klass xulosasi ("1 yo'lovchi, Ekonom").
+  /// Berilsa — qidiruvdan oldin shu yerning o'zida o'zgartirish mumkin.
+  final String? passengerSummary;
+
+  /// Xulosa bosilganda: yo'lovchilar oynasini ochadi va yangi xulosani
+  /// qaytaradi (bekor qilinsa — `null`, matn o'zgarmaydi).
+  final Future<String?> Function()? onPassengerSummaryTap;
 
   const DateCalendarWidget({
     super.key,
@@ -40,6 +58,10 @@ class DateCalendarWidget extends StatefulWidget {
     this.fromDir,
     this.toDir,
     this.scrollController,
+    this.priceParams = const MonthPriceParams(),
+    this.confirmLabel,
+    this.passengerSummary,
+    this.onPassengerSummaryTap,
   });
 
   @override
@@ -73,6 +95,9 @@ class _DateCalendarWidgetState extends State<DateCalendarWidget> {
   DateTime? _end;
   _Focus _focus = _Focus.departure;
 
+  /// Yo'lovchilar xulosasi — sheet ichida o'zgartirilganda yangilanadi.
+  String? _passengerSummary;
+
   /// Kun bo'yicha ixcham narx ("2.88M") — cellBuilder har katakda ro'yxatni
   /// qayta aylanmasligi uchun.
   Map<DateTime, String> _priceByDate = const {};
@@ -97,6 +122,7 @@ class _DateCalendarWidgetState extends State<DateCalendarWidget> {
       if (end != null && !end.isBefore(start)) _end = end;
     }
     _focus = _initialFocus();
+    _passengerSummary = widget.passengerSummary;
 
     if (_start != null) {
       WidgetsBinding.instance
@@ -177,6 +203,57 @@ class _DateCalendarWidgetState extends State<DateCalendarWidget> {
       _end = null;
       _focus = _Focus.returnDate;
     });
+  }
+
+  Future<void> _editPassengers() async {
+    final onTap = widget.onPassengerSummaryTap;
+    if (onTap == null) return;
+    HapticFeedback.selectionClick();
+    final String? next = await onTap();
+    if (!mounted || next == null) return;
+    setState(() => _passengerSummary = next);
+  }
+
+  /// Yo'lovchilar/klass xulosasi qatori — bosilsa o'zgartiriladi.
+  Widget _buildPassengerSummary(String summary) {
+    final bool editable = widget.onPassengerSummaryTap != null;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Semantics(
+        button: editable,
+        label: 'passengers'.tr(),
+        child: InkWell(
+          onTap: editable ? _editPassengers : null,
+          borderRadius: BorderRadius.circular(12),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 44),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+              child: Row(
+                children: [
+                  Icon(Icons.person_outline_rounded,
+                      size: 20, color: _secondaryColor),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      summary,
+                      style: context.textTheme.bodyMedium?.copyWith(
+                        color: _textColor,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  if (editable)
+                    Icon(Icons.chevron_right_rounded,
+                        size: 22, color: _secondaryColor),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   void _submit() {
@@ -285,6 +362,7 @@ class _DateCalendarWidgetState extends State<DateCalendarWidget> {
         fromWhere: widget.fromDir,
         toWhere: widget.toDir,
         flightType: widget.type,
+        priceParams: widget.priceParams,
       ),
       child: BlocListener<DatePickerCubit, DatePickerState>(
         listener: (context, state) {
@@ -346,8 +424,9 @@ class _DateCalendarWidgetState extends State<DateCalendarWidget> {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
-      child: SizedBox(
-        height: 52,
+      // Qat'iy balandlik emas — katta shriftda sarlavha kesilmaydi (№32).
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 52),
         child: Stack(
           alignment: Alignment.center,
           children: [
@@ -695,16 +774,19 @@ class _DateCalendarWidgetState extends State<DateCalendarWidget> {
                       ),
                     ),
             ),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
+            if (_passengerSummary != null)
+              _buildPassengerSummary(_passengerSummary!),
+            // Katta shriftda matn sig'ishi uchun balandlik qat'iy emas.
+            ConstrainedBox(
+              constraints: const BoxConstraints(
+                  minWidth: double.infinity, minHeight: 52),
               child: ElevatedButton(
                 onPressed: _start == null ? null : _submit,
                 style: ProjectTheme.blueButtonStyle.copyWith(
                   elevation: const WidgetStatePropertyAll(0),
                 ),
                 child: Text(
-                  'done'.tr(),
+                  widget.confirmLabel ?? 'done'.tr(),
                   style: context.textTheme.bodyMedium?.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
@@ -793,8 +875,13 @@ class _DateSegments extends StatelessWidget {
     // Linza yashirilganda ham oxirgi joyida so'nadi (sakramaydi).
     final lensIndex = activeIndex ?? count - 1;
 
+    // Katta tizim shriftida matn sig'ishi uchun balandlik shrift
+    // masshtabiga qarab o'sadi (≈40px matn qismi) — №32.
+    final double textPart = MediaQuery.textScalerOf(context).scale(40);
+    final double height = textPart > 40 ? _height + textPart - 40 : _height;
+
     return Container(
-      height: _height,
+      height: height,
       padding: const EdgeInsets.all(_inset),
       decoration: BoxDecoration(
         color: track,
@@ -985,7 +1072,7 @@ class _DateSegmentView extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: base.copyWith(
                               color: isActive ? accent : secondary,
-                              fontSize: 10.5,
+                              fontSize: 12,
                               fontWeight: FontWeight.w600,
                               letterSpacing: 0.42,
                               height: 1.3,
@@ -1019,7 +1106,8 @@ class _DateSegmentView extends StatelessWidget {
               ),
               if (segment.onClear != null)
                 SizedBox.square(
-                  dimension: 40,
+                  // Bosish maydoni ≥44 dp (№32).
+                  dimension: 44,
                   child: IconButton(
                     onPressed: segment.onClear,
                     padding: EdgeInsets.zero,

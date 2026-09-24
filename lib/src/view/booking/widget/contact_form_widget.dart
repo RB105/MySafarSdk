@@ -3,6 +3,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/tools/phone_format.dart';
+import 'package:mysafar_sdk/src/cubit/booking/passenger/passenger_cubit.dart'
+    show PassengerCubit;
 import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/booking_form_fields.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/support_widget.dart'
@@ -25,8 +27,9 @@ class ContactFormWidget extends StatelessWidget {
   /// Telefon o'zgarganda — faqat raqamlar (`998901234567`).
   final ValueChanged<String> onPhoneChanged;
 
-  /// Joriy telefon (faqat raqamlar). Validatsiya UI'dagi formatlangan
-  /// matndan mustaqil shu qiymat bo'yicha qilinadi.
+  /// Joriy telefon (faqat raqamlar). Validatsiya maydon matnidan olingan
+  /// raqamlar bo'yicha qilinadi — sahifa har harfda qayta qurilmasa ham
+  /// xato to'g'ri ko'rinadi. Parametr eski chaqiruvlar uchun qoldirilgan.
   final String rawPhoneDigits;
 
   const ContactFormWidget({
@@ -42,13 +45,14 @@ class ContactFormWidget extends StatelessWidget {
     required this.phoneFocusNode,
     required this.onNextField,
     required this.onPhoneChanged,
-    required this.rawPhoneDigits,
+    this.rawPhoneDigits = '',
   });
 
   @override
   Widget build(BuildContext context) {
     return BookingCard(
-      child: Column(
+      child: AutofillGroup(
+          child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -60,10 +64,14 @@ class ContactFormWidget extends StatelessWidget {
             focusNode: emailFocusNode,
             showError: showErrors,
             keyboardType: TextInputType.emailAddress,
+            autofillHints: const [AutofillHints.email],
             onChanged: onEmailChanged,
             onSubmitted: onNextField,
-            validator: (value) =>
-                value.trim().isEmpty ? "enter_email_address".tr() : null,
+            validator: (value) => value.trim().isEmpty
+                ? "enter_email_address".tr()
+                : PassengerCubit.isValidEmail(value)
+                    ? null
+                    : "srv_invalid_email".tr(),
             suggestions: emailSuggestions,
           ),
           const SizedBox(height: 16),
@@ -77,23 +85,26 @@ class ContactFormWidget extends StatelessWidget {
             showError: showErrors,
             keyboardType: TextInputType.phone,
             textInputAction: TextInputAction.done,
+            autofillHints: const [AutofillHints.telephoneNumber],
             inputFormatters: const [InternationalPhoneInputFormatter()],
             onChanged: (value) => onPhoneChanged(normalizePhoneDigits(value)),
             onSubmitted: onNextField,
-            validator: (_) => rawPhoneDigits.length < kMinPhoneDigits
-                ? "enter_full_phone_number".tr()
-                : null,
+            validator: (value) =>
+                normalizePhoneDigits(value).length < kMinPhoneDigits
+                    ? "enter_full_phone_number".tr()
+                    : null,
           ),
           const SizedBox(height: 12),
           const _PhoneOwnerNotice(),
         ],
-      ),
+      )),
     );
   }
 }
 
-/// "Telefon raqami yo'lovchining o'ziga tegishli bo'lishi shart" — telefon
-/// maydoni ostidagi ixcham izoh (katta ogohlantirish qutisi o'rniga).
+/// "Chipta va xabarlar shu raqamga yuboriladi" — telefon maydoni ostidagi
+/// ixcham izoh. Avvalgi "raqam yo'lovchiga tegishli bo'lishi shart" matni
+/// boshqa odam uchun bilet olayotganlarni cho'chitardi.
 class _PhoneOwnerNotice extends StatelessWidget {
   const _PhoneOwnerNotice();
 
@@ -115,7 +126,7 @@ class _PhoneOwnerNotice extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            "${"contact_phone_warning".tr()}. ${"contact_phone_warning_sub".tr()}.",
+            "contact_phone_notice".tr(),
             style: context.textTheme.bodyMedium?.copyWith(
               fontSize: 12.5,
               height: 1.35,

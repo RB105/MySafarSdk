@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -8,6 +9,8 @@ import 'package:mysafar_sdk/src/core/styles/theme.dart';
 import 'package:mysafar_sdk/src/core/tools/lang_helper.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/model/local/passenger_model.dart';
+import 'package:mysafar_sdk/src/model/local/passenger_rules.dart'
+    show DocumentNumberFormatter, PassengerNameFormatter;
 import 'package:mysafar_sdk/src/model/remote/profile/users_model.dart';
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart'
     show AnalyticsService;
@@ -18,10 +21,12 @@ import 'package:mysafar_sdk/src/view/booking/widget/save_passenger_information.d
 import 'package:mysafar_sdk/src/view/booking/widget/support_widget.dart'
     show BookingCard;
 
-/// Ism/familiya/otasini ismi maydonlarida raqam va bo'sh joy kiritilishini
-/// bloklaydi (aviabilet hujjatidagi yozuvga mos).
+/// Ism/familiya/otasining ismi: aviachipta uchun lotin A–Z, `-` va bitta
+/// bo'sh joy. Urg'uli harflar asosiy harfga keltiriladi, apostrof/raqam
+/// tashlanadi;
+/// kirillcha yozilsa "pasportdagidek lotincha yozing" xatosi chiqadi.
 final List<TextInputFormatter> passengerNameInputFormatters = [
-  FilteringTextInputFormatter.deny(RegExp(r'[\d\s]')),
+  const PassengerNameFormatter(),
 ];
 
 String? _validateBookingDate(String? value, {required String emptyMessage}) {
@@ -54,15 +59,27 @@ class PassengerCardWidget extends StatelessWidget {
   final List<String> Function(String key) getSuggestions;
   final Function(String field, String value) onFieldChanged;
   final Function(UsersModel) onUserSelected;
-  /// Host myid bersa "Ozimning malumotim" chiqadi
-  final VoidCallback? onMyDataTap;
   final VoidCallback onCitizenTap;
   final VoidCallback onDocexpCalendarTap;
   final VoidCallback onBirthdateCalendarTap;
   final VoidCallback onNextField;
   final VoidCallback onScanTap;
+
+  /// Aviakompaniya qoidasi bo'yicha xato (tarjima qilingan matn) yoki `null`
+  /// — masalan pasport safar tugaguncha amal qilmasa. Bo'sh maydonlar bu yerga
+  /// kelmaydi. Berilmasa faqat format tekshiriladi (profil formasi).
+  final String? Function(String field, String value)? ruleError;
   final MaskTextInputFormatter docexpFormatter;
   final MaskTextInputFormatter birthdateFormatter;
+
+  /// Formada chip sifatida ko'rsatiladigan saqlangan yo'lovchilar (slotga
+  /// mos kelganlari). Berilmasa chiplar chiqmaydi va "Yo'lovchi tanlash"
+  /// [cachedUsers] bo'yicha ko'rsatiladi.
+  final List<UsersModel>? savedUsers;
+
+  /// Saqlangan yo'lovchilar oynasidagi filtr (yosh toifasi, boshqa slotda
+  /// tanlanganlar).
+  final bool Function(UsersModel user)? savedUserFilter;
 
   // GlobalKeys
   final GlobalKey citizenKey;
@@ -83,12 +100,14 @@ class PassengerCardWidget extends StatelessWidget {
     required this.getSuggestions,
     required this.onFieldChanged,
     required this.onUserSelected,
-    this.onMyDataTap,
     required this.onCitizenTap,
     required this.onDocexpCalendarTap,
     required this.onBirthdateCalendarTap,
     required this.onNextField,
     required this.onScanTap,
+    this.ruleError,
+    this.savedUsers,
+    this.savedUserFilter,
     required this.docexpFormatter,
     required this.birthdateFormatter,
     required this.citizenKey,
@@ -109,6 +128,10 @@ class PassengerCardWidget extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildQuickFill(context),
+        if (savedUsers case final users? when users.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _SavedPassengerChips(users: users, onSelected: onUserSelected),
+        ],
         const SizedBox(height: 20),
         _SectionTitle("personal_info".tr()),
         BookingCard(
@@ -122,6 +145,7 @@ class PassengerCardWidget extends StatelessWidget {
                 textController: controller.lastnameController,
                 focusNode: controller.lastnameFocus,
                 error: "surname_not_entered".tr(),
+                autofillHint: AutofillHints.familyName,
               ),
               const SizedBox(height: _fieldGap),
               _nameField(
@@ -131,6 +155,7 @@ class PassengerCardWidget extends StatelessWidget {
                 textController: controller.firstnameController,
                 focusNode: controller.firstnameFocus,
                 error: "name_not_entered".tr(),
+                autofillHint: AutofillHints.givenName,
               ),
               const SizedBox(height: _fieldGap),
               _nameField(
@@ -140,6 +165,7 @@ class PassengerCardWidget extends StatelessWidget {
                 textController: controller.middlenameController,
                 focusNode: controller.middlenameFocus,
                 optional: true,
+                autofillHint: AutofillHints.middleName,
               ),
               const SizedBox(height: _fieldGap),
               _dateField(
@@ -152,12 +178,17 @@ class PassengerCardWidget extends StatelessWidget {
                 formatter: birthdateFormatter,
                 emptyMessage: 'birthdate_required'.tr(),
                 onCalendarTap: onBirthdateCalendarTap,
+                autofillHint: AutofillHints.birthday,
               ),
               const SizedBox(height: _fieldGap),
               BookingChoiceField<String>(
                 key: genderKey,
                 label: "gender".tr(),
                 value: passenger.gender,
+                // Jins standart tanlanmaydi — tanlanmasa xato ko'rsatiladi.
+                errorText: showErrors && passenger.gender.isEmpty
+                    ? "gender_not_selected".tr()
+                    : null,
                 options: [
                   (PassengerConstants.genderMale, "male".tr()),
                   (PassengerConstants.genderFemale, "female".tr()),
@@ -187,11 +218,12 @@ class PassengerCardWidget extends StatelessWidget {
                 focusNode: controller.docnumFocus,
                 showError: showErrors,
                 textCapitalization: TextCapitalization.characters,
-                inputFormatters: [
-                  FilteringTextInputFormatter.deny(RegExp(r'\s')),
-                ],
+                // Katta harf, o'xshash kirill → lotin, "№ - /" va bo'sh joy
+                // tashlanadi (№69).
+                inputFormatters: const [DocumentNumberFormatter()],
                 validator: (v) =>
-                    _validateRequired(v, "passport_data_not_entered".tr()),
+                    _validateRequired(v, "passport_data_not_entered".tr()) ??
+                    ruleError?.call('docnum', v),
                 onChanged: (value) => onFieldChanged('docnum', value),
                 onSubmitted: onNextField,
                 suggestions: getSuggestions('docnum'),
@@ -215,89 +247,46 @@ class PassengerCardWidget extends StatelessWidget {
     );
   }
 
-  /// Tezkor toldirish: skaner, myid (bolsa), saqlangan yolovchi
+  /// Tezkor to'ldirish: hujjatni skanerlash va (bo'lsa) saqlangan
+  /// yo'lovchini tanlash — ikonka, sarlavha va izohli kartalar.
   Widget _buildQuickFill(BuildContext context) {
-    final hasSavedPassengers = cachedUsers.isNotEmpty;
-    final hasMyData = onMyDataTap != null;
-
+    final hasSavedPassengers =
+        savedUsers != null ? savedUsers!.isNotEmpty : cachedUsers.isNotEmpty;
     final scan = _QuickFillCard(
       iconAsset: Assets.iconsScanFrameIcon,
       title: "scan_short".tr(),
       subtitle: "quick_scan_subtitle".tr(),
-      compact: hasSavedPassengers || hasMyData,
+      compact: hasSavedPassengers,
       onTap: onScanTap,
     );
+    if (!hasSavedPassengers) return scan;
 
-    final myData = hasMyData
-        ? _QuickFillCard(
-            iconAsset: Assets.iconsScanIdCardIcon,
-            title: "use_my_data_short".tr(),
-            subtitle: "quick_my_data_subtitle".tr(),
-            compact: true,
-            onTap: () {
-              FocusManager.instance.primaryFocus?.unfocus();
-              onMyDataTap!();
-            },
-          )
-        : null;
-
-    final saved = hasSavedPassengers
-        ? _QuickFillCard(
-            iconAsset: Assets.iconsScanSavedPassengersIcon,
-            title: "select_passenger_short".tr(),
-            subtitle: "quick_saved_subtitle".tr(),
-            compact: true,
-            onTap: () {
-              // Sheet yopilganda klaviatura oxirgi maydonga qaytib
-              // ochilmasin.
-              FocusManager.instance.primaryFocus?.unfocus();
-              showPassengerPickerBottomSheet(
-                context: context,
-                onSelected: onUserSelected,
-              );
-            },
-          )
-        : null;
-
-    // Yolovchi tanlash oldida myid tugmasi
-    final secondary = <Widget>[
-      if (myData != null) myData,
-      if (saved != null) saved,
-    ];
-
-    if (secondary.isEmpty) return scan;
-
-    // bitta qoshimcha bolsa skaner yoniga
-    if (secondary.length == 1) {
-      return IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(child: scan),
-            const SizedBox(width: 10),
-            Expanded(child: secondary.first),
-          ],
-        ),
-      );
-    }
-
-    // skaner tepada, pastda myid + yolovchi tanlash
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        scan,
-        const SizedBox(height: 10),
-        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: secondary[0]),
-              const SizedBox(width: 10),
-              Expanded(child: secondary[1]),
-            ],
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: scan),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _QuickFillCard(
+              iconAsset: Assets.iconsScanSavedPassengersIcon,
+              title: "select_passenger_short".tr(),
+              subtitle: "quick_saved_subtitle".tr(),
+              compact: true,
+              onTap: () {
+                // Sheet yopilganda klaviatura oxirgi maydonga qaytib
+                // ochilmasin.
+                FocusManager.instance.primaryFocus?.unfocus();
+                showPassengerPickerBottomSheet(
+                  context: context,
+                  onSelected: onUserSelected,
+                  filter: savedUserFilter,
+                );
+              },
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -309,17 +298,21 @@ class PassengerCardWidget extends StatelessWidget {
     required FocusNode focusNode,
     String? error,
     bool optional = false,
+    String? autofillHint,
   }) {
     return BookingTextField(
       key: key,
       label: label,
       optional: optional,
+      autofillHints: autofillHint == null ? null : [autofillHint],
       controller: textController,
       focusNode: focusNode,
       showError: showErrors,
       textCapitalization: TextCapitalization.characters,
       inputFormatters: passengerNameInputFormatters,
-      validator: error == null ? null : (v) => _validateRequired(v, error),
+      validator: (v) =>
+          (error == null ? null : _validateRequired(v, error)) ??
+          (v.trim().isEmpty ? null : ruleError?.call(field, v)),
       onChanged: (value) => onFieldChanged(field, value),
       onSubmitted: onNextField,
       suggestions: getSuggestions(field),
@@ -336,6 +329,7 @@ class PassengerCardWidget extends StatelessWidget {
     required MaskTextInputFormatter formatter,
     required String emptyMessage,
     required VoidCallback onCalendarTap,
+    String? autofillHint,
   }) {
     return BookingTextField(
       key: key,
@@ -344,9 +338,16 @@ class PassengerCardWidget extends StatelessWidget {
       controller: textController,
       focusNode: focusNode,
       showError: showErrors,
-      keyboardType: TextInputType.number,
+      // iOS raqam klaviaturasida "Keyingi" (return) tugmasi yo'q — raqam va
+      // belgilar klaviaturasi ishlatiladi (mask faqat raqamni qabul qiladi).
+      keyboardType: defaultTargetPlatform == TargetPlatform.iOS
+          ? const TextInputType.numberWithOptions(signed: true, decimal: true)
+          : TextInputType.number,
+      autofillHints: autofillHint == null ? null : [autofillHint],
       inputFormatters: [formatter],
-      validator: (v) => _validateBookingDate(v, emptyMessage: emptyMessage),
+      validator: (v) =>
+          _validateBookingDate(v, emptyMessage: emptyMessage) ??
+          ruleError?.call(field, v),
       onChanged: (value) => onFieldChanged(field, value),
       onSubmitted: onNextField,
       suggestions: getSuggestions(field),
@@ -504,6 +505,75 @@ class _QuickFillCard extends StatelessWidget {
                 ),
         ),
       ),
+    );
+  }
+}
+
+/// Saqlangan yo'lovchilar — formaning o'zida bir bosishda tanlash uchun
+/// gorizontal chiplar (oyna ochish shart emas).
+class _SavedPassengerChips extends StatelessWidget {
+  const _SavedPassengerChips({required this.users, required this.onSelected});
+
+  final List<UsersModel> users;
+  final ValueChanged<UsersModel> onSelected;
+
+  static const int _maxChips = 10;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isDark = context.isDarkMode;
+    final Color accent = isDark ? Colors.white : ProjectTheme.brandColor;
+    final shown = users.take(_maxChips).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 6),
+          child: Text(
+            "saved_passengers".tr(),
+            style: context.textTheme.bodyMedium?.copyWith(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w600,
+              color: BookingFormStyle.label(context),
+            ),
+          ),
+        ),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          clipBehavior: Clip.none,
+          child: Row(
+            children: [
+              for (int i = 0; i < shown.length; i++) ...[
+                if (i > 0) const SizedBox(width: 8),
+                ActionChip(
+                  // Tegish maydoni ≥ 48dp (materialTapTargetSize.padded).
+                  materialTapTargetSize: MaterialTapTargetSize.padded,
+                  avatar: Icon(Icons.person_rounded, size: 18, color: accent),
+                  label: Text(
+                    "${shown[i].lastname ?? ''} ${shown[i].firstname ?? ''}"
+                        .trim()
+                        .toUpperCase(),
+                    style: context.textTheme.bodyMedium?.copyWith(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  backgroundColor: context.color.primaryContainer,
+                  side: BorderSide(color: context.color.outline),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  onPressed: () {
+                    FocusManager.instance.primaryFocus?.unfocus();
+                    HapticFeedback.selectionClick();
+                    onSelected(shown[i]);
+                  },
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

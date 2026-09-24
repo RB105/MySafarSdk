@@ -1,3 +1,4 @@
+import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
@@ -15,6 +16,21 @@ class ExpireTimeText extends StatefulWidget {
     this.onExpired,
   });
 
+  /// To'lov muddati (bron yaratilgandan so'ng), soniya.
+  static const int paymentLimitSeconds = 1800;
+
+  /// [createdAt] dan [now] gacha o'tgan vaqtdan qolgan soniyalar (≥ 0).
+  /// Sana noma'lum bo'lsa 0 (muddat o'tgan deb hisoblanadi).
+  static int remainingSecondsAt(
+    DateTime? createdAt,
+    DateTime now, {
+    int limitSeconds = paymentLimitSeconds,
+  }) {
+    if (createdAt == null) return 0;
+    final remaining = limitSeconds - now.difference(createdAt).inSeconds;
+    return remaining > 0 ? remaining : 0;
+  }
+
   @override
   State<ExpireTimeText> createState() => _ExpireTimeTextState();
 }
@@ -27,8 +43,30 @@ class _ExpireTimeTextState extends State<ExpireTimeText> {
   @override
   void initState() {
     super.initState();
-    remainingSeconds =
-        ElementFormatter().bookingExpireRemainingSeconds(widget.createdAt);
+    _restart();
+  }
+
+  @override
+  void didUpdateWidget(covariant ExpireTimeText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Ro'yxat yangilangach element boshqa buyurtmaga tegishli bo'lishi mumkin.
+    if (oldWidget.createdAt != widget.createdAt) {
+      _timer?.cancel();
+      _timer = null;
+      _expiredNotified = false;
+      _restart();
+    }
+  }
+
+  /// Har safar `createdAt` dan qayta hisoblanadi (№88): 1 ayirish ilova
+  /// fonda bo'lganda (iOS taymerni to'xtatadi) orqada qolardi.
+  int _computeRemaining() => ExpireTimeText.remainingSecondsAt(
+        ElementFormatter().parseCreatedAt(widget.createdAt),
+        DateTime.now(),
+      );
+
+  void _restart() {
+    remainingSeconds = _computeRemaining();
     if (remainingSeconds > 0) {
       _startTimer();
     } else {
@@ -40,7 +78,7 @@ class _ExpireTimeTextState extends State<ExpireTimeText> {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) return;
       setState(() {
-        remainingSeconds--;
+        remainingSeconds = _computeRemaining();
       });
 
       if (remainingSeconds <= 0) {
@@ -55,7 +93,7 @@ class _ExpireTimeTextState extends State<ExpireTimeText> {
     if (_expiredNotified) return;
     _expiredNotified = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      widget.onExpired?.call();
+      if (mounted) widget.onExpired?.call();
     });
   }
 
@@ -74,7 +112,9 @@ class _ExpireTimeTextState extends State<ExpireTimeText> {
   @override
   Widget build(BuildContext context) {
     return Text(
-      remainingSeconds > 0 ? formatDuration(remainingSeconds) : "Vaqt tugagan",
+      remainingSeconds > 0
+          ? formatDuration(remainingSeconds)
+          : "payment_time_expired".tr(),
       style: context.textTheme.bodySmall?.copyWith(
         color: Colors.white,
         fontSize: 16,

@@ -9,8 +9,10 @@ import 'package:mysafar_sdk/src/cubit/profile/tickets/confirmed_tickets_cubit.da
 import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/model/remote/profile/confirmed_ticket_models.dart'
     show ConfirmedTicketsModel;
+import 'package:mysafar_sdk/src/model/remote/profile/order_status_classifier.dart';
 import 'package:mysafar_sdk/src/service/review/in_app_review_service.dart';
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
+import 'package:mysafar_sdk/src/view/navbar/bottom_nav_bar.dart';
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mysafar_sdk/src/view/profile/pages/booked_tickets_constants.dart';
 import 'package:mysafar_sdk/src/view/profile/pages/widget/ticked_list_page.dart';
@@ -335,11 +337,11 @@ class _BookedTicketsPageState extends State<BookedTicketsPage>
     );
   }
 
-  bool _isTicketed(ConfirmedTicketsModel ticket) {
-    // Kartadagi chip bilan bir xil manba (callback_status → order.status).
-    return ticket.orderStatus.toLowerCase() ==
-        BookedTicketsConstants.statusTicketed;
-  }
+  /// "To'langan" bo'limi: Paid, Ticketed, PartiallyTicketed,
+  /// TicketedWaitingPNR ... (№58). Kartadagi chip bilan bir xil manba
+  /// (callback_status → order.status), toifalash — [OrderStatusClassifier].
+  bool _isTicketed(ConfirmedTicketsModel ticket) =>
+      OrderStatusClassifier.isPaid(ticket.orderStatus);
 
   // ──────────────────────────────────────────────────────────────────
   //  LOGIN QILINMAGAN HOLAT
@@ -369,7 +371,19 @@ class _BookedTicketsPageState extends State<BookedTicketsPage>
           title: 'enter_profile'.tr(),
           subtitle: 'enter_profile_desc'.tr(),
           actionLabel: 'enter_login'.tr(),
-          onAction: () => ProjectDialogs.showAuthPhoneSheet(context),
+          // Kirgach bosh sahifaga emas, shu "Buyurtmalar" tabiga qaytamiz
+          // (№50) — stack AuthPage'ning default oqimidagidek yangilanadi.
+          onAction: () {
+            final navigator = Navigator.of(context);
+            ProjectDialogs.showAuthPhoneSheet(
+              context,
+              onAuthSuccess: () => navigator.pushNamedAndRemoveUntil(
+                BottomNavBarPage.routeName,
+                (route) => false,
+                arguments: BottomNavBarPage.ordersTabIndex,
+              ),
+            );
+          },
         ),
       ),
     );

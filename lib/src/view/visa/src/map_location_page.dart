@@ -162,7 +162,9 @@ class _MapLocationPickerPageState extends State<MapLocationPickerPage> {
           onTap: ()async {
             final result = await Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => AddressSearchPage())
+                MaterialPageRoute(
+                    settings: const RouteSettings(name: '/addressSearch'),
+                    builder: (context) => AddressSearchPage())
             );
 
             if (result != null) {

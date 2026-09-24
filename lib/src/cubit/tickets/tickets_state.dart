@@ -52,3 +52,16 @@ class TicketCentrumSuccessState extends TicketsState {
   @override
   List<Object?> get props => [recommendationRes];
 }
+
+/// Hech qaysi manba reys bermaganda ko'rsatiladigan natija turi
+/// ([TicketCubit.resolveNoResultsOutcome]).
+enum TicketNoResultsOutcome {
+  /// "Bilet topilmadi" holati.
+  empty,
+
+  /// Manba xatosi — xato dialogi ("Qayta urinish" bilan).
+  error,
+
+  /// Kutilmagan istisno — umumiy xato matni bilan xato dialogi.
+  unexpectedError,
+}

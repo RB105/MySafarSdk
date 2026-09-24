@@ -128,6 +128,8 @@ class _MainSearchFormState extends State<MainSearchForm> {
   }
 
   void _swap() {
+    // Ikkala maydon bo'sh bo'lsa almashtiradigan narsa yo'q.
+    if (fromDir == null && toDir == null) return;
     HapticFeedback.selectionClick();
     setState(() {
       final tmp = fromDir;
@@ -178,26 +180,34 @@ class _MainSearchFormState extends State<MainSearchForm> {
     // RouteSearchPage ochiladi (sana va yo'lovchilar o'sha yerda avtomatik
     // ketma-ket so'raladi).
     final int lastStep = widget.homeStyle ? _stepTo : _stepPassengers;
+    int? prevStep;
     for (int step = startStep; step <= lastStep; step++) {
       // Bosilgan qadamdan keyingilari faqat bo'sh bo'lsa ochiladi.
       if (step != startStep && _isStepFilled(step)) continue;
 
-      // Oldingi oyna yopilish animatsiyasi tugashi uchun qisqa pauza.
-      if (step != startStep) {
-        await Future.delayed(const Duration(milliseconds: 300));
+      // Oldingi oyna yopilish animatsiyasi tugashini kutamiz: shahar
+      // oynasidan keyin — aynan animatsiya oxirigacha; boshqalarida (sana)
+      // avvalgidek qisqa pauza.
+      if (prevStep != null) {
+        await (prevStep <= _stepTo
+            ? ProjectDialogs.citySheetClosed()
+            : Future.delayed(const Duration(milliseconds: 300)));
         if (!mounted) return;
       }
 
       final picked = await _promptStep(step);
       if (!mounted) return;
       if (!picked) return; // bekor qilindi
+      prevStep = step;
     }
 
-    // Bosh sahifada "qayerga" hech qachon holatga saqlanmaydi (yuqoridagi
-    // _promptStep), shuning uchun bu yerga (halqadan keyin) faqat bekor
-    // qilingan holatda yetib keladi — navigatsiya allaqachon _promptStep
-    // ichida amalga oshadi.
-    if (widget.homeStyle) return;
+    // Bosh sahifa: qayerdan va qayerga ikkalasi tanlangan bo'lsa (masalan,
+    // almashtirishdan keyin faqat "qayerdan" qayta tanlandi) — yo'nalish
+    // qidiruv sahifasiga o'tamiz; aks holda hech narsa qilmaymiz.
+    if (widget.homeStyle) {
+      _openRouteSearchIfReady();
+      return;
+    }
 
     // Hammasi to'liq — avtomatik qidiruv.
     if (isFilled) _search();
@@ -215,15 +225,11 @@ class _MainSearchFormState extends State<MainSearchForm> {
       case _stepTo:
         final r = await ProjectDialogs.showCitySearchPicker(context, 1);
         if (!mounted || r == null) return false;
-        // Bosh sahifada "qayerga" holatga saqlanmaydi — faqat yo'nalish
-        // qidiruv sahifasiga uzatiladi. Shu tufayli qidiruv u yerda amalga
-        // oshmasa (orqaga qaytilsa), bosh sahifadagi maydon yana bo'sh
-        // turadi — foydalanuvchi har safar qaytadan tanlaydi.
-        if (widget.homeStyle) {
-          if (fromDir != null) _openRouteSearch(r);
-          return false;
-        }
+        // "Qayerga" holatga saqlanadi — orqaga qaytilganda yo'nalish
+        // eslab qolinadi va almashtirish tugmasi to'g'ri ishlaydi. Bosh
+        // sahifada navigatsiya oqim oxirida (_runGuidedFlow) bo'ladi.
         setState(() => toDir = r);
+        if (widget.homeStyle) return true;
         // Qayerdan → qayerga tanlandi — alohida yo'nalish qidiruv oynasiga
         // o'tamiz (sana va yo'lovchilar o'sha yerda avtomatik so'raladi).
         if (fromDir != null) {
@@ -253,21 +259,42 @@ class _MainSearchFormState extends State<MainSearchForm> {
     }
   }
 
-  /// Yo'nalish qidiruv sahifasini ochadi — u yerda sana tanlash avtomatik
-  /// chiqadi, sana tanlangach yo'lovchilar soni so'raladi.
-  void _openRouteSearch(AirPortsModel to) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => RouteSearchPage(
-          from: fromDir!,
-          to: to,
-          autoPromptDatePassengers: true,
-        ),
-      ),
-    );
+  /// Bosh sahifa: ikkala shahar tanlangan va har xil bo'lsa — yo'nalish
+  /// qidiruv sahifasini ochadi.
+  void _openRouteSearchIfReady() {
+    if (!mounted || fromDir == null || toDir == null) return;
+    if (isSameAirport) {
+      showToastTr("same_airport_warning", type: AppMessageType.warning);
+      return;
+    }
+    _openRouteSearch(toDir!);
   }
 
+  /// Yo'nalish qidiruv sahifasini ochadi — u yerda sana tanlash avtomatik
+  /// chiqadi (yo'lovchilar oxirgi qidiruvdan olinadi).
+  void _openRouteSearch(AirPortsModel to) {
+    // Tez ikki bosishda ikkita sahifa ochilmasin (№83).
+    if (_navigating) return;
+    _navigating = true;
+    Navigator.of(context)
+        .push(
+          MaterialPageRoute(
+            settings: const RouteSettings(name: '/routeSearch'),
+            builder: (_) => RouteSearchPage(
+              from: fromDir!,
+              to: to,
+              autoPromptDatePassengers: true,
+            ),
+          ),
+        )
+        .whenComplete(() => _navigating = false);
+  }
+
+  /// Natijalar / yo'nalish sahifasi ochiq — takroriy bosish e'tiborsiz (№83).
+  bool _navigating = false;
+
   void _search() {
+    if (_navigating) return;
     HapticFeedback.mediumImpact();
     if (!isFilled) {
       showToastTr("home_fill_search", type: AppMessageType.warning);
@@ -277,11 +304,7 @@ class _MainSearchFormState extends State<MainSearchForm> {
       showToastTr("same_airport_warning", type: AppMessageType.warning);
       return;
     }
-    AnalyticsService().trackTicketSearched(
-      passengers: adt + chd + inf,
-      roundTrip: pickerDateRange?.endDate != null,
-      travelClass: klass,
-    );
+    // ticket_searched — natijalar route'i qurilganda (router) yuboriladi.
     final params = RecommendationRequestBody(
         adt: adt,
         chd: chd,
@@ -294,8 +317,10 @@ class _MainSearchFormState extends State<MainSearchForm> {
     ProjectUtils.setRecommendationParams(params);
     // Oxirgi qidiruvni lokal Hive keshga yozamiz (bosh sahifada ko'rsatiladi).
     RecentSearchCache().add(params);
+    _navigating = true;
     Navigator.of(context)
-        .pushNamed(RecommendationsTicketPage.routeName, arguments: params);
+        .pushNamed(RecommendationsTicketPage.routeName, arguments: params)
+        .whenComplete(() => _navigating = false);
   }
 
   @override
@@ -385,38 +410,44 @@ class _MainSearchFormState extends State<MainSearchForm> {
         ? Colors.white.withOpacity(0.22)
         : Colors.white.withOpacity(0.55);
 
+    // Yorug' rejimda karta deyarli shaffof emas (0.94) — blur ko'rinmaydi,
+    // lekin animatsiyali fon ustida har kadr qimmat hisoblanadi. Shuning
+    // uchun blur faqat qorong'i rejimda (№35).
+    final Widget card = Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: glass,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: border, width: 1),
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.12),
+                  blurRadius: 18,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+      ),
+      child: _homeFromToBlock(context),
+    );
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: glass,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: border, width: 1),
-            boxShadow: isDark
-                ? null
-                : [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.12),
-                      blurRadius: 18,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-          ),
-          child: _homeFromToBlock(context),
-        ),
-      ),
+      child: isDark
+          ? BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+              child: card,
+            )
+          : card,
     );
   }
 
   /// Bitta karta ichida From / To + circular orange swap (MySafar home).
   Widget _homeFromToBlock(BuildContext context) {
     final bool isDark = context.isDarkMode;
-    final Color divider = isDark
-        ? Colors.white.withOpacity(0.18)
-        : const Color(0xFFE6EAF0);
+    final Color divider =
+        isDark ? Colors.white.withOpacity(0.18) : const Color(0xFFE6EAF0);
     final Color fieldBg = isDark ? Colors.white : Colors.transparent;
 
     return Stack(
@@ -513,13 +544,18 @@ class _MainSearchFormState extends State<MainSearchForm> {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: _swap,
-          child: Center(
-            child: SvgPicture.asset(
-              ProjectAssets.swapVertIcon,
-              width: 22,
-              height: 22,
-              colorFilter:
-                  const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+          child: Semantics(
+            button: true,
+            label: "a11y_swap_cities".tr(),
+            excludeSemantics: true,
+            child: Center(
+              child: SvgPicture.asset(
+                ProjectAssets.swapVertIcon,
+                width: 22,
+                height: 22,
+                colorFilter:
+                    const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+              ),
             ),
           ),
         ),
@@ -692,9 +728,10 @@ class _MainSearchFormState extends State<MainSearchForm> {
           ),
         ),
         const SizedBox(height: 18),
-        SizedBox(
-          width: double.infinity,
-          height: 54,
+        ConstrainedBox(
+          // Katta shriftda matn sig'ishi uchun balandlik qat'iy emas (№32).
+          constraints:
+              const BoxConstraints(minWidth: double.infinity, minHeight: 54),
           child: ElevatedButton(
             style: ProjectTheme.blueButtonStyle,
             onPressed: _search,
@@ -769,6 +806,18 @@ class _MainSearchFormState extends State<MainSearchForm> {
   }
 
   Widget _swapButton(BuildContext context) {
+    // Ko'rinishi 38 dp doira, bosish maydoni 44 dp (№32).
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _swap,
+      child: SizedBox.square(
+        dimension: 44,
+        child: Center(child: _swapCircle(context)),
+      ),
+    );
+  }
+
+  Widget _swapCircle(BuildContext context) {
     return Material(
       color: context.color.primaryContainer,
       shape: CircleBorder(
@@ -779,16 +828,21 @@ class _MainSearchFormState extends State<MainSearchForm> {
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: _swap,
-        child: SizedBox(
-          width: 38,
-          height: 38,
-          child: Center(
-            child: SvgPicture.asset(
-              ProjectAssets.swapVertIcon,
-              width: 18,
-              height: 18,
-              colorFilter:
-                  ColorFilter.mode(ProjectTheme.brandColor, BlendMode.srcIn),
+        child: Semantics(
+          button: true,
+          label: "a11y_swap_cities".tr(),
+          excludeSemantics: true,
+          child: SizedBox(
+            width: 38,
+            height: 38,
+            child: Center(
+              child: SvgPicture.asset(
+                ProjectAssets.swapVertIcon,
+                width: 18,
+                height: 18,
+                colorFilter:
+                    ColorFilter.mode(ProjectTheme.brandColor, BlendMode.srcIn),
+              ),
             ),
           ),
         ),

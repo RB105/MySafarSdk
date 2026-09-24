@@ -12,6 +12,7 @@ import 'package:mysafar_sdk/src/core/styles/theme.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/model/remote/profile/users_model.dart';
 import 'package:mysafar_sdk/src/service/passenger/document_scan_service.dart';
+import 'package:mysafar_sdk/src/view/booking/support/document_photo_processor.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 /// Pasport/ID karta skaneri — to'liq ekranli kamera.
@@ -26,6 +27,7 @@ Future<UsersModel?> showDocumentScanner(BuildContext context) {
   return Navigator.of(context).push<UsersModel>(
     MaterialPageRoute(
       fullscreenDialog: true,
+      settings: const RouteSettings(name: '/documentScanner'),
       builder: (_) => const _DocumentScannerPage(),
     ),
   );
@@ -64,6 +66,12 @@ class _DocumentScannerPageState extends State<_DocumentScannerPage>
   /// qisqa vaqt belgi ko'rsatiladi.
   Offset? _focusIndicator;
 
+  /// Kamera maydonining oxirgi o'lchami — suratni ramka bo'yicha kesish uchun.
+  Size? _viewportSize;
+
+  /// Oxirgi kamera surati fayli (qayta olish / yopishda o'chiriladi).
+  String? _cameraCapturePath;
+
   bool get _cameraReady =>
       _cameraController?.value.isInitialized == true && _cameraError == null;
 
@@ -79,6 +87,7 @@ class _DocumentScannerPageState extends State<_DocumentScannerPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _discardCameraCapture();
     final controller = _cameraController;
     _cameraController = null;
     _cameraSession++;
@@ -127,12 +136,7 @@ class _DocumentScannerPageState extends State<_DocumentScannerPage>
         (c) => c.lensDirection == CameraLensDirection.back,
         orElse: () => cameras.first,
       );
-      final controller = CameraController(
-        back,
-        ResolutionPreset.veryHigh,
-        enableAudio: false,
-      );
-      await controller.initialize();
+      final controller = await _openCamera(back);
       if (!mounted || session != _cameraSession) {
         await controller.dispose();
         return;
@@ -152,6 +156,27 @@ class _DocumentScannerPageState extends State<_DocumentScannerPage>
         _cameraError = 'scan_camera_error'.tr();
       });
     }
+  }
+
+  /// 4K (`ultraHigh`, ~8 MP): hujjat matni (MRZ, raqamlar) server OCR'i uchun
+  /// tiniq, lekin `max` kabi 48–64 MP emas — past qurilmada surat ishlovida
+  /// xotira yetmay ilova yopilib qolmasin. Yuborishdan oldin surat kesiladi
+  /// va kichraytiriladi (prepareDocumentPhoto). Ochilmasa — `veryHigh`.
+  static Future<CameraController> _openCamera(CameraDescription camera) async {
+    for (final preset in const [
+      ResolutionPreset.ultraHigh,
+      ResolutionPreset.veryHigh
+    ]) {
+      final controller = CameraController(camera, preset, enableAudio: false);
+      try {
+        await controller.initialize();
+        return controller;
+      } catch (e) {
+        await controller.dispose();
+        if (preset == ResolutionPreset.veryHigh) rethrow;
+      }
+    }
+    throw StateError('camera not available');
   }
 
   Future<void> _disposeCamera() async {
@@ -239,11 +264,24 @@ class _DocumentScannerPageState extends State<_DocumentScannerPage>
       await _focusAt(controller, _framePoint);
       await Future<void>.delayed(const Duration(milliseconds: 600));
       if (!mounted) return;
-      final file = await controller.takePicture();
+      // Topilgan fokusni qulflaymiz — suratga olish paytida kamera qayta
+      // "qidirib" kadrni xiralashtirmasin.
+      try {
+        await controller.setFocusMode(FocusMode.locked);
+      } catch (_) {}
+      final XFile file;
+      try {
+        file = await controller.takePicture();
+      } finally {
+        try {
+          await controller.setFocusMode(FocusMode.auto);
+        } catch (_) {}
+      }
       if (_torchOn) unawaited(_toggleTorch());
       if (!mounted) return;
       _capturing = false;
-      await _upload(file.path);
+      _cameraCapturePath = file.path;
+      await _upload(file.path, cropToFrame: true);
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -270,14 +308,30 @@ class _DocumentScannerPageState extends State<_DocumentScannerPage>
   }
 
   /// Rasmni backendga yuboradi va javobni qaytaradi — boshqa ish yo'q.
-  Future<void> _upload(String path) async {
+  ///
+  /// [cropToFrame] — kamera surati: ramka atrofi kesiladi va o'lcham
+  /// me'yorlanadi (tiniq, lekin yengil). Galereya rasmi faqat kichraytiriladi.
+  Future<void> _upload(String path, {bool cropToFrame = false}) async {
     setState(() {
       _capturedPath = path;
       _uploading = true;
       _scanError = null;
     });
 
-    final response = await _service.scan(path);
+    final viewport = _viewportSize;
+    final uploadPath = await prepareDocumentPhoto(
+      path,
+      frame: cropToFrame && viewport != null ? _frameRect(viewport) : null,
+      viewport: cropToFrame ? viewport : null,
+    );
+    if (!mounted) {
+      // Sahifa ishlov paytida yopildi — vaqtinchalik fayl qolib ketmasin.
+      if (uploadPath != path) unawaited(_deleteQuietly(uploadPath));
+      return;
+    }
+
+    final response = await _service.scan(uploadPath);
+    if (uploadPath != path) unawaited(_deleteQuietly(uploadPath));
     if (!mounted) return;
 
     if (response is NetworkSuccessResponse &&
@@ -303,8 +357,23 @@ class _DocumentScannerPageState extends State<_DocumentScannerPage>
     });
   }
 
+  static Future<void> _deleteQuietly(String path) async {
+    try {
+      await File(path).delete();
+    } catch (_) {}
+  }
+
+  /// Kamera surati (kesh papkasida) — endi kerak emas bo'lsa o'chiriladi.
+  /// Galereya fayllariga tegilmaydi.
+  void _discardCameraCapture() {
+    final path = _cameraCapturePath;
+    _cameraCapturePath = null;
+    if (path != null) unawaited(_deleteQuietly(path));
+  }
+
   /// Xatodan keyin qayta suratga olish — jonli kamera qaytadi.
   void _retake() {
+    _discardCameraCapture();
     setState(() {
       _capturedPath = null;
       _scanError = null;
@@ -390,10 +459,14 @@ class _DocumentScannerPageState extends State<_DocumentScannerPage>
 
     final Widget background;
     if (capturedPath != null) {
+      // Ekranga to'liq o'lchamdagi (8 MP) rasm emas, ekran kengligidagi nusxa
+      // dekodlanadi — xotira tejaladi.
+      final media = MediaQuery.of(context);
       background = Image.file(
         File(capturedPath),
         fit: BoxFit.cover,
         gaplessPlayback: true,
+        cacheWidth: (media.size.width * media.devicePixelRatio).round(),
       );
     } else if (!_hasPermission) {
       return _buildCenteredState(
@@ -431,6 +504,8 @@ class _DocumentScannerPageState extends State<_DocumentScannerPage>
       child: LayoutBuilder(
         builder: (context, constraints) {
           final size = constraints.biggest;
+          // Surat shu o'lcham bo'yicha ramkaga qarab kesiladi.
+          _viewportSize = size;
           final frame = _frameRect(size);
           final focusPoint = _focusIndicator;
           return Stack(

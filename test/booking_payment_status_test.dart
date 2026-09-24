@@ -1,0 +1,346 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:mysafar_sdk/src/cubit/booking/confirm/booking_confirm_states.dart';
+import 'package:mysafar_sdk/src/model/remote/booking/booking_create_model.dart';
+import 'package:mysafar_sdk/src/model/remote/booking/booking_payment_status.dart';
+
+Map<String, dynamic> _ticketData(
+  String sign, {
+  String? callback,
+  String? receipt,
+  bool priceChanged = false,
+  num total = 1206994,
+}) =>
+    {
+      if (callback != null) 'callback_status': callback,
+      'data': {
+        'book': {
+          'order': {
+            'status': {'sign': sign, 'title': sign},
+            'billing_number': 125357974025,
+            'price': {
+              'UZS': {'amount': total}
+            },
+          },
+          'tickets': [
+            {
+              'provider': {'currency': 'UZS'},
+              'documents': {'ticket_receipt': receipt},
+            }
+          ],
+          'is_price_changed': priceChanged,
+          'is_search_price_changed': false,
+          'agent_mode_prices': {'total_amount_for_active_agent_mode': total},
+        }
+      },
+    };
+
+BookingPaymentStatus _status(BookingPaymentState state) =>
+    BookingPaymentStatus(state: state, sign: state.name);
+
+void main() {
+  group('BookingPaymentStatus.stateOf', () {
+    test('to\'langan holatlar', () {
+      for (final s in [
+        'Paid',
+        'Ticketed',
+        'ticketed',
+        'PartiallyTicketed',
+        'TicketedWaitingPNR',
+        'partly_ticketed_waiting_pnr',
+      ]) {
+        expect(BookingPaymentStatus.stateOf(s), BookingPaymentState.paid,
+            reason: s);
+      }
+    });
+
+    test('Booked — to\'lanmagan, Cancelled — muvaffaqiyatsiz', () {
+      expect(
+          BookingPaymentStatus.stateOf('Booked'), BookingPaymentState.unpaid);
+      expect(
+          BookingPaymentStatus.stateOf('CANCELED'), BookingPaymentState.failed);
+      expect(BookingPaymentStatus.stateOf('Cancelled'),
+          BookingPaymentState.failed);
+    });
+
+    test('noma\'lum / bo\'sh / AwaitPayment — pending', () {
+      expect(BookingPaymentStatus.stateOf('AwaitPayment'),
+          BookingPaymentState.pending);
+      expect(BookingPaymentStatus.stateOf(''), BookingPaymentState.pending);
+      expect(BookingPaymentStatus.stateOf(null), BookingPaymentState.pending);
+    });
+  });
+
+  group('BookingPaymentStatus.fromTicketData', () {
+    test('Ticketed — chipta havolasi, billing va valyuta bilan', () {
+      final status = BookingPaymentStatus.fromTicketData(
+          _ticketData('Ticketed', receipt: 'https://x.uz/eticket.pdf'));
+      expect(status.isPaid, isTrue);
+      expect(status.ticketReceiptUrl, 'https://x.uz/eticket.pdf');
+      expect(status.billingNumber, '125357974025');
+      expect(status.currency, 'UZS');
+      expect(status.changedTotal, isNull);
+      expect(status.ticketPdfArguments?['data']['book'], isNotNull);
+    });
+
+    test('callback_status to\'langan desa, order hali Booked bo\'lsa ham', () {
+      final status = BookingPaymentStatus.fromTicketData(
+          _ticketData('Booked', callback: 'Ticketed'));
+      expect(status.state, BookingPaymentState.paid);
+    });
+
+    test('Booked — to\'lanmagan', () {
+      final status = BookingPaymentStatus.fromTicketData(_ticketData('Booked'));
+      expect(status.state, BookingPaymentState.unpaid);
+      expect(status.sign, 'Booked');
+    });
+
+    test('narx o\'zgargani faqat bayroq bo\'lsa olinadi', () {
+      final status = BookingPaymentStatus.fromTicketData(
+          _ticketData('Booked', priceChanged: true, total: 1300000));
+      expect(status.changedTotal, 1300000);
+    });
+
+    test('shakli boshqacha javob yiqitmaydi — pending', () {
+      for (final json in [
+        null,
+        'error',
+        <dynamic>[],
+        <String, dynamic>{},
+        {'data': 'x'},
+        {
+          'data': {
+            'book': {'order': 'x', 'tickets': 'y'}
+          }
+        },
+      ]) {
+        final status = BookingPaymentStatus.fromTicketData(json);
+        expect(status.state, BookingPaymentState.pending, reason: '$json');
+        expect(status.isPaid, isFalse);
+      }
+    });
+
+    test('haqiqiy namuna (respons_data.json)', () {
+      final raw = jsonDecode(
+          File('lib/src/view/booking/respons_data.json').readAsStringSync());
+      final record = (raw['result'] as List).first as Map<String, dynamic>;
+
+      // Hamkor javobi: order.status.sign = Booked.
+      final partner = BookingPaymentStatus.fromTicketData(record['response']);
+      expect(partner.state, BookingPaymentState.unpaid);
+      expect(partner.ticketReceiptUrl, contains('eticket_125357974025'));
+      expect(partner.currency, 'UZS');
+
+      // Buyurtma yozuvi: callback_status = Cancelled (eski urinish), lekin
+      // jonli buyurtma Booked — hozirgi holat ustun.
+      final order = BookingPaymentStatus.fromTicketData(record);
+      expect(order.state, BookingPaymentState.unpaid);
+      // Booked buyurtmada ham ticket_receipt bor — lekin chipta chiqarilmagan.
+      expect(order.ticketIssued, isFalse);
+    });
+  });
+
+  group('BookingDisplayAmount.resolve', () {
+    test('bron summasi va valyutasi (qidiruv narxi emas)', () {
+      final r = BookingDisplayAmount.resolve(
+        bookingAmount: 1243204,
+        bookingCurrency: 'RUB',
+      );
+      expect(r?.amount, 1243204);
+      expect(r?.currency, 'RUB');
+    });
+
+    test('summa matn ko\'rinishida ham o\'qiladi', () {
+      final r = BookingDisplayAmount.resolve(
+        bookingAmount: '1 243 204',
+        bookingCurrency: 'UZS',
+      );
+      expect(r?.amount, 1243204);
+    });
+
+    test('backend narx o\'zgarganini bildirsa — yangi jami summa', () {
+      final r = BookingDisplayAmount.resolve(
+        bookingAmount: 1000000,
+        bookingCurrency: 'UZS',
+        ticketData: BookingPaymentStatus.fromTicketData(
+            _ticketData('Booked', priceChanged: true, total: 1300000)),
+      );
+      expect(r?.amount, 1300000);
+      expect(r?.currency, 'UZS');
+    });
+
+    test('bayroq bor, lekin summa bir xil — bron summasi', () {
+      final r = BookingDisplayAmount.resolve(
+        bookingAmount: 1300000,
+        bookingCurrency: 'RUB',
+        ticketData: BookingPaymentStatus.fromTicketData(
+            _ticketData('Booked', priceChanged: true, total: 1300000)),
+      );
+      expect(r?.currency, 'RUB');
+    });
+
+    test('summa yoki valyuta noma\'lum — null (sahifa narxi ishlatiladi)', () {
+      expect(
+          BookingDisplayAmount.resolve(
+              bookingAmount: null, bookingCurrency: 'UZS'),
+          isNull);
+      expect(
+          BookingDisplayAmount.resolve(
+              bookingAmount: 1000, bookingCurrency: null),
+          isNull);
+      expect(
+          BookingDisplayAmount.resolve(
+              bookingAmount: 0, bookingCurrency: 'UZS'),
+          isNull);
+    });
+  });
+
+  group('BookingCreateModel', () {
+    test('valyuta kodi → belgi', () {
+      expect(BookingCreateModel.currencyLabelFor(860), 'UZS');
+      expect(BookingCreateModel.currencyLabelFor(643), 'RUB');
+      expect(BookingCreateModel.currencyLabelFor(840), 'USD');
+      expect(BookingCreateModel.currencyLabelFor(null), isNull);
+      expect(BookingCreateModel.currencyLabelFor(999), isNull);
+    });
+
+    test('fromJson: matn valyuta, billing_id yo\'q', () {
+      final model = BookingCreateModel.fromJson({
+        'tr_id': 'abc',
+        'amount': 1243204,
+        'currency': '643',
+      });
+      expect(model.currencyLabel, 'RUB');
+      expect(model.billingId, isNull);
+      expect(model.trId, 'abc');
+    });
+  });
+
+  group('BookingConfirmCubit.pollPaymentStatus', () {
+    const tick = Duration(milliseconds: 1);
+    final delays = List<Duration>.filled(6, tick)..[0] = Duration.zero;
+
+    Future<({BookingPaymentState state, BookingPaymentStatus? status})> poll(
+      List<BookingPaymentStatus?> responses,
+    ) {
+      var i = 0;
+      return BookingConfirmCubit.pollPaymentStatus(
+        fetch: () async =>
+            responses[i < responses.length ? i++ : responses.length - 1],
+        delays: delays,
+      );
+    }
+
+    test('to\'langan — darhol', () async {
+      var calls = 0;
+      final result = await BookingConfirmCubit.pollPaymentStatus(
+        fetch: () async {
+          calls++;
+          return _status(BookingPaymentState.paid);
+        },
+        delays: delays,
+      );
+      expect(result.state, BookingPaymentState.paid);
+      expect(calls, 1);
+    });
+
+    test('birinchi javob to\'lanmagan — onFirstStatus bir marta chaqiriladi',
+        () async {
+      final firsts = <BookingPaymentState?>[];
+      var i = 0;
+      final responses = [
+        _status(BookingPaymentState.unpaid),
+        _status(BookingPaymentState.unpaid),
+        _status(BookingPaymentState.paid),
+      ];
+      final result = await BookingConfirmCubit.pollPaymentStatus(
+        fetch: () async => responses[i < 2 ? i++ : 2],
+        delays: delays,
+        onFirstStatus: (s) => firsts.add(s?.state),
+      );
+      expect(firsts, [BookingPaymentState.unpaid]);
+      // Fonda davom etib, kechikkan to'lov baribir aniqlanadi.
+      expect(result.state, BookingPaymentState.paid);
+    });
+
+    test('birinchi javob to\'langan — onFirstStatus chaqirilmaydi', () async {
+      var called = false;
+      await BookingConfirmCubit.pollPaymentStatus(
+        fetch: () async => _status(BookingPaymentState.paid),
+        delays: delays,
+        onFirstStatus: (_) => called = true,
+      );
+      expect(called, isFalse);
+    });
+
+    test('avval Booked, keyin Ticketed — to\'langan', () async {
+      final result = await poll([
+        _status(BookingPaymentState.unpaid),
+        _status(BookingPaymentState.paid),
+      ]);
+      expect(result.state, BookingPaymentState.paid);
+    });
+
+    test('Booked / Cancelled oyna oxirigacha kutiladi (callback kechikadi)',
+        () async {
+      var calls = 0;
+      final result = await BookingConfirmCubit.pollPaymentStatus(
+        fetch: () async {
+          calls++;
+          return _status(BookingPaymentState.unpaid);
+        },
+        delays: delays,
+      );
+      expect(result.state, BookingPaymentState.unpaid);
+      expect(calls, delays.length, reason: 'erta to\'xtamasligi kerak');
+
+      final cancelledThenPaid = await poll([
+        _status(BookingPaymentState.failed),
+        _status(BookingPaymentState.unpaid),
+        _status(BookingPaymentState.paid),
+      ]);
+      expect(cancelledThenPaid.state, BookingPaymentState.paid);
+    });
+
+    test('oxirgi javob Cancelled — muvaffaqiyatsiz', () async {
+      final result = await poll([_status(BookingPaymentState.failed)]);
+      expect(result.state, BookingPaymentState.failed);
+    });
+
+    test('umumiy chegara o\'tsa to\'xtaydi', () async {
+      var calls = 0;
+      final result = await BookingConfirmCubit.pollPaymentStatus(
+        fetch: () async {
+          calls++;
+          return null;
+        },
+        delays: delays,
+        deadline: Duration.zero,
+      );
+      expect(calls, lessThanOrEqualTo(1));
+      expect(result.state, BookingPaymentState.pending);
+    });
+
+    test('tarmoq xatolari / AwaitPayment — pending', () async {
+      expect((await poll([null])).state, BookingPaymentState.pending);
+      expect((await poll([_status(BookingPaymentState.pending)])).state,
+          BookingPaymentState.pending);
+    });
+
+    test('bekor qilinsa (cubit yopildi) so\'rov yuborilmaydi', () async {
+      var calls = 0;
+      final result = await BookingConfirmCubit.pollPaymentStatus(
+        fetch: () async {
+          calls++;
+          return null;
+        },
+        delays: delays,
+        isCancelled: () => true,
+      );
+      expect(calls, 0);
+      expect(result.state, BookingPaymentState.pending);
+    });
+  });
+}

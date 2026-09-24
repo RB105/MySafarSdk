@@ -16,6 +16,7 @@ class _RouteModeTabBar extends StatelessWidget {
       listenable: controller,
       builder: (context, _) => _SegmentedPill(
         onHero: true,
+        height: 40,
         selectedIndex: controller.index,
         onChanged: (i) => controller.index = i,
         items: [
@@ -146,21 +147,24 @@ class _LegBlock extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
+          // O'chirish tugmasining 44 dp bosish maydoni pastki oraliqni
+          // o'z ichiga oladi.
+          padding:
+              EdgeInsets.fromLTRB(4, 0, canRemove ? 0 : 4, canRemove ? 0 : 6),
           child: Row(
             children: [
               Expanded(
                 child: Text(
-                  "route_leg_index"
-                      .tr(namedArgs: {"index": "${index + 1}"}).toUpperCase(),
+                  "route_leg_index".tr(namedArgs: {"index": "${index + 1}"}),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 10.5,
+                  style: TextStyle(
+                    fontSize: 14,
                     height: 1.5,
                     fontWeight: FontWeight.w700,
-                    letterSpacing: 0.42,
-                    color: _Web.label,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? ProjectTheme.textColorDark
+                        : _Web.value,
                   ),
                 ),
               ),
@@ -172,6 +176,7 @@ class _LegBlock extends StatelessWidget {
           label: "from".tr(),
           value: _cityText(leg.from, "choose_from_dir".tr()),
           isPlaceholder: leg.from == null,
+          icon: Assets.iconsTicketTakeoffIcon,
           onTap: onFromTap,
         ),
         const SizedBox(height: 6),
@@ -179,6 +184,7 @@ class _LegBlock extends StatelessWidget {
           label: "to".tr(),
           value: _cityText(leg.to, "choose_to_dir".tr()),
           isPlaceholder: leg.to == null,
+          icon: Assets.iconsTicketLandingIcon,
           onTap: onToTap,
         ),
         const SizedBox(height: 6),
@@ -201,15 +207,35 @@ class _LegRemoveButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    void handleTap() {
+      HapticFeedback.lightImpact();
+      onTap();
+    }
+
+    // Ko'rinishi 24 dp doira, bosish maydoni 44×44 dp (№32).
+    return Semantics(
+      button: true,
+      label: "delete".tr(),
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: handleTap,
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Center(child: _circle(handleTap)),
+        ),
+      ),
+    );
+  }
+
+  Widget _circle(VoidCallback handleTap) {
     return Material(
       color: ProjectTheme.redBgLight.withAlpha(120),
       shape: const CircleBorder(),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () {
-          HapticFeedback.lightImpact();
-          onTap();
-        },
+        onTap: handleTap,
         child: SizedBox(
           width: 24,
           height: 24,
@@ -249,9 +275,10 @@ class _AddLegButton extends StatelessWidget {
                   onTap();
                 }
               : null,
-          child: SizedBox(
-            height: 44,
-            width: double.infinity,
+          child: ConstrainedBox(
+            // Katta shriftda matn sig'ishi uchun balandlik qat'iy emas (№32).
+            constraints:
+                const BoxConstraints(minWidth: double.infinity, minHeight: 44),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [

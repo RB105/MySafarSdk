@@ -157,6 +157,22 @@ class _DatePriceStripState extends State<_DatePriceStrip> {
     }
 
     final t = _TixTheme.of(context);
+    // Lenta balandligi qat'iy (pinned appbar tarkibida) — katta tizim
+    // shriftida sana/narx qatorlari sig'may qolmasligi uchun matn
+    // kattalashishi cheklanadi.
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.2,
+      child: _buildStrip(t, dates, priceTextByDay, priceValueByDay, minVisible),
+    );
+  }
+
+  Widget _buildStrip(
+    _TixTheme t,
+    List<DateTime> dates,
+    Map<int, String> priceTextByDay,
+    Map<int, double> priceValueByDay,
+    double? minVisible,
+  ) {
     return Container(
       height: _DatePriceStrip.height,
       color: t.card,
@@ -164,6 +180,7 @@ class _DatePriceStripState extends State<_DatePriceStrip> {
         children: [
           _StripArrowButton(
             icon: Icons.chevron_left_rounded,
+            semanticLabel: "a11y_previous_dates".tr(),
             onTap: () => _scrollBy(-_itemWidth * 3),
           ),
           Expanded(
@@ -199,6 +216,7 @@ class _DatePriceStripState extends State<_DatePriceStrip> {
           ),
           _StripArrowButton(
             icon: Icons.chevron_right_rounded,
+            semanticLabel: "a11y_next_dates".tr(),
             onTap: () => _scrollBy(_itemWidth * 3),
           ),
         ],
@@ -213,24 +231,42 @@ class _StripArrowButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
 
-  const _StripArrowButton({required this.icon, required this.onTap});
+  /// Ekran o'quvchi uchun tugma nomi.
+  final String semanticLabel;
+
+  const _StripArrowButton({
+    required this.icon,
+    required this.onTap,
+    required this.semanticLabel,
+  });
 
   @override
   Widget build(BuildContext context) {
     final t = _TixTheme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Material(
-        color: t.dark ? Colors.white.withAlpha(20) : const Color(0xFFF1F4F9),
-        borderRadius: BorderRadius.circular(10),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: SizedBox(
-            width: 30,
-            height: 40,
-            child: Center(
-              child: Icon(icon, size: 20, color: t.hi),
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      excludeSemantics: true,
+      // Chetdagi 4 dp ham bosiladi — bosish maydoni 44×48 dp (№32).
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Material(
+            color:
+                t.dark ? Colors.white.withAlpha(20) : const Color(0xFFF1F4F9),
+            borderRadius: BorderRadius.circular(10),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: onTap,
+              child: SizedBox(
+                width: 36,
+                height: 48,
+                child: Center(
+                  child: Icon(icon, size: 20, color: t.hi),
+                ),
+              ),
             ),
           ),
         ),
@@ -457,11 +493,12 @@ List<_AirlineGroup> _groupFlightsByAirline(List<FlightElement> flights) {
         .add(f);
   }
   final groups = map.values.where((g) => g.flights.isNotEmpty).toList();
+  // Narx bir marta o'qilgan (keshlangan) son — taqqoslashda matn qayta
+  // parse qilinmaydi.
   for (final g in groups) {
-    g.flights.sort((a, b) => _flightPriceUzs(a).compareTo(_flightPriceUzs(b)));
+    g.flights.sort((a, b) => a.sortPrice.compareTo(b.sortPrice));
   }
-  groups.sort((a, b) =>
-      _flightPriceUzs(a.cheapest).compareTo(_flightPriceUzs(b.cheapest)));
+  groups.sort((a, b) => a.cheapest.sortPrice.compareTo(b.cheapest.sortPrice));
   return groups;
 }
 
@@ -480,10 +517,16 @@ class _AirlinesSummaryCardState extends State<_AirlinesSummaryCard> {
 
   bool _expanded = false;
 
+  /// Guruhlash faqat reyslar ro'yxati o'zgarganda qayta hisoblanadi (har
+  /// rebuild'da emas).
+  final ListResultMemo<List<_AirlineGroup>> _groupsMemo =
+      ListResultMemo<List<_AirlineGroup>>();
+
   @override
   Widget build(BuildContext context) {
     final t = _TixTheme.of(context);
-    final groups = _groupFlightsByAirline(widget.flights);
+    final groups = _groupsMemo.get(
+        widget.flights, null, () => _groupFlightsByAirline(widget.flights));
     if (groups.length < 2) return const SizedBox.shrink();
 
     final visible = _expanded ? groups : groups.take(_collapsedCount).toList();
@@ -518,8 +561,9 @@ class _AirlinesSummaryCardState extends State<_AirlinesSummaryCard> {
                   onTap: () => setState(() => _expanded = !_expanded),
                   borderRadius: BorderRadius.circular(8),
                   child: Padding(
+                    // Bosish maydoni ≥44dp bo'lsin.
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
                     child: Row(
                       children: [
                         Text(
@@ -546,7 +590,10 @@ class _AirlinesSummaryCardState extends State<_AirlinesSummaryCard> {
           const SizedBox(height: 4),
           for (int i = 0; i < visible.length; i++) ...[
             if (i > 0) Divider(height: 1, thickness: 1, color: t.line),
-            _AirlineSummaryRow(group: visible[i], isCheapest: i == 0),
+            _AirlineSummaryRow(
+                group: visible[i],
+                // Faqat UZS narxli guruh "eng arzon" rangida (№82).
+                isCheapest: i == 0 && visible[i].cheapest.hasUzsSortPrice),
           ],
         ],
       ),
@@ -664,7 +711,7 @@ class _AirlineSummaryRow extends StatelessWidget {
               ],
             ),
             if (times.isNotEmpty) ...[
-              const SizedBox(height: 7),
+              // Oraliq vaqt chiplarining 44 dp bosish maydoni ichida (№32).
               Row(
                 children: [
                   Text(
@@ -714,6 +761,22 @@ class _TimeChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = _TixTheme.of(context);
+    // Chip ko'rinishi ixcham, bosish maydoni esa ≥44 dp (№32): atrofidagi
+    // shaffof maydon ham shu reysni ochadi.
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44, minWidth: 44),
+        child: Center(
+          widthFactor: 1,
+          child: _chip(t),
+        ),
+      ),
+    );
+  }
+
+  Widget _chip(_TixTheme t) {
     return Material(
       color: highlighted ? _kTixGreen.withAlpha(t.dark ? 50 : 26) : t.tonal,
       borderRadius: BorderRadius.circular(8),

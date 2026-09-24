@@ -240,14 +240,21 @@ class _RecViewFilterBar extends StatelessWidget implements PreferredSizeWidget {
       ),
     ];
 
-    return SizedBox(
-      height: 56,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(16, 9, 16, 9),
-        itemCount: chips.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (_, i) => chips[i],
+    // Balandlik qat'iy (appbar tarkibida) — katta tizim shriftida chip matni
+    // sig'may qolmasligi uchun kattalashish cheklanadi.
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.2,
+      child: SizedBox(
+        height: 56,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          // Chip ko'rinishi 38 dp, bosish maydoni esa 44 dp (≥44 dp, №32):
+          // yuqori/pastki 3 dp chip ichidagi shaffof maydon.
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+          itemCount: chips.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 8),
+          itemBuilder: (_, i) => chips[i],
+        ),
       ),
     );
   }
@@ -275,7 +282,24 @@ class _RecFilterChip extends StatelessWidget {
     final Color brand = ProjectTheme.brandColor;
     final Color bg = active ? brand.withAlpha(t.dark ? 56 : 18) : t.tonal;
     final Color fg = active ? (t.dark ? Colors.white : brand) : t.hi;
+    void handleTap() {
+      HapticFeedback.lightImpact();
+      onTap();
+    }
 
+    // Tashqi shaffof maydon (3 dp) ham bosiladi — umumiy 44 dp.
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: handleTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: _chip(bg, brand, t, fg, handleTap),
+      ),
+    );
+  }
+
+  Widget _chip(
+      Color bg, Color brand, _TixTheme t, Color fg, VoidCallback handleTap) {
     return Material(
       color: bg,
       shape: RoundedRectangleBorder(
@@ -286,10 +310,7 @@ class _RecFilterChip extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () {
-          HapticFeedback.lightImpact();
-          onTap();
-        },
+        onTap: handleTap,
         child: Padding(
           padding: EdgeInsets.only(left: 11, right: showChevron ? 8 : 12),
           child: Row(

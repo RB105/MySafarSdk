@@ -1,4 +1,5 @@
 import 'dart:async' show unawaited;
+import 'dart:convert' show jsonDecode, utf8;
 
 import 'package:mysafar_sdk/src/core/config/dio_client.dart'
     show AuthMode, DioClient;
@@ -19,7 +20,8 @@ import 'package:dio/dio.dart'
         DioExceptionType,
         FormData,
         Options,
-        Response;
+        Response,
+        ResponseType;
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 
 mixin RequestConfig<T> {
@@ -46,6 +48,8 @@ mixin RequestConfig<T> {
     required AuthMode authMode,
     String? contentType,
     CancelToken? cancelToken,
+    bool retryable = false,
+    ResponseType? responseType,
   }) async {
     try {
       final response = await DioClient.main.request(
@@ -55,14 +59,19 @@ mixin RequestConfig<T> {
         cancelToken: _resolveCancelToken(cancelToken),
         options: Options(
           method: method,
+          responseType: responseType,
           extra: {
             'authMode': authMode,
             if (contentType != null) 'contentType': contentType,
+            if (retryable) 'retryable': true,
           },
         ),
       );
       return _getResponse(response);
     } on DioException catch (e) {
+      // Xom (bytes/plain) javob so'ralgan bo'lsa ham xato tanasi avvalgidek
+      // JSON (Map) ko'rinishida qayta ishlansin — xato xabarlari o'zgarmasin.
+      if (responseType != null) _decodeRawErrorBody(e.response);
       return _catchError(e);
     } catch (e) {
       // Dio bo'lmagan kutilmagan xatolik (JSON shakli, interceptor StateError,
@@ -71,12 +80,21 @@ mixin RequestConfig<T> {
     }
   }
 
+  /// [retryable] — faqat ma'lumot o'qiydigan POST'lar (qidiruv, tarif) uchun
+  /// `true`: 502/503/504 da qayta yuboriladi. Bron/to'lov kabi yozadigan
+  /// so'rovlar uchun `false` qoldiring (takror bron xavfi).
+  ///
+  /// [responseType] — faqat shu so'rov uchun (global Dio sozlamasi
+  /// o'zgarmaydi). Masalan qidiruv natijalari `ResponseType.bytes` bilan
+  /// olinadi va JSON fon isolate'da o'qiladi. Berilmasa — odatdagi JSON.
   Future<NetworkResponse> postRequest({
     final bool? headers,
     final Map<String, dynamic>? params,
     final bool? partnerToken,
     required String endPoint,
     CancelToken? cancelToken,
+    bool retryable = false,
+    ResponseType? responseType,
   }) {
     return _send(
       'POST',
@@ -84,7 +102,25 @@ mixin RequestConfig<T> {
       data: params,
       authMode: _authMode(headers: headers, partnerToken: partnerToken),
       cancelToken: cancelToken,
+      retryable: retryable,
+      responseType: responseType,
     );
+  }
+
+  /// Xom (bytes/plain) so'ralgan javobning XATO tanasini JSON'ga qaytaradi
+  /// (kichik bo'ladi) — `_errorResponse` avvalgidek server xabarini o'qisin.
+  /// JSON bo'lmasa matn sifatida qoladi.
+  void _decodeRawErrorBody(Response? response) {
+    if (response == null) return;
+    final data = response.data;
+    if (data is! List<int> && data is! String) return;
+    final String text =
+        data is List<int> ? utf8.decode(data, allowMalformed: true) : data;
+    try {
+      response.data = jsonDecode(text);
+    } catch (_) {
+      response.data = text;
+    }
   }
 
   /// POST multipart/form-data (fayl yuklash). Retry o'chirilgan — yuborilgan

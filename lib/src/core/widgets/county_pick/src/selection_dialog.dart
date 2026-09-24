@@ -95,6 +95,7 @@ class _SelectionDialogState extends State<SelectionDialog> {
             children: [
               if (!widget.hideCloseIcon)
                 IconButton(
+                  tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
                   padding: const EdgeInsets.all(0),
                   iconSize: 20,
                   icon: widget.closeIcon!,

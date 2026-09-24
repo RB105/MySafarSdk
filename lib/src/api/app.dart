@@ -10,6 +10,7 @@ import 'package:flutter/services.dart'
     show PredictiveBackEvent, SystemNavigator;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
+import 'package:mysafar_sdk/src/core/config/connectivity_banner.dart';
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart'
     show SdkLocalization;
 import 'package:mysafar_sdk/src/core/localization/tg_fallback_localizations.dart';
@@ -30,18 +31,32 @@ import 'package:provider/provider.dart';
 /// keyinchalik MySafar app'ning o'zi shundan foydalanadi.
 ///
 /// `MySafarSdk.init` chaqirilgan bo'lishi shart.
-class MySafarApp extends StatelessWidget {
+class MySafarApp extends StatefulWidget {
   const MySafarApp({super.key, this.initialRoute});
 
   /// Boshlang'ich route. Berilmasa asosiy sahifa.
   final String? initialRoute;
 
   @override
+  State<MySafarApp> createState() => _MySafarAppState();
+}
+
+class _MySafarAppState extends State<MySafarApp> {
+  @override
+  void initState() {
+    super.initState();
+    // To'liq app rejimi — butun ilova SDK'niki, portret shu yerda
+    // qulflanadi (№93: init() endi yo'nalishga tegmaydi).
+    MySafarSdk.lockPortrait();
+    NavigationService.resetScreenTracking();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return _MySafarShell(
       builder: (context) => _sdkMaterialApp(
         context,
-        initialRoute: initialRoute ?? BottomNavBarPage.routeName,
+        initialRoute: widget.initialRoute ?? BottomNavBarPage.routeName,
       ),
     );
   }
@@ -58,6 +73,9 @@ class MySafarApp extends StatelessWidget {
 ///
 /// Cheklov: global `NavigationService.navigatorKey` tufayli bir vaqtda faqat
 /// BITTA `MySafarEmbed`/`MySafarApp` instance'i mavjud bo'lishi mumkin.
+/// №92: host embed'ni ikki marta ochsa (tugma ikki marta bosildi), ikkinchi
+/// nusxa hech narsa qurmaydi va o'z route'ini yopadi — foydalanuvchi ochiq
+/// turgan birinchi nusxada qoladi ("Duplicate GlobalKey" qulashi yo'q).
 class MySafarEmbed extends StatefulWidget {
   const MySafarEmbed({
     super.key,
@@ -99,7 +117,8 @@ class MySafarEmbed extends StatefulWidget {
   State<MySafarEmbed> createState() => _MySafarEmbedState();
 }
 
-class _MySafarEmbedState extends State<MySafarEmbed> with WidgetsBindingObserver {
+class _MySafarEmbedState extends State<MySafarEmbed>
+    with WidgetsBindingObserver {
   // ── Android back da'vosi ────────────────────────────────────────────────
   //
   // Android 16 (targetSdk 36) da tizim back'ini FAQAT `OnBackInvokedDispatcher`
@@ -167,6 +186,12 @@ class _MySafarEmbedState extends State<MySafarEmbed> with WidgetsBindingObserver
   // Ro'yxat 10s dan oshsa kutmaymiz — mehmon rejimida ochamiz.
   late final Future<void> _ready = _prepare();
 
+  /// №92: hozir ekranda turgan (birinchi) embed nusxasi.
+  static _MySafarEmbedState? _active;
+
+  /// Bu nusxa ikkinchi (takroriy) ochilish — hech narsa qurmaydi.
+  bool _duplicate = false;
+
   Future<void> _prepare() async {
     final locale = widget.locale;
     if (locale != null) {
@@ -189,6 +214,22 @@ class _MySafarEmbedState extends State<MySafarEmbed> with WidgetsBindingObserver
   @override
   void initState() {
     super.initState();
+    if (_active != null && _active!.mounted) {
+      // №92: SDK allaqachon ochiq — ikkinchi nusxa navigatorKey'ni
+      // takrorlamasin. Route'ni yopamiz, foydalanuvchi birinchisida qoladi.
+      _duplicate = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final route = ModalRoute.of(context);
+        if (route != null && route.isCurrent) {
+          Navigator.of(context).maybePop();
+        }
+      });
+      return;
+    }
+    _active = this;
+    // Qayta kirishda birinchi screen_view takror deb tashlanmasin (№97).
+    NavigationService.resetScreenTracking();
     WidgetsBinding.instance.addObserver(this);
     // 3-button back Android 16 da OnBackInvokedCallback orqali keladi.
     // Callback o'chiq bo'lsa tizim appni yopadi (EdgeSwipeBack esa Flutter
@@ -213,8 +254,28 @@ class _MySafarEmbedState extends State<MySafarEmbed> with WidgetsBindingObserver
     }
   }
 
+  // Host embed'ni yangi key bilan qayta qursa, eski State shu kadrda faqat
+  // deactivate bo'ladi (hali mounted) — yangi nusxa uni "ikkinchi SDK" deb
+  // o'ylab yopilmasin. Qayta faollashsa (GlobalKey ko'chishi) joyi tiklanadi.
+  @override
+  void deactivate() {
+    if (identical(_active, this)) _active = null;
+    super.deactivate();
+  }
+
+  @override
+  void activate() {
+    super.activate();
+    if (!_duplicate) _active ??= this;
+  }
+
   @override
   void dispose() {
+    if (_duplicate) {
+      super.dispose();
+      return;
+    }
+    if (identical(_active, this)) _active = null;
     WidgetsBinding.instance.removeObserver(this);
     _stopAndroidBackClaim();
     if (kDebugMode && _prevOnError != null) {
@@ -281,6 +342,10 @@ class _MySafarEmbedState extends State<MySafarEmbed> with WidgetsBindingObserver
 
   @override
   Widget build(BuildContext context) {
+    if (_duplicate) {
+      // Takroriy nusxa — neytral bo'sh fon (route darhol yopiladi).
+      return const ColoredBox(color: Color(0xFFF5F6FA));
+    }
     if (kDebugMode && _caughtError != null) {
       return _debugErrorScreen(_caughtError!);
     }
@@ -308,9 +373,8 @@ class _MySafarEmbedState extends State<MySafarEmbed> with WidgetsBindingObserver
               color: dark ? const Color(0xFF121212) : const Color(0xFFF5F6FA),
               child: Center(
                 child: CircularProgressIndicator(
-                  color: dark
-                      ? const Color(0xFF8BA3D4)
-                      : const Color(0xFF3E5788),
+                  color:
+                      dark ? const Color(0xFF8BA3D4) : const Color(0xFF3E5788),
                 ),
               ),
             );
@@ -351,9 +415,8 @@ Widget _sdkMaterialApp(BuildContext context, {required String initialRoute}) {
     // Nested MaterialApp default'i inner stack bo'sh bo'lsa
     // setFrameworkHandlesBack(false) yozadi. Android 16 3-button back
     // shu callback o'chiq bo'lsa appni yopadi. Embed ochiq ekan true yozamiz.
-    onNavigationNotification: MySafarSdk.isEmbedded
-        ? _embedOnNavigationNotification
-        : null,
+    onNavigationNotification:
+        MySafarSdk.isEmbedded ? _embedOnNavigationNotification : null,
     locale: SdkLocalization.locale,
     localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
       ...tgFallbackDelegates,
@@ -384,7 +447,8 @@ Widget _sdkMaterialApp(BuildContext context, {required String initialRoute}) {
         data: MediaQuery.of(context).copyWith(platformBrightness: brightness),
         child: child ?? const SizedBox.shrink(),
       );
-      return SdkEmbedBackHandler(child: content);
+      // Internet yo'qligi haqida yengil xabar (№48) — butun SDK uchun.
+      return SdkEmbedBackHandler(child: SdkConnectivityBanner(child: content));
     },
   );
 }
