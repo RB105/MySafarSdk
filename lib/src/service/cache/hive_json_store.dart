@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:hive_ce_flutter/hive_ce_flutter.dart';
+import 'package:mysafar_sdk/src/service/cache/hive_service.dart' show HiveService;
 
 /// Hive box ichida ma'lumotni JSON string ko'rinishida saqlaydigan umumiy
 /// yordamchi. Map/List kabi turlar Hive'ning tur nozikliklaridan xoli,
@@ -13,7 +14,7 @@ class HiveJsonStore {
 
   const HiveJsonStore(this.boxName, {this.key = 'data'});
 
-  Box get _box => Hive.box(boxName);
+  Box get _box => HiveService.box(boxName);
 
   Future<void> writeJson(Object? value) async {
     try {

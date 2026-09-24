@@ -3,14 +3,27 @@
 ///
 /// Hamma maydon ixtiyoriy: hech narsa berilmasa SDK odatdagidek ishlaydi.
 ///
-/// Xavfsizlik: karta ma'lumotlari faqat xotirada (in-memory) saqlanadi —
-/// diskka, keshga yoki analytics'ga yozilmaydi, `toString()` da karta raqami
-/// maskalanadi. Ilova qayta ishga tushsa host ularni yana berishi kerak.
+/// Xavfsizlik: karta va pasport ma'lumotlari faqat xotirada (in-memory)
+/// saqlanadi — diskka, keshga yoki analytics'ga yozilmaydi, `toString()` da
+/// karta raqami va shaxsiy ma'lumotlar maskalanadi. Ilova qayta ishga tushsa
+/// host ularni yana berishi kerak.
+///
+/// Xaridor ma'lumotlari ([firstName], [lastName], [birthDate], hujjat) berilsa
+/// bron formasida birinchi katta yoshli yo'lovchi shular bilan oldindan
+/// to'ldiriladi (foydalanuvchi o'zgartirishi mumkin).
 class MySafarUserData {
   const MySafarUserData({
     this.email,
     this.uzsCards = const [],
     this.foreignCards = const [],
+    this.firstName,
+    this.lastName,
+    this.middleName,
+    this.birthDate,
+    this.gender,
+    this.citizenship,
+    this.documentNumber,
+    this.documentExpiry,
   });
 
   /// Host user emaili. `MySafarEmbed.email` berilmasa shu ishlatiladi
@@ -23,7 +36,46 @@ class MySafarUserData {
   /// Boshqa valyutadagi kartalar (USD va h.k.) — token orqali.
   final List<MySafarForeignCard> foreignCards;
 
+  /// Ism — pasportdagidek lotincha (masalan `VALI`).
+  final String? firstName;
+
+  /// Familiya — pasportdagidek lotincha (masalan `ALIYEV`).
+  final String? lastName;
+
+  /// Otasining ismi (ixtiyoriy).
+  final String? middleName;
+
+  /// Tug'ilgan sana (faqat sana qismi ishlatiladi).
+  final DateTime? birthDate;
+
+  /// Jinsi. Berilmasa formada tanlanmagan holda turadi.
+  final MySafarGender? gender;
+
+  /// Fuqarolik — ISO 3166-1 alpha-2 kodi (`UZ`, `RU`, `KZ` ...).
+  final String? citizenship;
+
+  /// Pasport / ID-karta raqami (masalan `AA1234567`).
+  final String? documentNumber;
+
+  /// Hujjatning amal qilish muddati.
+  final DateTime? documentExpiry;
+
   bool get hasEmail => email?.trim().isNotEmpty ?? false;
+
+  /// Yo'lovchi formasini to'ldirish uchun biror maydon berilganmi.
+  bool get hasPassengerData =>
+      _filled(firstName) ||
+      _filled(lastName) ||
+      birthDate != null ||
+      _filled(documentNumber);
+
+  static bool _filled(String? value) => value?.trim().isNotEmpty ?? false;
+
+  static String? _clean(String? value, {bool upper = false}) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    return upper ? trimmed.toUpperCase() : trimmed;
+  }
 
   bool get hasCards => uzsCards.isNotEmpty || foreignCards.isNotEmpty;
 
@@ -36,6 +88,19 @@ class MySafarUserData {
           (trimmedEmail == null || trimmedEmail.isEmpty) ? null : trimmedEmail,
       uzsCards: List.unmodifiable(uzsCards.where((c) => c.isValid)),
       foreignCards: List.unmodifiable(foreignCards.where((c) => c.isValid)),
+      firstName: _clean(firstName, upper: true),
+      lastName: _clean(lastName, upper: true),
+      middleName: _clean(middleName, upper: true),
+      birthDate: birthDate,
+      gender: gender,
+      // Faqat 2 harfli kod qabul qilinadi — boshqasi jim tashlanadi.
+      citizenship: switch (_clean(citizenship, upper: true)) {
+        final String code when RegExp(r'^[A-Z]{2}$').hasMatch(code) => code,
+        _ => null,
+      },
+      documentNumber:
+          _clean(documentNumber, upper: true)?.replaceAll(RegExp(r'\s+'), ''),
+      documentExpiry: documentExpiry,
     );
   }
 
@@ -43,18 +108,38 @@ class MySafarUserData {
     String? email,
     List<MySafarUzsCard>? uzsCards,
     List<MySafarForeignCard>? foreignCards,
+    String? firstName,
+    String? lastName,
+    String? middleName,
+    DateTime? birthDate,
+    MySafarGender? gender,
+    String? citizenship,
+    String? documentNumber,
+    DateTime? documentExpiry,
   }) {
     return MySafarUserData(
       email: email ?? this.email,
       uzsCards: uzsCards ?? this.uzsCards,
       foreignCards: foreignCards ?? this.foreignCards,
+      firstName: firstName ?? this.firstName,
+      lastName: lastName ?? this.lastName,
+      middleName: middleName ?? this.middleName,
+      birthDate: birthDate ?? this.birthDate,
+      gender: gender ?? this.gender,
+      citizenship: citizenship ?? this.citizenship,
+      documentNumber: documentNumber ?? this.documentNumber,
+      documentExpiry: documentExpiry ?? this.documentExpiry,
     );
   }
 
   @override
   String toString() => 'MySafarUserData(email: ${hasEmail ? '***' : null}, '
+      'passenger: ${hasPassengerData ? '***' : null}, '
       'uzsCards: $uzsCards, foreignCards: $foreignCards)';
 }
+
+/// Yo'lovchi jinsi ([MySafarUserData.gender]).
+enum MySafarGender { male, female }
 
 /// So'mdagi (UZS) karta — UzCard / Humo.
 class MySafarUzsCard {
@@ -126,8 +211,7 @@ String? _compactMaskedName(String? name) {
       if (word.isNotEmpty) result.add(word);
       continue;
     }
-    final visible =
-        word.replaceAll(mask, '').replaceFirst(RegExp(r'\.+$'), '');
+    final visible = word.replaceAll(mask, '').replaceFirst(RegExp(r'\.+$'), '');
     if (visible.isNotEmpty) result.add('$visible.');
   }
   return result.isEmpty ? null : result.join(' ');

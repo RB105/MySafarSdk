@@ -49,6 +49,14 @@ class BookingConfirmPaymentCheckingState extends BookingConfirmStates {
   const BookingConfirmPaymentCheckingState();
 }
 
+/// Birinchi tekshiruv "to'langan" demadi (to'lanmagan / javob yo'q) —
+/// sahifa bloklanmaydi (foydalanuvchi boshqa usul bilan to'lay oladi),
+/// tekshiruv esa fonda davom etadi: kechikkan to'lov kelsa
+/// [BookingConfirmPaidState] chiqadi.
+class BookingConfirmPaymentBackgroundCheckState extends BookingConfirmStates {
+  const BookingConfirmPaymentBackgroundCheckState();
+}
+
 /// To'lov tasdiqlandi. [isNew] — shu tekshiruvda aniqlandi (analitika va
 /// natija dialogi uchun); `false` — sahifa ochilganda allaqachon to'langan.
 class BookingConfirmPaidState extends BookingConfirmStates {

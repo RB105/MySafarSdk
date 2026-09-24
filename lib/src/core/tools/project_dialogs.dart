@@ -15,8 +15,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show FontWeight, HapticFeedback;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
-import 'package:mysafar_sdk/src/service/profile/profile_cache.dart';
-import 'package:mysafar_sdk/src/service/profile/tickets_cache.dart';
 import 'package:lottie/lottie.dart';
 import 'package:mysafar_sdk/src/core/constants/end_points.dart';
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
@@ -32,8 +30,6 @@ import 'package:mysafar_sdk/src/core/widgets/ticket_tariffs_widget.dart';
 import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/core/widgets/verify_otp_widget.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart';
-import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart'
-    show AnalyticsService;
 import 'package:mysafar_sdk/src/model/remote/avia/airports_model.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_model.dart'
     show FlightElement;
@@ -122,7 +118,11 @@ class ProjectDialogs {
       int type,
       PickerDateRange? selectedDates,
       final AirPortsModel? fromDir,
-      final AirPortsModel? toDir) {
+      final AirPortsModel? toDir,
+      {MonthPriceParams priceParams = const MonthPriceParams(),
+      String? confirmLabel,
+      String? passengerSummary,
+      Future<String?> Function()? onPassengerSummaryTap}) {
     return showSdkFullHeightSheet<PickerDateRange?>(
       context: context,
       builder: (context, controller) => DateCalendarWidget(
@@ -131,6 +131,10 @@ class ProjectDialogs {
         fromDir: fromDir,
         toDir: toDir,
         scrollController: controller,
+        priceParams: priceParams,
+        confirmLabel: confirmLabel,
+        passengerSummary: passengerSummary,
+        onPassengerSummaryTap: onPassengerSummaryTap,
       ),
     );
   }
@@ -153,11 +157,39 @@ class ProjectDialogs {
       BuildContext context, int directionType) {
     return showSdkFullHeightSheet<AirPortsModel?>(
       context: context,
-      builder: (context, controller) => SearchCityWidget(
-        directionType: directionType,
-        scrollController: controller,
-      ),
+      builder: (context, controller) {
+        // Yopilish animatsiyasini kutish uchun ([citySheetClosed]).
+        _citySheetAnimation = ModalRoute.of(context)?.animation;
+        return SearchCityWidget(
+          directionType: directionType,
+          scrollController: controller,
+        );
+      },
     );
+  }
+
+  static Animation<double>? _citySheetAnimation;
+
+  /// Oxirgi shahar tanlash sheet'ining yopilish animatsiyasi tugashini
+  /// kutadi (qat'iy pauza o'rniga — keyingi sheet ketma-ket ochilishi uchun).
+  /// Animatsiya noma'lum yoki allaqachon tugagan bo'lsa — darhol; har ehtimolga
+  /// qarshi [timeout]dan ortiq kutilmaydi.
+  static Future<void> citySheetClosed(
+      {Duration timeout = const Duration(milliseconds: 400)}) {
+    final animation = _citySheetAnimation;
+    _citySheetAnimation = null;
+    if (animation == null || animation.isDismissed) return Future.value();
+    final completer = Completer<void>();
+    void listener(AnimationStatus status) {
+      if (status == AnimationStatus.dismissed && !completer.isCompleted) {
+        completer.complete();
+      }
+    }
+
+    animation.addStatusListener(listener);
+    return completer.future
+        .timeout(timeout, onTimeout: () {})
+        .whenComplete(() => animation.removeStatusListener(listener));
   }
 
   static Future showLowcostSheet(
@@ -253,7 +285,8 @@ class ProjectDialogs {
   }
 
   static Future<FlightElement?> showTariffPicker(
-      BuildContext context, List<FlightTariffModel> tariffs, String tid) async {
+      BuildContext context, List<FlightTariffModel> tariffs, String tid,
+      {FlightElement? current}) async {
     if (tariffs.isEmpty) return null;
 
     // Material sheet — jonli Theme.of(parent); CupertinoSheet Theme wrap
@@ -265,6 +298,7 @@ class ProjectDialogs {
       builder: (context) => TariffPickerWidget(
         tariffs: tariffs,
         id: tid,
+        current: current,
       ),
     );
   }
@@ -390,14 +424,10 @@ class ProjectDialogs {
               // Custom TokenStore ishlatilgan bo'lsa ham tokenlar
               // aniq tozalanishi uchun (box.erase faqat GetStorage'ni
               // o'chiradi).
-              await MySafarSdk.tokens.clear();
-              // Hive keshlari (profil + biletlar) — oldingi
-              // foydalanuvchi ma'lumoti qolib ketmasligi uchun tozalaymiz.
-              await ProfileCache().clear();
-              await TicketsCache().clear();
-              // Analytics profil ID'sini tozalaymiz — keyingi
-              // foydalanuvchi eski profil bilan aralashmasligi uchun.
-              AnalyticsService().clearUser();
+              // №62: tokenlar, Hive keshlari (profil, biletlar, so'nggi
+              // qidiruvlar), bron qoralamasi, avtoto'ldirish va analytics
+              // profil ID — hammasi bitta markaziy joyda tozalanadi.
+              await MySafarSdk.clearUserScopedData();
 
               if (isFirstTime != null) {
                 await box.write('isFirstTime', isFirstTime);
@@ -437,10 +467,7 @@ class ProjectDialogs {
               final lang = box.read('lang');
 
               await box.erase();
-              await MySafarSdk.tokens.clear();
-              await ProfileCache().clear();
-              await TicketsCache().clear();
-              AnalyticsService().clearUser();
+              await MySafarSdk.clearUserScopedData();
 
               if (isFirstTime != null) {
                 await box.write('isFirstTime', isFirstTime);
@@ -690,18 +717,26 @@ class ProjectDialogs {
   /// Qidiruv natijalari eskirgani (masalan, 5 daqiqa o'tgani) haqida ogohlantirib,
   /// foydalanuvchini qaytadan qidirishga undaydigan dialog.
   ///
-  /// Faqat "qayta qidirish" tugmasi bor; tashqarini bossa yopilmaydi. Tugma
-  /// bosilganda yopiladi va `true` qaytaradi.
+  /// Asosiy tugma — "Qayta qidirish" (`true`). Foydalanuvchi uni yopib
+  /// (ikkinchi tugma, tashqarini bosish yoki pastga surish) natijalarni
+  /// ko'rishda davom etishi ham mumkin — `false`. Bron oldidan reys baribir
+  /// serverda qayta tekshiriladi, shuning uchun eskirgan narx bilan bron
+  /// qilib yuborilmaydi.
   static Future<bool> showPricesOutdatedDialog(BuildContext context) async {
     final result = await showSdkSheetAlert<bool>(
       context: context,
       icon: Assets.iconsDialogClockIcon,
       tone: SdkDialogTone.warning,
-      isDismissible: false,
-      enableDrag: false,
       title: "prices_outdated_title".tr(),
       message: "prices_outdated_message".tr(),
-      actions: [SdkDialogAction(label: "search_again".tr(), value: true)],
+      actions: [
+        SdkDialogAction(label: "search_again".tr(), value: true),
+        SdkDialogAction(
+          label: "prices_outdated_keep_browsing".tr(),
+          value: false,
+          variant: SdkDialogButtonVariant.secondary,
+        ),
+      ],
     );
     return result ?? false;
   }

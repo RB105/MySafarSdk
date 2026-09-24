@@ -27,7 +27,9 @@ class _Web {
   static const blue = Color(0xFF0F3DEA);
 
   /// Matn ranglari.
-  static const label = Color(0xFF98A2B3);
+  // Yorliq rangi: avvalgi #98A2B3 och fonda juda xira edi (kontrast ~2.4:1)
+  // — WCAG AA'ga yaqin (≈4.6:1) to'qroq kulrang (№32).
+  static const label = Color(0xFF667085);
   static const value = Color(0xFF0B1830);
   static const placeholder = Color(0xFF9AA5B5);
   static const toggleText = Color(0xFF15233D);
@@ -156,17 +158,17 @@ class _SegmentedPill extends StatelessWidget {
     const double inset = 4;
     final double radius = height / 2;
 
+    // Hero ustida: qidiruv kartasi bilan bir xil yaxlit oq trek, tanlangan
+    // segment brend rangida to'ldiriladi (yangi UI). Oq karta/sheet ustida —
+    // och kulrang trek, oq "pill".
     final Color track = isDark
-        ? Colors.white.withAlpha(onHero ? 18 : 20)
-        : (onHero ? Colors.white.withAlpha(40) : const Color(0xFFEDF1F7));
-    final Color rim = isDark
-        ? Colors.white.withAlpha(26)
-        : (onHero ? Colors.white.withAlpha(70) : Colors.transparent);
-    final Color pill = isDark ? brand : Colors.white;
-    final Color activeColor = isDark ? Colors.white : brand;
-    final Color idleColor = onHero || isDark
-        ? Colors.white.withAlpha(isDark ? 170 : 225)
-        : const Color(0xFF5B6B85);
+        ? (onHero ? ProjectTheme.cardColorDark : Colors.white.withAlpha(20))
+        : (onHero ? Colors.white : const Color(0xFFEDF1F7));
+    final Color rim = isDark ? Colors.white.withAlpha(26) : Colors.transparent;
+    final Color pill = onHero || isDark ? brand : Colors.white;
+    final Color activeColor = onHero || isDark ? Colors.white : brand;
+    final Color idleColor =
+        isDark ? Colors.white.withAlpha(170) : const Color(0xFF5B6B85);
 
     return Container(
       height: height,
@@ -303,6 +305,24 @@ class _HeroBackButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    // Ko'rinishi 34 dp doira, bosish maydoni 44×44 dp (№32).
+    return Semantics(
+      button: true,
+      label: MaterialLocalizations.of(context).backButtonTooltip,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Center(child: _circle(isDark)),
+        ),
+      ),
+    );
+  }
+
+  Widget _circle(bool isDark) {
     return Material(
       color: isDark ? ProjectTheme.cardColorDark : Colors.white,
       shape: const CircleBorder(),
@@ -373,7 +393,7 @@ class _WebSearchCard extends StatelessWidget {
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: isDark ? ProjectTheme.cardColorDark : Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(22),
         border: isDark ? Border.all(color: ProjectTheme.borderDark) : null,
         boxShadow: isDark ? null : _Web.cardShadow,
       ),
@@ -389,6 +409,7 @@ class _WebSearchCard extends StatelessWidget {
                   _WebField(
                     label: "from".tr(),
                     value: _cityLabel(from),
+                    icon: Assets.iconsTicketTakeoffIcon,
                     onTap: onFromTap,
                     // O'ng tomonda almashtirish tugmasi uchun joy (web: pr-14).
                     rightPadding: 56,
@@ -397,6 +418,7 @@ class _WebSearchCard extends StatelessWidget {
                   _WebField(
                     label: "to".tr(),
                     value: _cityLabel(to),
+                    icon: Assets.iconsTicketLandingIcon,
                     onTap: onToTap,
                     rightPadding: 56,
                   ),
@@ -446,17 +468,14 @@ class _WebSearchCard extends StatelessWidget {
   }
 }
 
-/// Kartaning bitta katakchasi: tepada kichik BOSH HARFLI yorliq, ostida
-/// qiymat, ixtiyoriy o'ng ikonka.
-///
-/// Web: `rounded-[12px] bg-[#f4f7fc] px-3.5 py-2`, yorliq `10.5px/600`
-/// uppercase `tracking-[0.04em]`, qiymat `15.5px/600`.
+/// Kartaning bitta katakchasi: chapda ikonka plitkasi (bosh sahifa
+/// kartalari uslubida), o'ngida kichik yorliq va qiymat.
 class _WebField extends StatelessWidget {
   final String label;
   final String value;
   final bool isPlaceholder;
 
-  /// O'ng tomondagi SVG ikonka asset'i ([Assets]).
+  /// Chapdagi plitkadagi SVG ikonka ([Assets]).
   final String? icon;
   final double rightPadding;
   final VoidCallback onTap;
@@ -467,7 +486,7 @@ class _WebField extends StatelessWidget {
     required this.onTap,
     this.isPlaceholder = false,
     this.icon,
-    this.rightPadding = 14,
+    this.rightPadding = 12,
   });
 
   @override
@@ -477,33 +496,52 @@ class _WebField extends StatelessWidget {
     final Color valueColor = isPlaceholder
         ? _Web.placeholder
         : (isDark ? ProjectTheme.textColorDark : _Web.value);
+    final Color labelColor =
+        isDark ? ProjectTheme.secondaryTextDark : _Web.label;
 
     return Material(
       color: bg,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(14),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         highlightColor: isDark ? null : _Web.fieldBgPressed,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(14, 8, rightPadding, 8),
+          padding: EdgeInsets.fromLTRB(8, 8, rightPadding, 8),
           child: Row(
             children: [
+              if (icon != null) ...[
+                Container(
+                  width: 36,
+                  height: 36,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white.withAlpha(18) : Colors.white,
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: _SvgIcon(
+                    icon!,
+                    size: 18,
+                    color: isDark ? Colors.white : ProjectTheme.brandColor,
+                  ),
+                ),
+                const SizedBox(width: 10),
+              ] else
+                const SizedBox(width: 6),
               Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      label.toUpperCase(),
+                      label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 10.5,
-                        height: 1.5,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.42,
-                        color: _Web.label,
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.3,
+                        fontWeight: FontWeight.w500,
+                        color: labelColor,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -512,19 +550,16 @@ class _WebField extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 15.5,
-                        height: 1.5,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                        height: 1.35,
+                        fontWeight:
+                            isPlaceholder ? FontWeight.w500 : FontWeight.w700,
                         color: valueColor,
                       ),
                     ),
                   ],
                 ),
               ),
-              if (icon != null) ...[
-                const SizedBox(width: 8),
-                _SvgIcon(icon!, size: 18, color: _Web.placeholder),
-              ],
             ],
           ),
         ),
@@ -567,11 +602,16 @@ class _WebSwapButton extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          child: const Center(
-            child: _SvgIcon(
-              Assets.iconsSwapVertIcon,
-              size: 18,
-              color: Colors.white,
+          child: Semantics(
+            button: true,
+            label: "a11y_swap_cities".tr(),
+            excludeSemantics: true,
+            child: const Center(
+              child: _SvgIcon(
+                Assets.iconsSwapVertIcon,
+                size: 18,
+                color: Colors.white,
+              ),
             ),
           ),
         ),
@@ -757,7 +797,8 @@ class _WebSearchButton extends StatelessWidget {
     return Opacity(
       opacity: enabled ? 1 : 0.5,
       child: Container(
-        height: 54,
+        // Qat'iy balandlik emas — katta tizim shriftida matn sig'adi (№32).
+        constraints: const BoxConstraints(minHeight: 54),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           boxShadow: enabled ? _Web.goldShadow : null,
@@ -811,7 +852,7 @@ class _WebSectionTitle extends StatelessWidget {
       style: TextStyle(
         fontSize: 19,
         height: 1.2,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w800,
         color: isDark ? ProjectTheme.textColorDark : _Web.sectionTitle,
       ),
     );

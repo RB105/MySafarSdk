@@ -14,8 +14,13 @@ import 'package:mysafar_sdk/src/service/avia_service.dart' show AviaService;
 import 'package:mysafar_sdk/src/service/fornex/fornex_repository.dart'
     show FornexRepository;
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
+import 'dart:async' show Timer;
+
+import 'package:dio/dio.dart' show CancelToken;
 import 'package:mysafar_sdk/src/core/config/network_request_scope.dart'
-    show NetworkCancel;
+    show NetworkCancel, NetworkRequestScope;
+import 'package:mysafar_sdk/src/cubit/main/datePicker/date_picker_cubit.dart'
+    show MonthPriceParams;
 
 part 'route_search_state.dart';
 
@@ -28,9 +33,10 @@ class RouteSearchCubit extends Cubit<RouteSearchState> with NetworkCancel {
     required AirPortsModel to,
     required AviaService aviaService,
     required FornexRepository fornexRepository,
+    RecommendationRequestBody? lastSearch,
   })  : _avia = aviaService,
         _fornex = fornexRepository,
-        super(RouteSearchState(from: from, to: to)) {
+        super(initialState(from: from, to: to, lastSearch: lastSearch)) {
     _loadMonthPrices();
     _loadDestInfo();
   }
@@ -38,14 +44,48 @@ class RouteSearchCubit extends Cubit<RouteSearchState> with NetworkCancel {
   final AviaService _avia;
   final FornexRepository _fornex;
 
+  /// Boshlang'ich holat: yo'lovchilar soni va klass oxirgi qidiruvdan olinadi
+  /// (№31) — takroriy qidiruvda har safar qaytadan tanlash shart emas.
+  /// Noto'g'ri qiymatlar (chaqaloq > katta, jami > 9) standartga qaytadi.
+  static RouteSearchState initialState({
+    required AirPortsModel from,
+    required AirPortsModel to,
+    RecommendationRequestBody? lastSearch,
+  }) {
+    final base = RouteSearchState(from: from, to: to);
+    if (lastSearch == null) return base;
+    final int adt = lastSearch.adt;
+    final int chd = lastSearch.chd;
+    final int inf = lastSearch.inf;
+    final bool valid =
+        adt >= 1 && chd >= 0 && inf >= 0 && inf <= adt && adt + chd + inf <= 9;
+    final String klass = (lastSearch.klass ?? '').trim().toLowerCase();
+    return base.copyWith(
+      adt: valid ? adt : null,
+      chd: valid ? chd : null,
+      inf: valid ? inf : null,
+      klass: const {'a', 'e', 'b', 'f', 'w'}.contains(klass) ? klass : null,
+    );
+  }
+
   /// Joriy so'rov kaliti — async yuklash tugaganda natija hali dolzarbmi
   /// (foydalanuvchi shahar, yo'lovchilar, klass yoki filtrlarni
   /// almashtirmadimi) tekshirish uchun. Oylik narxlar ham, takliflar ham shu
   /// parametrlar bilan so'raladi.
-  String get _routeKey =>
-      '${state.from.cityIataCode}-${state.to.cityIataCode}'
+  String get _routeKey => '${state.from.cityIataCode}-${state.to.cityIataCode}'
       '|${state.adt}-${state.chd}-${state.inf}-${state.klass}'
       '|${state.direct}-${state.baggage}';
+
+  /// Oylik narxlar so'rovi parametrlari — kalendar va narxlar jadvali ham
+  /// aynan shularni yuboradi, shuning uchun narxlar bir marta so'raladi.
+  MonthPriceParams get priceParams => MonthPriceParams(
+        adt: state.adt,
+        chd: state.chd,
+        inf: state.inf,
+        klass: MonthPriceParams.normalizeKlass(state.klass),
+        direct: state.direct,
+        baggage: state.baggage,
+      );
 
   // ── Forma tanlovlari ──────────────────────────────────────────────────
 
@@ -142,7 +182,8 @@ class RouteSearchCubit extends Cubit<RouteSearchState> with NetworkCancel {
 
   void setLegDate(int index, DateTime value) => _updateLeg(
         index,
-        (leg) => leg.copyWith(date: DateTime(value.year, value.month, value.day)),
+        (leg) =>
+            leg.copyWith(date: DateTime(value.year, value.month, value.day)),
       );
 
   void _updateLeg(int index, RouteLeg Function(RouteLeg leg) update) {
@@ -169,8 +210,23 @@ class RouteSearchCubit extends Cubit<RouteSearchState> with NetworkCancel {
 
   // ── Ma'lumot yuklash ──────────────────────────────────────────────────
 
+  /// Oylik narxlar so'rovining boshlanish sanasi: tanlangan sana bugundan
+  /// boshlanadigan 30 kunlik oynaga tushsa — `null` (bugundan, umumiy kesh).
+  static DateTime? _monthAnchor(DateTime? date) {
+    if (date == null) return null;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(date.year, date.month, date.day);
+    return day.difference(today).inDays < 30 ? null : day;
+  }
+
   Future<void> _loadMonthPrices() async {
     refreshNetworkCancel();
+    // Eski parametrlar bilan ketayotgan / kutilayotgan takliflar qidiruvi
+    // darhol bekor qilinadi (№79).
+    _cancelBestOffers();
+    // Parametrlar qayta yuklanmoqda — oldingi takliflar endi yaroqsiz.
+    _offersLoadedKey = null;
     final key = _routeKey;
     // Eski takliflar ham darhol olib tashlanadi: ular boshqa yo'nalish /
     // yo'lovchilar uchun topilgan, bosilsa noto'g'ri parametrlar bilan
@@ -187,13 +243,17 @@ class RouteSearchCubit extends Cubit<RouteSearchState> with NetworkCancel {
         () => _avia.getPriceByMonth(
           state.from.cityIataCode ?? '',
           state.to.cityIataCode ?? '',
-          date: state.date,
-          adt: state.adt,
-          chd: state.chd,
-          inf: state.inf,
-          klass: state.klass,
-          direct: state.direct,
-          baggage: state.baggage,
+          // Sana 30 kunlik oynaga tushsa yuborilmaydi (bugundan) — narxlar
+          // jadvali, kalendar va karta bir xil so'rov/kesh kalitidan
+          // foydalanadi (№39). Uzoqroq sana tanlangan bo'lsa, narxlar o'sha
+          // davr uchun olinadi.
+          date: _monthAnchor(state.date),
+          adt: priceParams.adt,
+          chd: priceParams.chd,
+          inf: priceParams.inf,
+          klass: priceParams.klass,
+          direct: priceParams.direct,
+          baggage: priceParams.baggage,
         ),
       );
       if (isClosed || key != _routeKey) return;
@@ -204,7 +264,7 @@ class RouteSearchCubit extends Cubit<RouteSearchState> with NetworkCancel {
             : null,
         clearMonthPrices: response is! NetworkSuccessResponse,
       ));
-      _loadBestOffers();
+      _scheduleBestOffers();
     } catch (_) {
       if (!isClosed && key == _routeKey) {
         emit(state.copyWith(monthLoading: false, offersLoading: false));
@@ -214,9 +274,80 @@ class RouteSearchCubit extends Cubit<RouteSearchState> with NetworkCancel {
 
   static const int _maxOffers = 6;
 
+  // ── "Eng yaxshi takliflar" fon qidiruvi (№79) ─────────────────────────
+  // Ilgari sahifa ochilganda va har yo'lovchi/filtr o'zgarishida HAMMA
+  // manbaga parallel to'liq qidiruv ketardi va asosiy qidiruv boshlanganda
+  // ham bekor qilinmasdi (90 s gacha) — birinchi natijalar sekinlashardi.
+  // Endi: debounce, o'z CancelToken'i (yangi so'rov / natijalarga o'tishda
+  // bekor), manbalar KETMA-KET (birinchi reys bergan manbada to'xtaydi).
+  static const Duration offersDebounce = Duration(milliseconds: 700);
+  Timer? _offersDebounce;
+  CancelToken? _offersCancel;
+  int _offersSeq = 0;
+
+  /// Qaysi parametrlar ([_routeKey]) uchun takliflar oxirigacha yuklangan.
+  String? _offersLoadedKey;
+
+  /// Natijalar sahifasi ochiq — fon takliflar qidiruvi boshlanmaydi
+  /// (oylik narxlar shu paytda kelsa ham); qaytilganda davom etadi.
+  bool _backgroundPaused = false;
+
+  void _scheduleBestOffers() {
+    _offersDebounce?.cancel();
+    if (_backgroundPaused) return;
+    _offersDebounce = Timer(offersDebounce, () {
+      _offersDebounce = null;
+      if (!isClosed) _loadBestOffers();
+    });
+  }
+
+  void _cancelBestOffers() {
+    _offersDebounce?.cancel();
+    _offersDebounce = null;
+    final token = _offersCancel;
+    if (token != null && !token.isCancelled) token.cancel('superseded');
+    _offersCancel = null;
+    _offersSeq++;
+  }
+
+  /// Asosiy qidiruv (natijalar sahifasi) boshlanganda: fon takliflar
+  /// qidiruvi to'xtatiladi — server va tarmoq asosiy qidiruvga qoladi.
+  void pauseBackgroundSearches() {
+    _backgroundPaused = true;
+    _cancelBestOffers();
+    if (!isClosed && state.offersLoading && !state.monthLoading) {
+      emit(state.copyWith(offersLoading: false));
+    }
+  }
+
+  /// Natijalar sahifasidan qaytilganda: takliflar joriy parametrlar uchun
+  /// yuklanmagan bo'lsa (to'xtatilgan edi) — qayta rejalashtiriladi.
+  void resumeBackgroundSearches() {
+    _backgroundPaused = false;
+    if (isClosed) return;
+    if (state.monthPrices == null) {
+      // Pauza paytida oylik narxlar xato bilan tugagan — takliflar
+      // yuklanmaydi, shimmer abadiy qolmasin.
+      if (!state.monthLoading && state.offersLoading) {
+        emit(state.copyWith(offersLoading: false));
+      }
+      return;
+    }
+    if (_offersLoadedKey == _routeKey) return;
+    emit(state.copyWith(offersLoading: true));
+    _scheduleBestOffers();
+  }
+
+  @override
+  Future<void> close() {
+    _cancelBestOffers();
+    return super.close();
+  }
+
   Future<void> _loadBestOffers() async {
     final date = _cheapestDate();
     if (date == null) {
+      _offersLoadedKey = _routeKey;
       if (!isClosed) {
         emit(state.copyWith(
           offersLoading: false,
@@ -227,6 +358,10 @@ class RouteSearchCubit extends Cubit<RouteSearchState> with NetworkCancel {
       return;
     }
     final key = _routeKey;
+    final int seq = ++_offersSeq;
+    final token = CancelToken();
+    _offersCancel = token;
+    bool isStale() => isClosed || key != _routeKey || seq != _offersSeq;
     emit(state.copyWith(offersLoading: true, offers: const []));
     try {
       // Takliflar foydalanuvchining AYNAN o'z yo'lovchilari, klassi va
@@ -252,40 +387,42 @@ class RouteSearchCubit extends Cubit<RouteSearchState> with NetworkCancel {
       final params = body.toJson();
       final List<String> endpoints =
           RemoteConfigService.instance.recommendationEndpoints;
-      // Parallel so'rovlar; bekor qilish oylik narxlar bilan bir doirada.
-      final List<NetworkResponse> responses = await withNetworkCancel(
-        () => Future.wait(
-          endpoints.map(
-            (ep) => _avia.getRecommendations(params: params, endPoint: ep),
-          ),
-        ),
-      );
-      if (isClosed || key != _routeKey) return;
-
+      // Manbalar KETMA-KET: odatda birinchisi yetarli — 3 ta og'ir parallel
+      // qidiruv o'rniga bitta. Reys bermasa keyingisiga o'tiladi.
       final List<FlightElement> flights = [];
       final Set<Object?> seenIds = {};
-      for (final response in responses) {
+      for (final ep in endpoints) {
+        final NetworkResponse response = await NetworkRequestScope.run(
+          token,
+          () => _avia.getRecommendations(params: params, endPoint: ep),
+        );
+        if (isStale()) return;
         if (response is! NetworkSuccessResponse) continue;
         final model = response.data as GetRecommendationResModel;
         for (final f
             in model.recommedations?.flights ?? const <FlightElement>[]) {
           if (seenIds.add(f.id)) flights.add(f);
         }
+        if (flights.isNotEmpty) break;
       }
+      if (isStale()) return;
       flights.sort((a, b) => _price(a).compareTo(_price(b)));
       final top = flights.length > _maxOffers
           ? flights.sublist(0, _maxOffers)
           : flights;
 
+      _offersLoadedKey = key;
       emit(state.copyWith(
         offersLoading: false,
         offers: top,
         offersDate: date,
       ));
     } catch (_) {
-      if (!isClosed && key == _routeKey) {
+      if (!isStale()) {
         emit(state.copyWith(offersLoading: false, offers: const []));
       }
+    } finally {
+      if (identical(_offersCancel, token)) _offersCancel = null;
     }
   }
 
@@ -329,20 +466,9 @@ class RouteSearchCubit extends Cubit<RouteSearchState> with NetworkCancel {
     return v == null || v <= 0 ? null : v * mult;
   }
 
-  static double _price(FlightElement e) {
-    double parse(String? s) {
-      if (s == null || s.isEmpty || s == 'null') return double.maxFinite;
-      final cleaned = s.replaceAll(',', '').replaceAll(RegExp(r'[^0-9.]'), '');
-      final v = double.tryParse(cleaned);
-      return (v == null || v <= 0) ? double.maxFinite : v;
-    }
-
-    final uzs = parse(e.price?.uzs?.amount);
-    if (uzs != double.maxFinite) return uzs;
-    final usd = parse(e.price?.usd?.amount);
-    if (usd != double.maxFinite) return usd;
-    return parse(e.price?.rub?.amount);
-  }
+  /// Natijalar sahifasi bilan bir xil saralash narxi: faqat USD/RUB narxli
+  /// reys UZS narxlilardan keyin (№82).
+  static double _price(FlightElement e) => e.sortPrice;
 
   Future<void> _loadDestInfo() async {
     final cityName = state.to.cityName ?? '';
@@ -359,9 +485,11 @@ class RouteSearchCubit extends Cubit<RouteSearchState> with NetworkCancel {
 
   // ── Qidiruv so'rovi ───────────────────────────────────────────────────
 
-  RecommendationRequestBody buildRequest() {
-    final date = state.date!;
-    final endDate = state.endDate;
+  /// [day] berilsa — forma holatini O'ZGARTIRMASDAN shu kunga bir tomonlama
+  /// so'rov (masalan "Eng yaxshi takliflar" kartasi uchun, №85).
+  RecommendationRequestBody buildRequest({DateTime? day}) {
+    final date = day ?? state.date!;
+    final endDate = day != null ? null : state.endDate;
     return RecommendationRequestBody(
       adt: state.adt,
       chd: state.chd,

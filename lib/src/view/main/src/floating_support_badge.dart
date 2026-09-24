@@ -27,8 +27,7 @@ class FloatingSupportBadge extends StatelessWidget {
                 const BorderRadius.vertical(top: Radius.circular(4.0)),
           ),
           child: Padding(
-            padding:
-                const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
+            padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
             child: Text(
               "support_badge_title".tr(),
               textDirection: TextDirection.ltr,

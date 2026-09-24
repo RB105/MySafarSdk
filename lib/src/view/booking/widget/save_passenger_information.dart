@@ -16,15 +16,20 @@ import '../../imports/app_imports.dart';
 /// Saqlangan yo'lovchilar ro'yxati — davlat / joy tanlash oynalari bilan bir
 /// xil to'liq balandlikdagi sheet: sarlavha, tepada qidiruv, yo'lovchilar.
 /// Qator bosilishi bilan yo'lovchi tanlanadi va sheet yopiladi.
+///
+/// [filter] berilsa faqat mos kelganlar ko'rsatiladi (masalan slotning yosh
+/// toifasi, boshqa slotda tanlanmaganlar).
 void showPassengerPickerBottomSheet({
   required BuildContext context,
   required void Function(UsersModel selectedUser) onSelected,
+  bool Function(UsersModel user)? filter,
 }) {
   showSdkFullHeightSheet<UsersModel>(
     context: context,
     builder: (sheetContext, controller) => BlocProvider(
       create: (_) => UsersDataCubit(needGetUsers: true),
-      child: _SavedPassengersSheet(scrollController: controller),
+      child:
+          _SavedPassengersSheet(scrollController: controller, filter: filter),
     ),
   ).then((user) {
     if (user != null) onSelected(user);
@@ -32,7 +37,9 @@ void showPassengerPickerBottomSheet({
 }
 
 class _SavedPassengersSheet extends StatefulWidget {
-  const _SavedPassengersSheet({required this.scrollController});
+  const _SavedPassengersSheet({required this.scrollController, this.filter});
+
+  final bool Function(UsersModel user)? filter;
 
   /// To'liq balandlikdagi sheet controller'i — ro'yxat tepada turganda
   /// pastga tortib yopish shu orqali ishlaydi.
@@ -189,6 +196,7 @@ class _SavedPassengersSheetState extends State<_SavedPassengersSheet> {
         suffixIcon: _query.isEmpty
             ? null
             : IconButton(
+                tooltip: "filter_clear".tr(),
                 onPressed: () {
                   _search.clear();
                   _onQueryChanged('');
@@ -225,8 +233,14 @@ class _SavedPassengersSheetState extends State<_SavedPassengersSheet> {
       );
     }
 
+    final eligible = state is UsersDataSuccessState
+        ? (widget.filter == null
+            ? state.usersModel
+            : state.usersModel.where(widget.filter!).toList())
+        : const <UsersModel>[];
+
     if (state is UsersDataEmptyState ||
-        (state is UsersDataSuccessState && state.usersModel.isEmpty)) {
+        (state is UsersDataSuccessState && eligible.isEmpty)) {
       return _message(
         icon: Assets.iconsProfileUsersIcon,
         iconColor: BookingFormStyle.label(context),
@@ -246,7 +260,7 @@ class _SavedPassengersSheetState extends State<_SavedPassengersSheet> {
       );
     }
 
-    final users = SavedPassengerSearch.filter(state.usersModel, _query);
+    final users = SavedPassengerSearch.filter(eligible, _query);
     if (users.isEmpty) {
       return _message(
         icon: Assets.iconsPlaceEmptySearchIcon,

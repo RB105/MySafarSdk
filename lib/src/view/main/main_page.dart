@@ -1,5 +1,6 @@
 // ignore_for_file: depend_on_referenced_packages, deprecated_member_use
 
+import 'package:mysafar_sdk/src/view/destinations/cover_image_cache_size.dart';
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'dart:async';
 import 'dart:ui' show ImageFilter;
@@ -138,7 +139,10 @@ class _MainPageState extends State<MainPage> {
     });
   }
 
-  /// Load nearby airport when geolocation permission is granted
+  /// Yaqin aeroport — faqat ruxsat ALLAQACHON berilgan bo'lsa jim aniqlanadi.
+  /// Ilova ochilishida ruxsat oynasi chiqarilmaydi (rad etilgan bo'lsa ham
+  /// qayta so'ralmaydi) — so'rov faqat shahar tanlashdagi "Joriy joylashuv"
+  /// bosilganda.
   Future<void> _loadNearbyAirport() async {
     // First check if we have cached airport
     final cachedAirport = _locationAirportService.cachedNearbyAirport;
@@ -153,7 +157,8 @@ class _MainPageState extends State<MainPage> {
 
     // Try to get nearby airport
     final lang = mounted ? context.locale.languageCode : 'en';
-    final airport = await _locationAirportService.getNearbyAirport(lang: lang);
+    final airport = await _locationAirportService.getNearbyAirport(
+        lang: lang, allowPrompt: false);
 
     if (airport != null && mounted) {
       setState(() {
@@ -205,27 +210,31 @@ class _MainPageState extends State<MainPage> {
               // Embed: UI ← bir bosishda hostga qaytadi (toast yo'q).
               leading: MySafarSdk.isEmbedded
                   ? Padding(
-                      padding: const EdgeInsets.only(left: 12),
-                      child: _circleIconButton(
-                          null, MySafarSdk.exitEmbed,
-                          iconData: Icons.arrow_back_rounded, isDark: isDark),
+                      // 11 + 1 + 44 = 56 (standart leading kengligi).
+                      padding: const EdgeInsets.only(left: 11),
+                      child: _circleIconButton(null, MySafarSdk.exitEmbed,
+                          iconData: Icons.arrow_back_rounded,
+                          isDark: isDark,
+                          semanticLabel: MaterialLocalizations.of(context)
+                              .backButtonTooltip),
                     )
                   : null,
               actions: [
                 _circleIconButton(ProjectAssets.callCenterIcon,
                     () => ProjectDialogs.showSupportMenu(context),
                     isDark: isDark,
+                    semanticLabel: "support".tr(),
                     showcaseKey: HomeShowcaseKeys.support,
                     showcaseTitle: "showcase_support_title".tr(),
                     showcaseDesc: "showcase_support_desc".tr()),
-                const SizedBox(width: 12),
+                const SizedBox(width: 9),
               ],
             ),
             body: SingleChildScrollView(
               controller: _scrollController,
               // Shisha bottom bar ostida oxirgi kontent yopilib qolmasin.
-              padding: EdgeInsets.only(
-                  bottom: MediaQuery.paddingOf(context).bottom),
+              padding:
+                  EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom),
               child: Column(
                 children: [
                   _homeHeader(context),
@@ -234,6 +243,9 @@ class _MainPageState extends State<MainPage> {
                     child: Column(
                       children: [
                         const SizedBox(height: 16),
+                        // So'ngi qidiruvlar — boshqa bo'limlar bilan bir xil
+                        // uslubda (sarlavha + oq kartalar), rasm ostida.
+                        const RecentSearchesWidget(),
                         Showcase(
                             key: HomeShowcaseKeys.hot,
                             title: "showcase_popular_title".tr(),
@@ -276,7 +288,9 @@ class _MainPageState extends State<MainPage> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  const HomeBackgroundCarousel(),
+                  // Alohida qatlam — fon almashuvi boshqa kontentni qayta
+                  // chizdirmaydi.
+                  const RepaintBoundary(child: HomeBackgroundCarousel()),
                   DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -316,9 +330,7 @@ class _MainPageState extends State<MainPage> {
                       homeStyle: true, nearbyAirport: _nearbyAirport),
                 ),
               ),
-              // Oxirgi qidiruvlar — aylanuvchi rasm ICHIDA, shahar kartasi ostida.
-              const RecentSearchesWidget(),
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
             ],
           ),
         ],
@@ -413,6 +425,7 @@ class _MainPageState extends State<MainPage> {
   Widget _circleIconButton(String? asset, VoidCallback onTap,
       {IconData? iconData,
       required bool isDark,
+      String? semanticLabel,
       GlobalKey? showcaseKey,
       String? showcaseTitle,
       String? showcaseDesc}) {
@@ -422,44 +435,62 @@ class _MainPageState extends State<MainPage> {
 
     // Material(circle) + InkWell — splash doira ichida clip bo'ladi,
     // AppBar Material ustida katta overlay chiqmaydi.
-    final Widget button = Padding(
-      padding: const EdgeInsets.only(left: 4),
-      child: Material(
-        color: bg,
-        shape: const CircleBorder(),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(9),
-            child: SizedBox(
-              width: 20,
-              height: 20,
-              child: asset != null
-                  ? SvgPicture.asset(
-                      asset,
-                      colorFilter: const ColorFilter.mode(
-                          Colors.white, BlendMode.srcIn),
-                    )
-                  : Icon(iconData, size: 20, color: Colors.white),
-            ),
+    Widget circle = Material(
+      color: bg,
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(9),
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: asset != null
+                ? SvgPicture.asset(
+                    asset,
+                    colorFilter:
+                        const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+                  )
+                : Icon(iconData, size: 20, color: Colors.white),
           ),
         ),
       ),
     );
 
-    if (showcaseKey == null) return button;
+    // Showcase faqat ko'rinadigan doirani ajratadi.
+    if (showcaseKey != null) {
+      circle = Showcase(
+        key: showcaseKey,
+        title: showcaseTitle,
+        description: showcaseDesc,
+        targetShapeBorder: const CircleBorder(),
+        targetPadding: const EdgeInsets.all(4),
+        tooltipBackgroundColor: ProjectTheme.brandColor,
+        textColor: Colors.white,
+        child: circle,
+      );
+    }
 
-    return Showcase(
-      key: showcaseKey,
-      title: showcaseTitle,
-      description: showcaseDesc,
-      targetShapeBorder: const CircleBorder(),
-      targetPadding: const EdgeInsets.all(4),
-      tooltipBackgroundColor: ProjectTheme.brandColor,
-      textColor: Colors.white,
-      child: button,
+    // Ko'rinishi 38 dp doira, bosish maydoni 44 dp (№32): atrofidagi 3 dp
+    // shaffof maydon ham bosiladi. Chap padding 4 → 1 — doira joyi o'zgarmaydi.
+    return Padding(
+      padding: const EdgeInsets.only(left: 1),
+      child: Semantics(
+        button: true,
+        label: semanticLabel,
+        excludeSemantics: semanticLabel != null,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: SizedBox(
+            width: 44,
+            height: 44,
+            child: Center(child: circle),
+          ),
+        ),
+      ),
     );
   }
 }

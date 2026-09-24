@@ -30,6 +30,7 @@ class PaymentHelper {
   static Future<void> openInWebView(BuildContext context, String url) {
     return Navigator.of(context).push<void>(
       MaterialPageRoute(
+        settings: const RouteSettings(name: '/paymentWebView'),
         builder: (_) => WebViewScreen(url: url, confirmClose: true),
       ),
     );

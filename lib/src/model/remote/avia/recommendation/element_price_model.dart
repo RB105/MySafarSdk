@@ -56,14 +56,14 @@ class FluffyUzs {
 
   FluffyUzs.fromJson(Map<String, dynamic> json) {
     amount = "${json['amount']}";
-    passengersAmounts = json['passengers_amounts'] != null
-        ? PassengersAmounts.fromJson(json['passengers_amounts'])
+    passengersAmounts = _asMap(json['passengers_amounts']) != null
+        ? PassengersAmounts.fromJson(_asMap(json['passengers_amounts'])!)
         : null;
-    agentModePrices = json['agent_mode_prices'] != null
-        ? AgentModePrices.fromJson(json['agent_mode_prices'])
+    agentModePrices = _asMap(json['agent_mode_prices']) != null
+        ? AgentModePrices.fromJson(_asMap(json['agent_mode_prices'])!)
         : null;
-    comsa = json['comsa'];
-    partnerAffiliateFee = json['partner_affiliate_fee'];
+    comsa = _intOrNull(json['comsa']);
+    partnerAffiliateFee = _intOrNull(json['partner_affiliate_fee']);
     startPrice = _getDouble(json['start_price']);
     if (json['passengers_amounts_details'] != null) {
       passengersAmountsDetails = <PassengersAmountsDetails>[];
@@ -99,7 +99,7 @@ class PassengersAmounts {
   PassengersAmounts({this.adult});
 
   PassengersAmounts.fromJson(Map<String, dynamic> json) {
-    adult = json['adult'];
+    adult = _intOrNull(json['adult']);
   }
 
   Map<String, dynamic> toJson() {

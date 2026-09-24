@@ -11,7 +11,8 @@ import 'package:mysafar_sdk/src/model/remote/fornex/pop_destinations.dart';
 import 'package:mysafar_sdk/src/service/map/marker_service.dart';
 import 'package:mysafar_sdk/src/view/destinations/destination_map_constants.dart';
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
-import 'package:mysafar_sdk/src/view/tickets/ticket_page.dart' show RecommendationsTicketPage;
+import 'package:mysafar_sdk/src/view/tickets/ticket_page.dart'
+    show RecommendationsTicketPage;
 
 class DestinationInfoMapWidget extends StatefulWidget {
   final PopDestinationsModel destinationsModel;
@@ -57,20 +58,23 @@ class _DestinationInfoMapWidgetState extends State<DestinationInfoMapWidget> {
       create: (_) => PopularDestinationInfoCubit(
         info: widget.destinationsModel.destination.slug,
       ),
-      child: BlocConsumer<PopularDestinationInfoCubit, PopularDestinationInfoState>(
+      child: BlocConsumer<PopularDestinationInfoCubit,
+          PopularDestinationInfoState>(
         listener: _handleStateChanges,
         builder: (context, state) => _buildScaffold(context, state),
       ),
     );
   }
 
-  void _handleStateChanges(BuildContext context, PopularDestinationInfoState state) {
+  void _handleStateChanges(
+      BuildContext context, PopularDestinationInfoState state) {
     if (state is PopularDestinationInfoSuccessState) {
       _loadMarkers(state.destinations);
     }
   }
 
-  Widget _buildScaffold(BuildContext context, PopularDestinationInfoState state) {
+  Widget _buildScaffold(
+      BuildContext context, PopularDestinationInfoState state) {
     return Scaffold(
       appBar: _buildAppBar(context),
       body: _buildMap(context),
@@ -194,7 +198,8 @@ class _DestinationInfoMapWidgetState extends State<DestinationInfoMapWidget> {
     setState(() {
       for (final placeMarkers in results) {
         for (final marker in placeMarkers) {
-          _markers.removeWhere((m) => m.markerId.value == marker.markerId.value);
+          _markers
+              .removeWhere((m) => m.markerId.value == marker.markerId.value);
           _markers.add(marker);
         }
       }
@@ -212,14 +217,16 @@ class _DestinationInfoMapWidgetState extends State<DestinationInfoMapWidget> {
     final markers = <Marker>[];
 
     final placeholderIcon = await MarkerService.createPlaceholderMarker();
-    markers.add(_buildMarker(id, position, placeholderIcon, title, description));
+    markers
+        .add(_buildMarker(id, position, placeholderIcon, title, description));
 
     if (place.images?.isNotEmpty == true) {
       final imageUrl = place.images!.first.image ?? '';
       if (imageUrl.isNotEmpty) {
         final imageIcon = await MarkerService.createImageMarker(imageUrl);
         if (imageIcon != null) {
-          markers.add(_buildMarker(id, position, imageIcon, title, description));
+          markers
+              .add(_buildMarker(id, position, imageIcon, title, description));
         }
       }
     }

@@ -29,21 +29,21 @@ import 'package:mysafar_sdk/src/cubit/booking/confirm/booking_confirm_states.dar
 import 'package:mysafar_sdk/src/cubit/profile/tickets/confirmed_tickets_cubit.dart';
 import 'package:mysafar_sdk/src/model/local/payment_type.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_model.dart'
-    show FlightPrice, FluffyRub, FluffyUzs;
-import 'package:mysafar_sdk/src/core/config/response_config.dart'
-    show NetworkSuccessResponse;
+    show FlightElement, FlightPrice, FluffyRub, FluffyUzs;
 import 'package:mysafar_sdk/src/model/remote/booking/booking_create_model.dart';
+import 'package:mysafar_sdk/src/model/remote/profile/confirmed_ticket_models.dart'
+    show Book;
 import 'package:mysafar_sdk/src/model/remote/booking/booking_payment_status.dart';
-import 'package:mysafar_sdk/src/model/remote/booking/payment_type_model.dart'
-    show Result;
+import 'package:mysafar_sdk/src/model/remote/profile/order_status_classifier.dart';
 import 'package:mysafar_sdk/src/model/remote/payment/payment_type_config.dart';
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart';
-import 'package:mysafar_sdk/src/service/booking_service.dart';
 import 'package:mysafar_sdk/src/service/payment/payment_type_repository.dart';
 import 'package:mysafar_sdk/src/service/payment/card_token_encoder.dart';
+import 'package:mysafar_sdk/src/service/payment/sensitive_log.dart';
 import 'package:mysafar_sdk/src/view/booking/support/payment_helper.dart';
 import 'package:mysafar_sdk/src/view/booking/support/webview_debug.dart';
 import 'package:mysafar_sdk/src/view/booking/ticket_pdf_page.dart';
+import 'package:mysafar_sdk/src/view/booking/widget/booking_flight_summary_card.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/booking_form_fields.dart'
     show BookingFieldError, BookingFormStyle;
 import 'package:mysafar_sdk/src/view/booking/widget/next_button_widget.dart';
@@ -63,12 +63,27 @@ class BookingConfirmPage extends StatefulWidget {
   final int passengerNumber;
   final FlightPrice? price;
 
+  /// Tanlangan reys — "nima uchun to'lanmoqda" kartasi (№23). Buyurtmalardan
+  /// kelinganda `null` — o'rniga [summary] beriladi.
+  final FlightElement? flight;
+
+  /// Karta uchun tayyor ko'rinish modeli (masalan, "Buyurtmalarim"dagi
+  /// buyurtmadan — [BookingFlightSummary.fromOrder]). Berilmasa [flight]
+  /// dan quriladi; ikkalasi ham bo'lmasa karta ko'rsatilmaydi.
+  final BookingFlightSummary? summary;
+
   const BookingConfirmPage({
     super.key,
     required this.passengerNumber,
     required this.bookingCreateModel,
     required this.price,
+    this.flight,
+    this.summary,
   });
+
+  /// "Buyurtmalarim"dagi buyurtmadan karta modeli ([summary] uchun).
+  static BookingFlightSummary orderSummary(Book? book) =>
+      BookingFlightSummary.fromOrder(book);
 
   @override
   State<BookingConfirmPage> createState() => _BookingConfirmPageState();
@@ -124,6 +139,11 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
 
   bool get _paymentBusy => _phase != _PaymentPhase.idle;
 
+  /// WebView yopilgach birinchi tekshiruv "to'langan" demadi — sahifa ochiq
+  /// (boshqa usul bilan to'lash mumkin), holat esa fonda tekshirilmoqda.
+  /// Kechikkan to'lov kelsa sahifa "to'landi" ga o'tadi.
+  bool _bgChecking = false;
+
   @override
   void initState() {
     super.initState();
@@ -135,14 +155,15 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
     });
   }
 
-  /// To'lov turlarini Firebase'dan (Hive keshi orqali) yuklaydi.
+  /// To'lov turlarini yuklaydi.
   ///
   /// Rasm/logotip 100% LOKAL qoladi (`PaymentConstants.paymentTypeByName`) —
-  /// Firestore'dan faqat matn/holat (isActive, cardName) keladi. Har bir turni
+  /// manbadan faqat matn/holat (isActive, cardName) keladi. Har bir turni
   /// statik rasmga bog'laydi; rasm topilmagan (noma'lum) turlar chiqarilmaydi.
   ///
-  /// Oqim: kesh bo'lsa darhol ko'rsatamiz → Firestore'dan yangilaymiz. Firestore
-  /// ham, kesh ham bo'sh bo'lsa — zaxira faol turlar (fallbackActiveNames).
+  /// Oqim (№38): kesh bo'lsa darhol ko'rsatamiz (tugma kutmaydi) → server
+  /// ro'yxati sessiyada eskirgan bo'lsa fonda yangilaymiz. Server ham, kesh
+  /// ham bo'sh bo'lsa — zaxira faol turlar (fallbackActiveNames).
   Future<void> _loadPaymentTypes() async {
     final repo = PaymentTypeRepository();
 
@@ -156,37 +177,30 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
       });
     }
 
-    // 2. Firebase'dan yangilaymiz.
-    List<PaymentTypeConfig> configs;
+    // Kesh shu sessiyada serverdan olingan va hali yangi — qayta so'ramaymiz.
+    if (cached.isNotEmpty && PaymentTypeRepository.isFresh) return;
+
+    // 2. Serverdan (`/get-payment-type`) yangilaymiz — kesh ko'rsatilgan
+    //    bo'lsa bu fonda ketadi.
+    final List<PaymentTypeConfig> configs;
     try {
-      configs = await repo.fetch();
+      configs = await PaymentTypeRepository.fetchFromServer();
     } catch (_) {
-      configs = const [];
+      if (mounted && cached.isEmpty) _applyFallbackPaymentTypes();
+      return;
     }
     if (!mounted) return;
 
-    var entries = _buildPaymentEntries(configs);
+    final entries = _buildPaymentEntries(configs);
 
-    // Firebase bo'sh, lekin keshda ko'rsatilgan turlar bor — keshni saqlaymiz
-    // (tanlov kesh ro'yxatiga qarshi qilingani uchun hali ham amal qiladi).
-    if (entries.isEmpty && configs.isEmpty && cached.isNotEmpty) {
+    // Server natija bermadi, lekin keshdagi turlar ko'rsatilgan — keshni
+    // saqlaymiz (tanlov kesh ro'yxatiga qarshi qilingani uchun amal qiladi).
+    if (entries.isEmpty && cached.isNotEmpty) return;
+
+    // 3. U ham bo'lmasa — lokal zaxira faol turlar.
+    if (entries.isEmpty) {
+      _applyFallbackPaymentTypes();
       return;
-    }
-
-    // 3. Firebase natija bermasa (ulanolmadi yoki bo'sh) — ESKI usul: serverdan
-    //    `/get-payment-type` orqali olamiz.
-    if (entries.isEmpty) {
-      entries = await _loadPaymentTypesFromServer();
-      if (!mounted) return;
-    }
-
-    // 4. U ham bo'lmasa — lokal zaxira faol turlar.
-    if (entries.isEmpty) {
-      entries = _buildPaymentEntries(
-        PaymentConstants.fallbackActiveNames
-            .map((name) => PaymentTypeConfig(name: name, isActive: true))
-            .toList(),
-      );
     }
 
     setState(() {
@@ -196,25 +210,16 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
     });
   }
 
-  /// Eski usul — to'lov turlarini serverdan (`/get-payment-type`) oladi.
-  /// Firebase ishlamagan/bo'sh bo'lganda zaxira sifatida ishlatiladi.
-  Future<List<PaymentTypeEntry>> _loadPaymentTypesFromServer() async {
-    try {
-      final response = await BookingService().getPaymentType();
-      if (response is NetworkSuccessResponse && response.data is List<Result>) {
-        final results = response.data as List<Result>;
-        final configs = results
-            .map((r) => PaymentTypeConfig(
-                  name: (r.name ?? '').toUpperCase(),
-                  isActive: r.isActive ?? false,
-                ))
-            .toList();
-        return _buildPaymentEntries(configs);
-      }
-    } catch (_) {
-      // jim — chaqiruvchi keyingi zaxiraga o'tadi
-    }
-    return const [];
+  void _applyFallbackPaymentTypes() {
+    setState(() {
+      _paymentTypeItems = _buildPaymentEntries(
+        PaymentConstants.fallbackActiveNames
+            .map((name) => PaymentTypeConfig(name: name, isActive: true))
+            .toList(),
+      );
+      _paymentTypesLoading = false;
+      _reconcileSelection();
+    });
   }
 
   /// Ro'yxat yangilangach tanlovni tekshiradi — tanlangan tur endi faol emas
@@ -324,9 +329,9 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
   /// qaytgach ishlaydi.
   void _onTimeExpired() {
     if (!mounted || _leavingAfterExpiry) return;
-    // To'lov sahifasi ochiq, to'lov tekshirilmoqda yoki to'langan —
+    // To'lov sahifasi ochiq, to'lov tekshirilmoqda (fonda ham) yoki to'langan —
     // chiqarib yubormaymiz. "To'lanmagan" natijasidan so'ng qayta chaqiriladi.
-    if (_paymentBusy) return;
+    if (_paymentBusy || _bgChecking) return;
     final route = ModalRoute.of(context);
     if (route == null || !route.isCurrent) {
       _expiryTimer?.cancel();
@@ -339,7 +344,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
   }
 
   void _leaveAfterExpiry() {
-    if (!mounted || _paymentBusy) return;
+    if (!mounted || _paymentBusy || _bgChecking) return;
     final route = ModalRoute.of(context);
     // Kutish paytida dialog ochilgan bo'lsa — yopilishini kutamiz.
     if (route == null || !route.isCurrent) {
@@ -405,16 +410,44 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
   /// Ortga qaytish — back tugmasi, system back va chetdan swipe uchun bir
   /// xil: avval chiqishni tasdiqlash dialogi, tasdiqlansa bosh sahifaga.
   Future<void> _handleBack(BuildContext context) async {
-    // To'langan yoki to'lov tekshirilayotgan bo'lsa "to'lovdan chiqish"
-    // ogohlantirishi ma'nosiz — chipta "Buyurtmalar"da chiqadi.
-    if (_paymentBusy) {
-      PaymentHelper.navigateToHome(context);
+    // To'langan yoki tasdiq kutilmoqda — natija / chipta "Buyurtmalarim"da
+    // (bosh sahifaga jimgina otilmaydi, №66).
+    if (_phase == _PaymentPhase.paid || _phase == _PaymentPhase.pending) {
+      PaymentHelper.navigateToOrders(context);
+      return;
+    }
+    // Holat tekshirilmoqda (60–90 s): avval so'raymiz — chiqilsa tekshiruv
+    // to'xtaydi, natija "Buyurtmalarim"da ko'rinadi (№66).
+    if (_phase == _PaymentPhase.inWebView ||
+        _phase == _PaymentPhase.checking) {
+      final leave = await _showLeaveCheckingDialog(context);
+      if (leave && context.mounted) PaymentHelper.navigateToOrders(context);
       return;
     }
     final shouldExit = await _showExitConfirmDialog(context);
     if (shouldExit && context.mounted) {
       PaymentHelper.navigateToHome(context);
     }
+  }
+
+  Future<bool> _showLeaveCheckingDialog(BuildContext context) async {
+    if (!context.mounted) return false;
+    final result = await showSdkAlert<bool>(
+      context: context,
+      icon: Assets.iconsDialogHourglassIcon,
+      tone: SdkDialogTone.warning,
+      title: 'payment_checking_title'.tr(),
+      message: 'payment_checking_leave_message'.tr(),
+      actions: [
+        SdkDialogAction(label: 'payment_checking_stay'.tr(), value: false),
+        SdkDialogAction(
+          label: 'go_to_my_orders'.tr(),
+          value: true,
+          variant: SdkDialogButtonVariant.secondary,
+        ),
+      ],
+    );
+    return result ?? false;
   }
 
   Future<bool> _showExitConfirmDialog(BuildContext context) async {
@@ -450,6 +483,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
       _handlePaymentSuccess(context, state);
     } else if (state is BookingConfirmErrorState) {
       _pendingSavedCard = null;
+      _resetStartingPhase();
       AnalyticsService().trackPaymentFailed(
         trId: widget.bookingCreateModel.trId ?? '',
         billingId: widget.bookingCreateModel.billingId ?? '',
@@ -462,22 +496,39 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
           () => _ticketData = BookingPaymentStatus.fromTicketData(state.data));
       _handlePriceChange(context, state);
     } else if (state is BookingConfirmPaymentCheckingState) {
-      setState(() => _phase = _PaymentPhase.checking);
+      setState(() {
+        _phase = _PaymentPhase.checking;
+        _bgChecking = false;
+      });
+    } else if (state is BookingConfirmPaymentBackgroundCheckState) {
+      _onBackgroundCheck(context);
     } else if (state is BookingConfirmPaidState) {
       _onPaid(context, state);
     } else if (state is BookingConfirmNotPaidState) {
+      if (_phase != _PaymentPhase.checking) {
+        _endBackgroundCheck();
+        return;
+      }
       _onNotPaid(context, state.status);
     } else if (state is BookingConfirmPaymentPendingState) {
+      if (_phase != _PaymentPhase.checking) {
+        _endBackgroundCheck();
+        return;
+      }
       _onPaymentPending(context, state.status);
     }
   }
 
   Future<void> _handlePaymentSuccess(
       BuildContext context, BookingConfirmSuccessState state) async {
-    final data = state.data;
-    final type = (_selectedPaymentType ?? '').toUpperCase();
     final savedCard = _pendingSavedCard;
     _pendingSavedCard = null;
+    // Faqat shu sahifadan boshlangan to'lov uchun (№57): kutish paytida
+    // buyurtma to'langan deb topilgan bo'lsa yoki WebView allaqachon
+    // ochilgan bo'lsa — ikkinchi to'lov sahifasi ochilmaydi.
+    if (_phase != _PaymentPhase.starting) return;
+    final data = state.data;
+    final type = (_selectedPaymentType ?? '').toUpperCase();
 
     final String urlKey;
     switch (type) {
@@ -504,14 +555,57 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
       WebViewDebug.log('   tanlangan url: $url');
     }
     if (url == null) {
+      _resetStartingPhase();
       _onPaymentUrlMissing(context, type, urlKey);
       return;
     }
     if (type == PaymentConstants.mysafarpay && savedCard != null) {
       url = await _withCardToken(url, savedCard);
       if (!context.mounted) return;
+      // Token kutilayotganda sahifa ochilganda "to'langan" aniqlangan bo'lishi
+      // mumkin.
+      if (_phase != _PaymentPhase.starting) return;
     }
     await _openPaymentPage(context, url);
+  }
+
+  /// Birinchi tekshiruv "to'lanmagan" (yoki javob yo'q): foydalanuvchi to'lov
+  /// sahifasini to'lamasdan yopgan bo'lishi mumkin — kutib turmasdan boshqa
+  /// usulni tanlashiga ruxsat beramiz, tekshiruv fonda davom etadi.
+  void _onBackgroundCheck(BuildContext context) {
+    if (_phase != _PaymentPhase.checking || !mounted) return;
+    setState(() {
+      _phase = _PaymentPhase.idle;
+      _bgChecking = true;
+    });
+    ProjectDialogs.showCustomToast(
+      context,
+      'payment_not_completed'.tr(),
+      type: AppMessageType.warning,
+    );
+  }
+
+  /// Fondagi tekshiruv "to'langan"siz tugadi.
+  void _endBackgroundCheck() {
+    if (!mounted || !_bgChecking) return;
+    setState(() => _bgChecking = false);
+    AnalyticsService().trackPaymentFailed(
+      trId: widget.bookingCreateModel.trId ?? '',
+      billingId: widget.bookingCreateModel.billingId ?? '',
+      errorMessage: 'not_paid_after_close',
+      paymentMethod: _selectedPaymentType,
+    );
+    // Tekshiruv paytida vaqt tugagan bo'lsa — odatiy "vaqt tugadi" oqimi.
+    if (_phase == _PaymentPhase.idle && _remainingSeconds <= 0) {
+      _onTimeExpired();
+    }
+  }
+
+  /// `starting` bosqichida xato bo'ldi — qayta to'lash imkoniyati qaytadi.
+  void _resetStartingPhase() {
+    if (_phase != _PaymentPhase.starting || !mounted) return;
+    setState(() => _phase = _PaymentPhase.idle);
+    if (_remainingSeconds <= 0) _onTimeExpired();
   }
 
   /// Server kutilgan to'lov havolasini qaytarmadi — jim qolmasdan xato
@@ -563,6 +657,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
     _expiryTimer?.cancel();
     setState(() {
       _phase = _PaymentPhase.paid;
+      _bgChecking = false;
       _ticketData = state.status;
       _leavingAfterExpiry = false;
     });
@@ -631,8 +726,11 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
   /// Chipta PDF'i tayyor bo'lsa — `TicketPdfPage` argumentlari.
   Map<String, dynamic>? get _paidTicketArgs {
     final status = _ticketData;
+    // Buyurtmalar ro'yxati bilan bir xil qoida (№59): chipta holati +
+    // kvitansiya havolasi.
     if (status == null ||
-        !status.ticketIssued ||
+        !(status.ticketIssued ||
+            OrderStatusClassifier.isTicketIssued(status.sign)) ||
         (status.ticketReceiptUrl ?? '').isEmpty) {
       return null;
     }
@@ -763,12 +861,10 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
       }
       return url;
     }
-    final result = uri.replace(queryParameters: {
-      ...uri.queryParametersAll,
-      'card_token': token,
-    }).toString();
-    _debugCardToken('token', token);
-    _debugCardToken('url', result);
+    // XOM satrga qo'shiladi — `Uri.replace` imzolangan query'ni qayta
+    // kodlab shlyuz imzosini buzardi (№64).
+    final result = CardTokenEncoder.appendQueryParam(url, 'card_token', token);
+    _debugCardToken('token', SensitiveLog.maskTail(token));
     return result;
   }
 
@@ -782,8 +878,8 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
       _debugCardToken(
         'payload (host callback)',
         jsonEncode({
-          'card_number': card.cardNumberDigits,
-          'expire': card.expire,
+          'card_number': SensitiveLog.maskTail(card.cardNumberDigits),
+          'expire': SensitiveLog.hide(card.expire),
           'tr_id': trId,
           'billing_id': billingId,
         }),
@@ -807,7 +903,14 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
       trId: trId,
       issuedAt: DateTime.now(),
     );
-    _debugCardToken('payload', jsonEncode(payload));
+    _debugCardToken(
+      'payload',
+      jsonEncode({
+        ...payload,
+        'card_number': SensitiveLog.maskTail(payload['card_number']),
+        'expire': SensitiveLog.hide(payload['expire']),
+      }),
+    );
     try {
       return CardTokenEncoder(secret!).encrypt(payload);
     } catch (e) {
@@ -893,6 +996,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
           .copyWith(statusBarColor: Colors.transparent),
       leading: IconButton(
         onPressed: () => _handleBack(context),
+        tooltip: MaterialLocalizations.of(context).backButtonTooltip,
         icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 19),
       ),
       title: Text(
@@ -913,9 +1017,18 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
           // To'lov sahifasi yopilgach taymer o'rnida to'lov holati.
           child: switch (_phase) {
-            _PaymentPhase.idle => PaymentCountdownCard(
-                remaining: _remainingNotifier,
-                researching: _leavingAfterExpiry,
+            // `starting` — hali to'lov sahifasi ochilmagan, taymer ko'rinadi.
+            _PaymentPhase.idle ||
+            _PaymentPhase.starting =>
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  PaymentCountdownCard(
+                    remaining: _remainingNotifier,
+                    researching: _leavingAfterExpiry,
+                  ),
+                  if (_bgChecking) const _BackgroundCheckNotice(),
+                ],
               ),
             _PaymentPhase.inWebView ||
             _PaymentPhase.checking =>
@@ -937,6 +1050,17 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Nima uchun to'lanmoqda — yo'nalish, sana, bagaj, shartlar (№23).
+          if (widget.summary?.isEmpty == false) ...[
+            BookingFlightSummaryCard.fromSummary(widget.summary!),
+            const SizedBox(height: 20),
+          ] else if (widget.flight != null) ...[
+            BookingFlightSummaryCard(
+              flight: widget.flight!,
+              passengerCount: widget.passengerNumber,
+            ),
+            const SizedBox(height: 20),
+          ],
           _SectionTitle('select_payment_method'.tr()),
           KeyedSubtree(
             key: _methodsKey,
@@ -1174,6 +1298,7 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
           onPressed: () => _checkPayment(context.read<BookingConfirmCubit>()),
         );
       case _PaymentPhase.idle:
+      case _PaymentPhase.starting:
       case _PaymentPhase.inWebView:
       case _PaymentPhase.checking:
         final checking = _phase != _PaymentPhase.idle;
@@ -1349,7 +1474,35 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
     _submitPayment(context);
   }
 
-  void _submitPayment(BuildContext context) {
+  /// Oldingi to'lov hali fonda tekshirilmoqda — ikki marta to'lamaslik uchun
+  /// ogohlantirib, so'ng davom etamiz.
+  Future<void> _confirmPayWhileChecking(BuildContext context) async {
+    final proceed = await showSdkAlert<bool>(
+      context: context,
+      icon: Assets.iconsDialogWarningIcon,
+      tone: SdkDialogTone.warning,
+      title: 'payment_check_in_progress_title'.tr(),
+      message: 'payment_check_in_progress_message'.tr(),
+      actions: [
+        SdkDialogAction(label: 'payment_pay_anyway'.tr(), value: true),
+        SdkDialogAction(
+          label: 'payment_checking_stay'.tr(),
+          value: false,
+          variant: SdkDialogButtonVariant.secondary,
+        ),
+      ],
+    );
+    if (proceed != true || !mounted || !context.mounted) return;
+    // Kutish paytida to'lov tasdiqlangan bo'lishi mumkin.
+    if (_phase != _PaymentPhase.idle) return;
+    _submitPayment(context, confirmed: true);
+  }
+
+  void _submitPayment(BuildContext context, {bool confirmed = false}) {
+    if (_bgChecking && !confirmed && !_paymentBusy) {
+      _confirmPayWhileChecking(context);
+      return;
+    }
     if (_paymentBusy ||
         context.read<BookingConfirmCubit>().state
             is BookingConfirmLoadingState) {
@@ -1358,6 +1511,13 @@ class _BookingConfirmPageState extends State<BookingConfirmPage> {
     // Tanlangan tur ID'si allaqachon API nomi (MYSAFARPAY / PAYME / PAYGINE /
     // CLICK / VISA) — uni to'g'ridan-to'g'ri transaction_type sifatida yuboramiz.
     final String transactionType = _selectedPaymentType!.toUpperCase();
+    // Tugma himoyasi faqat cubit holatiga tayanmaydi (№57): confirm javobi,
+    // token tayyorlash va WebView ochilguncha bosqich `starting`.
+    setState(() => _phase = _PaymentPhase.starting);
+    AnalyticsService().trackPaymentStarted(
+      trId: widget.bookingCreateModel.trId,
+      paymentMethod: transactionType,
+    );
 
     context.read<BookingConfirmCubit>().confirmBooking(
       params: {
@@ -1406,9 +1566,43 @@ class _PaymentMethodsLock extends StatelessWidget {
 }
 
 /// To'lov sahifasi (WebView) bilan bog'liq bosqich.
+/// Oldingi to'lov fonda tekshirilayotganda kichik eslatma (bloklamaydi).
+class _BackgroundCheckNotice extends StatelessWidget {
+  const _BackgroundCheckNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final color = context.textTheme.bodySmall?.color;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(strokeWidth: 2, color: color),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'payment_checking_background'.tr(),
+              style: context.textTheme.bodySmall,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 enum _PaymentPhase {
   /// To'lov boshlanmagan yoki to'lanmagan — to'lash mumkin.
   idle,
+
+  /// "To'lovga o'tish" bosildi: confirm so'rovi / `card_token` / WebView
+  /// ochilishi kutilmoqda (№57). Kechikkan `ticket-data` javobi cubit
+  /// holatini almashtirsa ham tugma qayta faollashmaydi.
+  starting,
 
   /// To'lov sahifasi ochiq.
   inWebView,

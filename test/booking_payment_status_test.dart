@@ -246,6 +246,35 @@ void main() {
       expect(calls, 1);
     });
 
+    test('birinchi javob to\'lanmagan — onFirstStatus bir marta chaqiriladi',
+        () async {
+      final firsts = <BookingPaymentState?>[];
+      var i = 0;
+      final responses = [
+        _status(BookingPaymentState.unpaid),
+        _status(BookingPaymentState.unpaid),
+        _status(BookingPaymentState.paid),
+      ];
+      final result = await BookingConfirmCubit.pollPaymentStatus(
+        fetch: () async => responses[i < 2 ? i++ : 2],
+        delays: delays,
+        onFirstStatus: (s) => firsts.add(s?.state),
+      );
+      expect(firsts, [BookingPaymentState.unpaid]);
+      // Fonda davom etib, kechikkan to'lov baribir aniqlanadi.
+      expect(result.state, BookingPaymentState.paid);
+    });
+
+    test('birinchi javob to\'langan — onFirstStatus chaqirilmaydi', () async {
+      var called = false;
+      await BookingConfirmCubit.pollPaymentStatus(
+        fetch: () async => _status(BookingPaymentState.paid),
+        delays: delays,
+        onFirstStatus: (_) => called = true,
+      );
+      expect(called, isFalse);
+    });
+
     test('avval Booked, keyin Ticketed — to\'langan', () async {
       final result = await poll([
         _status(BookingPaymentState.unpaid),

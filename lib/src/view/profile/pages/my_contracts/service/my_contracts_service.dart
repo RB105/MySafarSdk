@@ -2,13 +2,16 @@ import 'package:flutter/foundation.dart';
 import 'package:mysafar_sdk/src/core/config/request_config.dart';
 import 'package:mysafar_sdk/src/core/config/response_config.dart';
 import 'package:mysafar_sdk/src/core/constants/end_points.dart';
+import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
+import 'package:mysafar_sdk/src/service/payment/sensitive_log.dart';
 import 'my_contract_model.dart';
 
 class MyContractsService with RequestConfig {
   Future<NetworkResponse> getMyContracts({
     required String pinfl,
   }) async {
-    debugPrint("Contracts pinfl: $pinfl");
+    // JShShIR log'ga yozilmaydi (№63) — faqat debug'da, niqoblangan.
+    SensitiveLog.debug('Contracts pinfl: ${SensitiveLog.maskTail(pinfl)}');
 
     final response = await postRequest(
       partnerToken: true,
@@ -20,18 +23,26 @@ class MyContractsService with RequestConfig {
       if (response is NetworkSuccessResponse) {
         final data = response.data;
         final List<dynamic> rawList = _extractList(data);
-        final contracts = rawList
-            .whereType<Map>()
-            .map((e) =>
-                MyContractModel.fromJson(Map<String, dynamic>.from(e)))
-            .toList();
+        // Bitta buzuq shartnoma butun ro'yxatni yiqitmasin (№89) — o'tkazib
+        // yuboriladi.
+        final contracts = <MyContractModel>[];
+        for (final e in rawList.whereType<Map>()) {
+          try {
+            contracts
+                .add(MyContractModel.fromJson(Map<String, dynamic>.from(e)));
+          } catch (e) {
+            debugPrint('MySafarSdk: shartnoma o\'tkazib yuborildi '
+                '(${e.runtimeType})');
+          }
+        }
         return NetworkSuccessResponse<List<MyContractModel>>(
             data: contracts);
       }
       return response;
-    } on Exception catch (e) {
-      debugPrint(e.toString());
-      return response;
+    } catch (e) {
+      // Faqat Exception emas, TypeError ham — sahifa yuklanishda qotmasin.
+      debugPrint('MySafarSdk: contracts parse xatosi (${e.runtimeType})');
+      return NetworkErrorResponse(error: 'error_other'.tr());
     }
   }
 
@@ -39,7 +50,7 @@ class MyContractsService with RequestConfig {
   Future<NetworkResponse> getContractDetail({
     required String loanId,
   }) async {
-    debugPrint("Contract find loan_id: $loanId");
+    SensitiveLog.debug('Contract find loan_id: $loanId');
 
     final response = await postRequest(
       partnerToken: true,
@@ -50,14 +61,17 @@ class MyContractsService with RequestConfig {
     try {
       if (response is NetworkSuccessResponse) {
         final raw = _extractSingle(response.data);
-        if (raw == null) return response;
+        if (raw == null) {
+          return NetworkErrorResponse(error: 'error_other'.tr());
+        }
         final contract = MyContractModel.fromJson(raw);
         return NetworkSuccessResponse<MyContractModel>(data: contract);
       }
       return response;
-    } on Exception catch (e) {
-      debugPrint(e.toString());
-      return response;
+    } catch (e) {
+      // TypeError ham ushlanadi (№89) — sahifa xato holatini ko'rsatadi.
+      debugPrint('MySafarSdk: contract parse xatosi (${e.runtimeType})');
+      return NetworkErrorResponse(error: 'error_other'.tr());
     }
   }
 

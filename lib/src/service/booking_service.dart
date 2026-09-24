@@ -17,9 +17,15 @@ import 'package:mysafar_sdk/src/model/remote/booking/booking_create_model.dart';
 import 'package:mysafar_sdk/src/model/remote/booking/payment_type_model.dart';
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart';
 import 'package:mysafar_sdk/src/service/api_service.dart';
-import 'package:mysafar_sdk/src/service/token_verification_cache.dart';
 import 'package:provider/provider.dart' show Provider;
 
+/// Eslatma (№37): bu yerdagi barcha so'rovlar `partnerToken: true` bilan
+/// ketadi — `Authorization: Token <partner>` yuboriladi, foydalanuvchi
+/// access token'i umuman ishlatilmaydi. Shu sabab avval har so'rovdan oldin
+/// chaqirilgan `TokenVerificationCache.ensureVerified` (user token tekshiruvi)
+/// olib tashlandi: u bron natijasiga ta'sir qilmas, faqat yopib bo'lmaydigan
+/// yuklanish oynasida vaqt olardi. Bearer so'rovlar (profil) 401'da tokenni
+/// interceptor orqali o'zi yangilaydi.
 class BookingService with RequestConfig {
   ApiService apiService = ApiService();
   final AnalyticsService _analyticsService = AnalyticsService();
@@ -33,7 +39,6 @@ class BookingService with RequestConfig {
       required BuildContext context}) async {
     final currencyProvider =
         Provider.of<CurrencyProvider>(context, listen: false);
-    await TokenVerificationCache.ensureVerified(apiService);
     final normalizedPhone = normalizePhoneDigits(clientPhoneNum);
     final normalizedPassengers = passenger.map((p) {
       final copy = Map<String, dynamic>.from(p);
@@ -95,7 +100,6 @@ class BookingService with RequestConfig {
     required String otpToken,
     required int otp,
   }) async {
-    await TokenVerificationCache.ensureVerified(apiService);
     NetworkResponse response = await postRequest(
         headers: false,
         partnerToken: true,
@@ -180,7 +184,6 @@ class BookingService with RequestConfig {
 
   Future<NetworkResponse> confirmBooking(
       {required Map<String, dynamic> params}) async {
-    await TokenVerificationCache.ensureVerified(apiService);
     NetworkResponse response = await postRequest(
         headers: false,
         partnerToken: true,
@@ -212,7 +215,6 @@ class BookingService with RequestConfig {
   Future<NetworkResponse> getCardInfo({
     required String cardNumber,
   }) async {
-    await TokenVerificationCache.ensureVerified(apiService);
     NetworkResponse response = await postRequest(
         retryable: true,
         headers: false,
@@ -233,7 +235,6 @@ class BookingService with RequestConfig {
   Future<NetworkResponse> getTicketStatus({
     required String billingId,
   }) async {
-    await TokenVerificationCache.ensureVerified(apiService);
     NetworkResponse response = await postRequest(
       retryable: true,
       headers: false,
@@ -255,7 +256,6 @@ class BookingService with RequestConfig {
   /// `{"result": [ {id, name, is_active}, ... ]}` ko'rinishida qaytaradi;
   /// muvaffaqiyatda `List<Result>` beriladi.
   Future<NetworkResponse> getPaymentType() async {
-    await TokenVerificationCache.ensureVerified(apiService);
     NetworkResponse response = await getRequest(
         endPoint: EndPoints.getPaymentType, partnerToken: true, headers: false);
 
@@ -283,7 +283,6 @@ class BookingService with RequestConfig {
   Future<NetworkResponse> getTicketedBookingInfo({
     required String billingId,
   }) async {
-    await TokenVerificationCache.ensureVerified(apiService);
     NetworkResponse response = await postRequest(
       retryable: true,
       headers: false,
@@ -305,7 +304,6 @@ class BookingService with RequestConfig {
     required String trId,
     required int otp,
   }) async {
-    await TokenVerificationCache.ensureVerified(apiService);
     NetworkResponse response = await postRequest(
         headers: false,
         partnerToken: true,
@@ -343,7 +341,6 @@ class BookingService with RequestConfig {
 
   Future<NetworkResponse> centrumConfirmBooking(
       {required Map<String, dynamic> params}) async {
-    await TokenVerificationCache.ensureVerified(apiService);
     NetworkResponse response = await postRequest(
         headers: false,
         partnerToken: true,

@@ -207,8 +207,9 @@ class _SettingsPageState extends State<SettingsPage> {
         padding: const EdgeInsets.only(left: 4, bottom: 8, top: 4),
         child: Text(
           text.toUpperCase(),
+          // 11 px juda mayda edi (№32).
           style: context.textTheme.labelSmall?.copyWith(
-            fontSize: 11,
+            fontSize: 12.5,
             fontWeight: FontWeight.w700,
             letterSpacing: 1.1,
             color: context.disabledTextColor,

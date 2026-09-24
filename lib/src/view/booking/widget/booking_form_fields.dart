@@ -13,12 +13,15 @@ class BookingFormStyle {
   BookingFormStyle._();
 
   static const double radius = 14;
+
+  /// Maydonning ENG KAM balandligi — katta tizim shriftida maydon o'sadi,
+  /// matn kesilmaydi.
   static const double fieldHeight = 52;
   static const double labelGap = 6;
 
   static Color hint(BuildContext context) => context.isDarkMode
       ? ProjectTheme.secondaryTextDark.withValues(alpha: 0.6)
-      : const Color(0xFF9AA3B2);
+      : const Color(0xFF8A93A3);
 
   static Color label(BuildContext context) => context.isDarkMode
       ? ProjectTheme.secondaryTextDark
@@ -146,6 +149,7 @@ class BookingTextField extends StatefulWidget {
     this.inputFormatters,
     this.suffix,
     this.suggestions = const [],
+    this.autofillHints,
   });
 
   final String label;
@@ -163,6 +167,9 @@ class BookingTextField extends StatefulWidget {
   final List<TextInputFormatter>? inputFormatters;
   final Widget? suffix;
   final List<String> suggestions;
+
+  /// Tizim avtoto'ldirishi uchun ([AutofillHints.email] va h.k.).
+  final Iterable<String>? autofillHints;
 
   static const int _maxSuggestions = 3;
 
@@ -242,17 +249,25 @@ class _BookingTextFieldState extends State<BookingTextField> {
     }).take(BookingTextField._maxSuggestions);
   }
 
-  /// Tavsiya tanlanganda mask formatter'larning ichki holati ham yangilansin
-  /// (aks holda keyingi tahrirda mask noto'g'ri ishlaydi).
+  /// Tavsiya tanlanganda qiymat maydon formatter'laridan o'tadi (mask
+  /// formatter'ning ichki holati ham yangilanadi — aks holda keyingi tahrirda
+  /// mask noto'g'ri ishlaydi).
+  ///
+  /// Faqat raqam qabul qiladigan mask'ga raqamlar beriladi; boshqa
+  /// formatter'larga (hujjat raqami, ism) qiymat TO'LIQ beriladi — ilgari
+  /// "AA1234567" tanlansa seriya harflari tushib qolardi (№67).
   void _onSelected(String option) {
     var value = TextEditingValue(text: option);
-    final formatters = widget.inputFormatters;
-    if (formatters != null && formatters.isNotEmpty) {
-      final digits = option.replaceAll(RegExp(r'[^0-9]'), '');
-      value = formatters.first.formatEditUpdate(
-        TextEditingValue.empty,
-        TextEditingValue(text: digits.isNotEmpty ? digits : option),
-      );
+    for (final formatter in widget.inputFormatters ?? const []) {
+      if (formatter is MaskTextInputFormatter) {
+        final digits = option.replaceAll(RegExp(r'[^0-9]'), '');
+        value = formatter.formatEditUpdate(
+          TextEditingValue.empty,
+          TextEditingValue(text: digits.isNotEmpty ? digits : option),
+        );
+      } else {
+        value = formatter.formatEditUpdate(TextEditingValue.empty, value);
+      }
     }
     widget.controller.value = value.copyWith(
         selection: TextSelection.collapsed(offset: value.text.length));
@@ -284,7 +299,8 @@ class _BookingTextFieldState extends State<BookingTextField> {
               fieldViewBuilder: (context, controller, focusNode, _) =>
                   AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
-                height: BookingFormStyle.fieldHeight,
+                constraints: const BoxConstraints(
+                    minHeight: BookingFormStyle.fieldHeight),
                 decoration: BookingFormStyle.box(
                   context,
                   focused: focused,
@@ -300,6 +316,7 @@ class _BookingTextFieldState extends State<BookingTextField> {
                   textInputAction: widget.textInputAction,
                   textCapitalization: widget.textCapitalization,
                   inputFormatters: widget.inputFormatters,
+                  autofillHints: widget.autofillHints,
                   autocorrect: false,
                   enableSuggestions: false,
                   onChanged: widget.onChanged,
@@ -418,42 +435,47 @@ class BookingPickerField extends StatelessWidget {
             color: Colors.transparent,
             borderRadius: BorderRadius.circular(BookingFormStyle.radius),
             clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: onTap,
-              child: Ink(
-                height: BookingFormStyle.fieldHeight,
-                decoration: BookingFormStyle.box(context, hasError: hasError),
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 14, right: 10),
-                  child: Row(
-                    children: [
-                      if (hasValue && leading != null) ...[
-                        leading!,
-                        const SizedBox(width: 10),
+            child: Semantics(
+              button: true,
+              label: label,
+              child: InkWell(
+                onTap: onTap,
+                child: Ink(
+                  decoration: BookingFormStyle.box(context, hasError: hasError),
+                  child: Container(
+                    constraints: const BoxConstraints(
+                        minHeight: BookingFormStyle.fieldHeight),
+                    padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
+                    child: Row(
+                      children: [
+                        if (hasValue && leading != null) ...[
+                          leading!,
+                          const SizedBox(width: 10),
+                        ],
+                        Expanded(
+                          child: Text(
+                            hasValue ? value! : placeholder,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: hasValue
+                                ? BookingFormStyle.value(context)
+                                : BookingFormStyle.value(context).copyWith(
+                                    fontWeight: FontWeight.w500,
+                                    color: BookingFormStyle.hint(context),
+                                  ),
+                          ),
+                        ),
+                        SvgPicture.asset(
+                          chevronAsset,
+                          width: 20,
+                          height: 20,
+                          colorFilter: ColorFilter.mode(
+                            BookingFormStyle.hint(context),
+                            BlendMode.srcIn,
+                          ),
+                        ),
                       ],
-                      Expanded(
-                        child: Text(
-                          hasValue ? value! : placeholder,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: hasValue
-                              ? BookingFormStyle.value(context)
-                              : BookingFormStyle.value(context).copyWith(
-                                  fontWeight: FontWeight.w500,
-                                  color: BookingFormStyle.hint(context),
-                                ),
-                        ),
-                      ),
-                      SvgPicture.asset(
-                        chevronAsset,
-                        width: 20,
-                        height: 20,
-                        colorFilter: ColorFilter.mode(
-                          BookingFormStyle.hint(context),
-                          BlendMode.srcIn,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -476,12 +498,16 @@ class BookingChoiceField<T> extends StatelessWidget {
     required this.options,
     required this.value,
     required this.onChanged,
+    this.errorText,
   });
 
   final String label;
   final List<(T, String)> options;
   final T value;
   final ValueChanged<T> onChanged;
+
+  /// Hech narsa tanlanmagan bo'lsa ko'rsatiladigan xato (masalan jins).
+  final String? errorText;
 
   static const double _height = 48;
   static const double _padding = 4;
@@ -501,9 +527,15 @@ class BookingChoiceField<T> extends StatelessWidget {
       children: [
         BookingFieldLabel(text: label),
         Container(
-          height: _height,
+          // Katta tizim shriftida matn sig'ishi uchun balandlik o'sadi.
+          height: _height +
+              (MediaQuery.textScalerOf(context).scale(15) - 15)
+                  .clamp(0.0, 40.0),
           padding: const EdgeInsets.all(_padding),
-          decoration: BookingFormStyle.box(context),
+          decoration: BookingFormStyle.box(
+            context,
+            hasError: errorText != null && errorText!.isNotEmpty,
+          ),
           child: LayoutBuilder(
             builder: (context, constraints) {
               final double itemWidth = constraints.maxWidth / options.length;
@@ -576,6 +608,7 @@ class BookingChoiceField<T> extends StatelessWidget {
             },
           ),
         ),
+        BookingFieldError(text: errorText),
       ],
     );
   }

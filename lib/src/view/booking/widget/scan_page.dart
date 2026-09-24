@@ -27,6 +27,7 @@ Future<UsersModel?> showDocumentScanner(BuildContext context) {
   return Navigator.of(context).push<UsersModel>(
     MaterialPageRoute(
       fullscreenDialog: true,
+      settings: const RouteSettings(name: '/documentScanner'),
       builder: (_) => const _DocumentScannerPage(),
     ),
   );

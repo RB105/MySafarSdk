@@ -24,19 +24,24 @@ class MainInputPage extends StatelessWidget {
           elevation: 4.0,
           shadowColor: Colors.black38,
           actions: [
-            InkWell(
-              borderRadius: BorderRadius.circular(24),
-              onTap: () => ProjectDialogs.showSupportMenu(context),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: SvgPicture.asset(
-                    Assets.iconsCallCenterIcon,
-                    colorFilter: ColorFilter.mode(
-                        context.theme.appBarTheme.iconTheme!.color!,
-                        BlendMode.srcIn),
+            Semantics(
+              button: true,
+              label: "support".tr(),
+              excludeSemantics: true,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(24),
+                onTap: () => ProjectDialogs.showSupportMenu(context),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: SvgPicture.asset(
+                      Assets.iconsCallCenterIcon,
+                      colorFilter: ColorFilter.mode(
+                          context.theme.appBarTheme.iconTheme!.color!,
+                          BlendMode.srcIn),
+                    ),
                   ),
                 ),
               ),

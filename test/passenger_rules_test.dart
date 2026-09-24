@@ -19,10 +19,10 @@ void main() {
       );
 
   group('normalizeName', () {
-    test('apostrof, bo\'sh joy va raqam tashlanadi', () {
+    test('apostrof va raqam tashlanadi, ichki bo\'sh joy qoladi', () {
       expect(PassengerRules.normalizeName("O'rinboyev"), 'ORINBOYEV');
       expect(PassengerRules.normalizeName('Oʻrinboyev'), 'ORINBOYEV');
-      expect(PassengerRules.normalizeName("ERGASH O'G'LI"), 'ERGASHOGLI');
+      expect(PassengerRules.normalizeName("ERGASH O'G'LI"), 'ERGASH OGLI');
       expect(PassengerRules.normalizeName('ali2'), 'ALI');
       expect(PassengerRules.normalizeName('anna-maria'), 'ANNA-MARIA');
     });

@@ -1,8 +1,5 @@
 // ignore_for_file: depend_on_referenced_packages, use_build_context_synchronously
 
-import 'dart:io';
-
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -12,20 +9,18 @@ import 'package:mysafar_sdk/src/core/styles/theme.dart';
 import 'package:mysafar_sdk/src/core/tools/formatters.dart';
 import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart';
 import 'package:mysafar_sdk/src/core/widgets/main_button_widget.dart';
-import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/cubit/booking/ticketed_search/ticketed_booking_search_cubit.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_model.dart'
     show FlightPrice, FluffyUzs;
 import 'package:mysafar_sdk/src/model/remote/booking/booking_create_model.dart';
 import 'package:mysafar_sdk/src/model/remote/profile/confirmed_ticket_models.dart';
+import 'package:mysafar_sdk/src/model/remote/profile/order_status_classifier.dart';
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
+import 'package:mysafar_sdk/src/service/pdf/ticket_pdf_actions.dart';
 import 'package:mysafar_sdk/src/view/booking/booking_confirm_page.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/custom_input_field_widget.dart';
 import 'package:mysafar_sdk/src/view/profile/src/expire_time_widget.dart';
 import 'package:mysafar_sdk/src/view/profile/src/my_ticket_widget.dart';
-import 'package:open_filex/open_filex.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 class TicketedBookingSearchPage extends StatelessWidget {
   static const routeName = '/ticketed-booking-search';
@@ -60,7 +55,8 @@ class _TicketedBookingSearchViewState
   @override
   void initState() {
     super.initState();
-    debugPrint('TicketedBookingSearchPage OPENED billingId=${widget.initialBillingId}');
+    debugPrint(
+        'TicketedBookingSearchPage OPENED billingId=${widget.initialBillingId}');
     final id = widget.initialBillingId;
     if (id != null && id.isNotEmpty) {
       _controller.text = id;
@@ -88,7 +84,8 @@ class _TicketedBookingSearchViewState
     return Scaffold(
       appBar: AppBar(
         centerTitle: false,
-        title: Text("ticketed_payment_title".tr(), style: context.textTheme.titleLarge),
+        title: Text("ticketed_payment_title".tr(),
+            style: context.textTheme.titleLarge),
       ),
       body: Column(
         children: [
@@ -228,8 +225,8 @@ class _TicketedBookingSearchViewState
                 color: ProjectTheme.error.withAlpha(20),
                 shape: BoxShape.circle,
               ),
-              child:
-                  Icon(Icons.error_outline, size: 48, color: ProjectTheme.error),
+              child: Icon(Icons.error_outline,
+                  size: 48, color: ProjectTheme.error),
             ),
             const SizedBox(height: 16),
             Text(
@@ -240,7 +237,10 @@ class _TicketedBookingSearchViewState
             const SizedBox(height: 20),
             SizedBox(
               width: 180,
-              child: MainButtonWidget(title: "retry_search".tr(), onTap: _search),
+              child: MainButtonWidget(
+                  title: "retry_search".tr(),
+                  analyticsId: 'ticketed_search_retry',
+                  onTap: _search),
             ),
           ],
         ),
@@ -261,19 +261,16 @@ class _TicketResultCard extends StatefulWidget {
 class _TicketResultCardState extends State<_TicketResultCard> {
   bool _isLoading = false;
 
+  /// Yuklab ochadi; ochilmasa brauzerda ochish taklif qilinadi (№30).
   Future<void> _downloadAndOpen(String url, String fileName) async {
+    setState(() => _isLoading = true);
     try {
-      setState(() => _isLoading = true);
-      final appDir = await getApplicationSupportDirectory();
-      final targetDir = Directory(p.join(appDir.path, 'mysafar'));
-      if (!await targetDir.exists()) await targetDir.create(recursive: true);
-      final filePath = p.join(targetDir.path, "$fileName.pdf");
-      await Dio().download(url, filePath);
-      await OpenFilex.open(filePath);
-    } catch (_) {
-      if (mounted) {
-        showErrorMessage("file_open_error".tr(), context: context);
-      }
+      await TicketPdfActions.downloadAndOpen(
+        context,
+        url: url,
+        fileName: fileName,
+        forceDownload: true,
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -284,7 +281,9 @@ class _TicketResultCardState extends State<_TicketResultCard> {
     final responseData = widget.ticket.response?.data;
     if (responseData == null) return const SizedBox.shrink();
 
-    final status = widget.ticket.callbackStatus ?? "";
+    // Normallashtirilgan holat (№87): callback_status bo'sh bo'lsa
+    // order.status.sign; "ticketed"/"CANCELED" kabi yozuvlar kanonik kalitga.
+    final status = widget.ticket.orderStatus;
     final displayStatus = status == 'Booked' &&
             !ElementFormatter.expireStatus(widget.ticket.createdAt ?? "")
         ? 'payment_time_expired'
@@ -312,11 +311,7 @@ class _TicketResultCardState extends State<_TicketResultCard> {
             label: "ticket_tariff_label".tr(),
             value: segments.isNotEmpty
                 ? ElementFormatter.getClassName(
-                    segments[0]
-                            .parametersForEachPassenger?[0]
-                            .flightClass
-                            ?.code ??
-                        "",
+                    _flightClassCode(segments.first),
                     dataLang(),
                   )
                 : "—",
@@ -356,10 +351,24 @@ class _TicketResultCardState extends State<_TicketResultCard> {
     );
   }
 
+  /// Birinchi yo'lovchining klass kodi — bo'sh ro'yxatda "" (RangeError emas).
+  static String _flightClassCode(ConfirmedTicketSegment segment) {
+    final params = segment.parametersForEachPassenger;
+    if (params == null || params.isEmpty) return "";
+    return params.first.flightClass?.code ?? "";
+  }
+
+  /// Birinchi chipta kvitansiyasi — bo'sh ro'yxatda "" (№87).
+  static String _ticketReceiptUrl(ConfirmTicketResponseData data) {
+    final tickets = data.book?.tickets;
+    if (tickets == null || tickets.isEmpty) return "";
+    return tickets.first.documents?.ticketReceipt ?? "";
+  }
+
   Widget _buildHeader(BuildContext context, String status) {
     final statusColor = status == 'Booked'
         ? ProjectTheme.warning
-        : status == 'Ticketed'
+        : OrderStatusClassifier.isPaid(status)
             ? ProjectTheme.success
             : status == 'payment_time_expired'
                 ? ProjectTheme.error
@@ -371,7 +380,9 @@ class _TicketResultCardState extends State<_TicketResultCard> {
             ? 'status_ticketed'.tr()
             : status == 'payment_time_expired'
                 ? 'payment_time_expired'.tr()
-                : status;
+                // Boshqa holatlar ("Paid", "TicketedWaitingPNR" ...) —
+                // buyurtmalar kartasidagi kabi tarjima kaliti.
+                : status.tr(defaultValue: status);
 
     return Row(
       children: [
@@ -446,7 +457,8 @@ class _TicketResultCardState extends State<_TicketResultCard> {
             color: context.color.outline.withAlpha(25),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(icon, size: 18, color: context.color.onSurface.withAlpha(160)),
+          child: Icon(icon,
+              size: 18, color: context.color.onSurface.withAlpha(160)),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -483,8 +495,28 @@ class _TicketResultCardState extends State<_TicketResultCard> {
   ) {
     final trId = widget.ticket.transaction?.trId ?? "";
 
-    switch (status) {
-      case 'Booked':
+    // Toifalash buyurtmalar ro'yxati bilan bir xil (№58/№59/№87).
+    final String action;
+    final pdfUrl = _ticketReceiptUrl(responseData);
+    if (OrderStatusClassifier.isAwaitingPayment(status)) {
+      action = 'pay';
+    } else if (OrderStatusClassifier.canDownloadTicket(status, pdfUrl)) {
+      action = 'download';
+    } else if (OrderStatusClassifier.isTicketPending(status, pdfUrl)) {
+      return Text(
+        'ticket_being_issued'.tr(),
+        style: context.textTheme.bodyMedium?.copyWith(
+          fontSize: 13.5,
+          fontWeight: FontWeight.w600,
+          color: ProjectTheme.success,
+        ),
+      );
+    } else {
+      action = '';
+    }
+
+    switch (action) {
+      case 'pay':
         final canPay =
             ElementFormatter.expireStatus(widget.ticket.createdAt ?? "");
         if (!canPay) return const SizedBox.shrink();
@@ -501,6 +533,12 @@ class _TicketResultCardState extends State<_TicketResultCard> {
               disabledBackgroundColor: context.color.primary.withAlpha(45),
             ),
             onPressed: () {
+              // Taymer orqada qolgan bo'lishi mumkin — qayta tekshiramiz.
+              if (!ElementFormatter.expireStatus(
+                  widget.ticket.createdAt ?? "")) {
+                setState(() {});
+                return;
+              }
               final price = FlightPrice(
                 uzs: FluffyUzs(
                   amount: ElementFormatter.formatNumberWithSpaces(
@@ -513,9 +551,10 @@ class _TicketResultCardState extends State<_TicketResultCard> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
+                  settings:
+                      const RouteSettings(name: BookingConfirmPage.routeName),
                   builder: (_) => BookingConfirmPage(
-                    passengerNumber:
-                        responseData.book?.passengers?.length ?? 0,
+                    passengerNumber: responseData.book?.passengers?.length ?? 0,
                     bookingCreateModel: BookingCreateModel(
                       billingId:
                           responseData.book?.order?.billingNumber.toString() ??
@@ -554,11 +593,8 @@ class _TicketResultCardState extends State<_TicketResultCard> {
           ),
         );
 
-      case 'Ticketed':
-      case 'Paid':
-        final pdfUrl =
-            responseData.book?.tickets?[0].documents?.ticketReceipt ?? "";
-        return SizedBox(
+      case 'download':
+        final downloadButton = SizedBox(
           width: double.infinity,
           height: 52,
           child: OutlinedButton(
@@ -585,7 +621,8 @@ class _TicketResultCardState extends State<_TicketResultCard> {
                       SizedBox(
                         height: 22,
                         width: 22,
-                        child: Image.asset("packages/mysafar_sdk/assets/img/booking/pfd_icon.png"),
+                        child: Image.asset(
+                            "packages/mysafar_sdk/assets/img/booking/pfd_icon.png"),
                       ),
                       const SizedBox(width: 8),
                       Text(
@@ -598,6 +635,39 @@ class _TicketResultCardState extends State<_TicketResultCard> {
                     ],
                   ),
           ),
+        );
+        if (pdfUrl.isEmpty) return downloadButton;
+        // Tizim "Ulashish" oynasi (№30); iPad'da popover tugma ustidan chiqadi.
+        return Row(
+          children: [
+            Expanded(child: downloadButton),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 52,
+              height: 52,
+              child: Builder(
+                builder: (buttonContext) => OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    side: BorderSide(color: context.color.primary),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: () => TicketPdfActions.share(
+                    context,
+                    url: pdfUrl,
+                    fileName: widget.ticket.billingId ?? "",
+                    originContext: buttonContext,
+                  ),
+                  child: Tooltip(
+                    message: 'share_ticket'.tr(),
+                    child: Icon(Icons.ios_share_rounded,
+                        size: 22, color: context.color.primary),
+                  ),
+                ),
+              ),
+            ),
+          ],
         );
 
       default:

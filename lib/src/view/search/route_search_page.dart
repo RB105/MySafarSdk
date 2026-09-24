@@ -15,9 +15,12 @@ import 'package:mysafar_sdk/src/generated/assets.dart' show Assets;
 import 'package:mysafar_sdk/src/core/styles/theme.dart' show ProjectTheme;
 import 'package:mysafar_sdk/src/core/tools/currency_provider.dart'
     show CurrencyProvider;
-import 'package:mysafar_sdk/src/core/tools/formatters.dart' show ElementFormatter;
-import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart' show ProjectDialogs;
-import 'package:mysafar_sdk/src/core/tools/project_utils.dart' show ProjectUtils;
+import 'package:mysafar_sdk/src/core/tools/formatters.dart'
+    show ElementFormatter;
+import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart'
+    show ProjectDialogs;
+import 'package:mysafar_sdk/src/core/tools/project_utils.dart'
+    show ProjectUtils;
 import 'package:mysafar_sdk/src/core/tools/sdk_sheets.dart';
 import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/cubit/search/route_search_cubit.dart'
@@ -41,7 +44,12 @@ import 'package:provider/provider.dart' show Consumer, Provider;
 import 'package:shimmer/shimmer.dart' show Shimmer;
 import 'package:syncfusion_flutter_datepicker/datepicker.dart'
     show PickerDateRange;
+import 'dart:async' show Completer;
 import 'dart:math' as math;
+import 'package:mysafar_sdk/src/model/local/recom_req_model.dart'
+    show RecommendationRequestBody;
+import 'package:mysafar_sdk/src/cubit/main/datePicker/date_picker_cubit.dart'
+    show MonthPriceParams;
 
 part 'route_search_header.dart';
 part 'route_search_multiway.dart';
@@ -58,8 +66,10 @@ part 'route_search_best_offers.dart';
 ///  • "Eng yaxshi takliflar" — eng arzon kunga topilgan aniq reyslar
 ///    (gorizontal kartalar; bosilganda o'sha sana bo'yicha natijalar).
 ///
-/// Bosh sahifadan kelganda ([autoPromptDatePassengers]): avval kalendar,
-/// keyin yo'lovchilar ochiladi — qidiruv faqat "Bilet izlash" da.
+/// Bosh sahifadan kelganda ([autoPromptDatePassengers]): kalendar avtomatik
+/// ochiladi; uning tugmasi "Bilet izlash" — sana tasdiqlanishi bilan qidiruv
+/// boshlanadi (№24). Yo'lovchilar va klass oxirgi qidiruvdan olinadi va
+/// kalendar pastida xulosa sifatida ko'rinadi (bosib o'zgartirish mumkin).
 class RouteSearchPage extends StatelessWidget {
   final AirPortsModel from;
   final AirPortsModel to;
@@ -68,9 +78,13 @@ class RouteSearchPage extends StatelessWidget {
   final DateTime? initialDate;
   final DateTime? initialEndDate;
 
-  /// Bosh sahifadan yo'nalish tanlangach: sana → yo'lovchi ketma-ket ochiladi.
-  /// "Bilet izlash" bosilmaguncha qidiruv boshlanmaydi.
+  /// Bosh sahifadan yo'nalish tanlangach: kalendar avtomatik ochiladi va
+  /// sana tasdiqlanishi bilan qidiruv boshlanadi.
   final bool autoPromptDatePassengers;
+
+  /// Yo'lovchilar soni va klass shu qidiruvdan olinadi. Berilmasa — oxirgi
+  /// saqlangan qidiruvdan (RecentSearchCache).
+  final RecommendationRequestBody? lastSearch;
 
   const RouteSearchPage({
     super.key,
@@ -79,7 +93,17 @@ class RouteSearchPage extends StatelessWidget {
     this.initialDate,
     this.initialEndDate,
     this.autoPromptDatePassengers = false,
+    this.lastSearch,
   });
+
+  static RecommendationRequestBody? _latestSearch() {
+    try {
+      final list = RecentSearchCache().read();
+      return list.isEmpty ? null : list.first;
+    } catch (_) {
+      return null;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -92,6 +116,7 @@ class RouteSearchPage extends StatelessWidget {
           to: to,
           aviaService: AviaService(),
           fornexRepository: FornexRepository(),
+          lastSearch: lastSearch ?? _latestSearch(),
         );
         if (initialDate != null) {
           cubit.setDates(initialDate!, initialEndDate);
@@ -190,36 +215,44 @@ class _RouteSearchViewState extends State<_RouteSearchView>
     _cubit.swap();
   }
 
-  /// Sana → yo'lovchi yo'riqli oqim. Qidiruv faqat "Bilet izlash" da.
-  /// Istalgan bosqich bekor qilinsa oqim to'xtaydi (sahifa ochiq qolaveradi).
+  /// Bosh sahifadan kelganda kalendar avtomatik ochiladi (№24): tugmasi
+  /// "Bilet izlash", pastida yo'lovchilar/klass xulosasi (bosib o'zgartirish
+  /// mumkin). Sana tasdiqlansa qidiruv shu zahoti boshlanadi — alohida
+  /// "Bilet izlash" bosish shart emas. Kalendar yopilsa — sahifada qolinadi.
   Future<void> _runDatePassengerFlow() async {
-    // Sahifa ochilish (push) animatsiyasi tugashini kutamiz.
-    await Future.delayed(const Duration(milliseconds: 400));
+    // Sahifa ochilish (push) animatsiyasi tugashini kutamiz — qat'iy
+    // kechikish o'rniga aynan animatsiya oxirigacha.
+    await _routeAnimationDone();
     if (!mounted || _cubit.state.date != null) return;
-    final datePicked = await _pickDate();
-    if (!mounted || !datePicked) return;
-    await Future.delayed(const Duration(milliseconds: 300));
-    if (!mounted) return;
-    await _pickPassengers();
-    // Valyuta avval tanlanmagan bo'lsa — bir marta so'raymiz (keyin eslab
-    // qoladi; pill orqali istalgan payt o'zgartiriladi).
-    if (!mounted) return;
-    await Future.delayed(const Duration(milliseconds: 300));
-    if (!mounted) return;
-    _maybePromptCurrency();
+    final bool picked = await _pickDate(forSearch: true);
+    if (!mounted || !picked) return;
+    _search();
   }
 
-  /// Valyuta AVVAL tanlanmagan bo'lsa (birinchi marta) bottom-sheet ochib
-  /// so'raydi; tanlangach global [CurrencyProvider]ga saqlanadi va keyingi
-  /// qidiruvlarda qayta so'ralmaydi.
-  void _maybePromptCurrency() {
-    final provider = Provider.of<CurrencyProvider>(context, listen: false);
-    if (provider.hasSelected) return;
-    ProjectDialogs.showCurrencyMenu(context);
+  /// Joriy route'ning kirish animatsiyasi tugashini kutadi (allaqachon
+  /// tugagan yoki animatsiyasiz bo'lsa — darhol).
+  Future<void> _routeAnimationDone() {
+    final animation = ModalRoute.of(context)?.animation;
+    if (animation == null || animation.isCompleted) return Future.value();
+    final completer = Completer<void>();
+    void listener(AnimationStatus status) {
+      if (status == AnimationStatus.completed ||
+          status == AnimationStatus.dismissed) {
+        animation.removeStatusListener(listener);
+        if (!completer.isCompleted) completer.complete();
+      }
+    }
+
+    animation.addStatusListener(listener);
+    return completer.future;
   }
 
   /// Sana tanlash (kalendar). Muvaffaqiyatli tanlansa `true`.
-  Future<bool> _pickDate() async {
+  ///
+  /// [forSearch] — tasdiqlashdan keyin qidiruv boshlanadigan oqim: tugma
+  /// "Bilet izlash" deb yoziladi va yo'lovchilar xulosasi ko'rsatiladi.
+  /// Oddiy sana tahririda (maydon bosilganda) — "Bajarildi", qidiruv yo'q.
+  Future<bool> _pickDate({bool forSearch = false}) async {
     final s = _cubit.state;
     final r = await ProjectDialogs.showCalendartPicker(
       context,
@@ -227,6 +260,16 @@ class _RouteSearchViewState extends State<_RouteSearchView>
       s.date != null ? PickerDateRange(s.date, s.endDate) : null,
       s.from,
       s.to,
+      // Cubit bilan bir xil parametrlar — narxlar keshdan olinadi (№39).
+      priceParams: _cubit.priceParams,
+      confirmLabel: forSearch ? "home_search_ticket".tr() : null,
+      passengerSummary: forSearch ? _paxSummaryText(s) : null,
+      onPassengerSummaryTap: forSearch
+          ? () async {
+              await _pickPassengers();
+              return mounted ? _paxSummaryText(_cubit.state) : null;
+            }
+          : null,
     );
     if (!mounted || r == null || r.startDate == null) return false;
     if (r.endDate != null) {
@@ -255,7 +298,9 @@ class _RouteSearchViewState extends State<_RouteSearchView>
   Future<void> _pickLegCity(int index, int directionType) async {
     final r = await ProjectDialogs.showCitySearchPicker(context, directionType);
     if (!mounted || r == null) return;
-    directionType == 0 ? _cubit.setLegFrom(index, r) : _cubit.setLegTo(index, r);
+    directionType == 0
+        ? _cubit.setLegFrom(index, r)
+        : _cubit.setLegTo(index, r);
   }
 
   Future<void> _pickLegDate(int index) async {
@@ -330,10 +375,13 @@ class _RouteSearchViewState extends State<_RouteSearchView>
     // klass va filtrlar bilan qidirilgan (RouteSearchCubit._loadBestOffers;
     // ular o'zgarsa takliflar qayta yuklanadi) — reys id/narxi bron
     // parametrlariga mos.
+    // №85: forma holati (tanlangan sana / qaytish sanasi) O'ZGARTIRILMAYDI —
+    // taklif sanasi faqat shu so'rov parametrlariga beriladi. Ilgari
+    // `pickDay` qaytish sanasini o'chirib, keyingi qidiruv boshqa kunga va
+    // bir tomonga ketardi.
     final day = _cubit.state.offersDate ?? _cubit.state.date;
     final safeDay = day ?? DateTime.now();
-    _cubit.pickDay(safeDay);
-    ProjectUtils.setRecommendationParams(_cubit.buildRequest());
+    ProjectUtils.setRecommendationParams(_cubit.buildRequest(day: safeDay));
 
     TicketInfoPage.show(context, flight);
   }
@@ -349,7 +397,15 @@ class _RouteSearchViewState extends State<_RouteSearchView>
     // Sana tanlanmagan — toast o'rniga sana tanlash oynasi ochiladi;
     // tanlansa qidiruv shu zahoti davom etadi.
     if (!state.hasDate) {
-      final bool picked = await _pickDate();
+      // Tez ikki bosishda ikkita kalendar ochilmasin (№83).
+      if (_pickingDateForSearch) return;
+      _pickingDateForSearch = true;
+      final bool picked;
+      try {
+        picked = await _pickDate(forSearch: true);
+      } finally {
+        _pickingDateForSearch = false;
+      }
       if (!mounted || !picked) return;
       return _search();
     }
@@ -357,6 +413,7 @@ class _RouteSearchViewState extends State<_RouteSearchView>
       showToastTr("same_airport_warning", type: AppMessageType.warning);
       return;
     }
+    if (_resultsOpen) return;
     HapticFeedback.mediumImpact();
     // `ticket_searched` eventi endi TicketCubit'da — so'rov servicega
     // ketayotgan paytda yuboriladi (bu yerda takrorlanmaydi).
@@ -364,11 +421,31 @@ class _RouteSearchViewState extends State<_RouteSearchView>
     ProjectUtils.setRecommendationParams(params);
     // Home oqimi shu sahifadan qidiradi — tarix shu yerda saqlanadi.
     RecentSearchCache().add(params);
-    Navigator.pushNamed(
-      context,
-      RecommendationsTicketPage.routeName,
-      arguments: params,
-    );
+    _openResults(params);
+  }
+
+  /// Natijalar sahifasi ochiq (yoki ochilayotgan) — ikkinchi bosish ikkinchi
+  /// sahifani ochmasin (№83).
+  bool _resultsOpen = false;
+  bool _pickingDateForSearch = false;
+
+  /// Natijalar sahifasini BIR marta ochadi. Asosiy qidiruv boshlanganda fon
+  /// "Eng yaxshi takliflar" qidiruvlari to'xtatiladi (№79) va sahifaga
+  /// qaytilganda (kerak bo'lsa) qayta yuklanadi.
+  Future<void> _openResults(RecommendationRequestBody params) async {
+    if (_resultsOpen) return;
+    _resultsOpen = true;
+    _cubit.pauseBackgroundSearches();
+    try {
+      await Navigator.pushNamed(
+        context,
+        RecommendationsTicketPage.routeName,
+        arguments: params,
+      );
+    } finally {
+      _resultsOpen = false;
+      if (mounted) _cubit.resumeBackgroundSearches();
+    }
   }
 
   void _searchMulti() {
@@ -378,14 +455,11 @@ class _RouteSearchViewState extends State<_RouteSearchView>
       return;
     }
     HapticFeedback.mediumImpact();
+    if (_resultsOpen) return;
     final params = _cubit.buildMultiRequest();
     ProjectUtils.setRecommendationParams(params);
     RecentSearchCache().add(params);
-    Navigator.pushNamed(
-      context,
-      RecommendationsTicketPage.routeName,
-      arguments: params,
-    );
+    _openResults(params);
   }
 
   // ── UI ────────────────────────────────────────────────────────────────
@@ -405,10 +479,24 @@ class _RouteSearchViewState extends State<_RouteSearchView>
   String _paxFieldText(RouteSearchState s) =>
       "passengers_count".tr(namedArgs: {"count": "${s.passengerCount}"});
 
+  /// Kalendar pastidagi xulosa — "1 yo'lovchi, Ekonom".
+  String _paxSummaryText(RouteSearchState s) => "passengers_details".tr(
+        namedArgs: {
+          "count": "${s.passengerCount}",
+          "klass": s.klassLabelKey.tr().trim(),
+        },
+      );
+
+  /// Tepadagi panel balandligi: 44 dp orqaga tugmasi va 40 dp tanlagich.
+  static const double _appBarHeight = 52;
+
   /// Light: ko'k hero (MySafar). Dark: qora fon + dark karta (MySafar dark).
   Widget _hero(BuildContext context, RouteSearchState state) {
+    // `extendBodyBehindAppBar` — body'dagi padding.top status bar VA app bar
+    // balandligini allaqachon o'z ichiga oladi (ilgari app bar balandligi
+    // ikki marta qo'shilib, tepada katta bo'sh joy qolardi).
     final double topInset = MediaQuery.of(context).padding.top;
-    const double appBarH = 36;
+    const double appBarH = 0;
     final bool enableMulti = MySafarSdk.config.enableMultiSearch;
     final bool multiMode = enableMulti && state.multiMode;
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
@@ -416,10 +504,7 @@ class _RouteSearchViewState extends State<_RouteSearchView>
     final Widget body = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (enableMulti) ...[
-          _RouteModeTabBar(controller: _tabController),
-          const SizedBox(height: 12),
-        ],
+        const SizedBox(height: 12),
         AnimatedSize(
           duration: const Duration(milliseconds: 320),
           curve: Curves.easeOutCubic,
@@ -528,11 +613,28 @@ class _RouteSearchViewState extends State<_RouteSearchView>
       ],
     );
 
+    // Chapga / o'ngga surish "Bir tomonlama" va "Multi marshrut" ni
+    // almashtiradi (tab bosish bilan bir xil).
+    final Widget swipeable = enableMulti
+        ? GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onHorizontalDragEnd: (details) {
+              final double v = details.primaryVelocity ?? 0;
+              if (v.abs() < 250) return;
+              final int target = v < 0 ? 1 : 0;
+              if (_tabController.index != target) {
+                _tabController.index = target;
+              }
+            },
+            child: body,
+          )
+        : body;
+
     if (isDark) {
       // MySafar dark: ko'k shell yo'q — qora sahifa ustida dark karta.
       return Padding(
         padding: EdgeInsets.fromLTRB(16, topInset + appBarH, 16, 8),
-        child: body,
+        child: swipeable,
       );
     }
 
@@ -544,22 +646,20 @@ class _RouteSearchViewState extends State<_RouteSearchView>
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
       ),
       padding: EdgeInsets.fromLTRB(16, topInset + appBarH, 16, 16),
-      child: body,
+      child: swipeable,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color pageBg =
-        isDark ? ProjectTheme.backgroundDark : _Web.pageBg;
+    final Color pageBg = isDark ? ProjectTheme.backgroundDark : _Web.pageBg;
     final Color appBarFill =
         isDark ? ProjectTheme.backgroundDark : ProjectTheme.brandColor;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        statusBarIconBrightness:
-            isDark ? Brightness.light : Brightness.light,
+        statusBarIconBrightness: isDark ? Brightness.light : Brightness.light,
         statusBarBrightness: Brightness.dark,
       ),
       child: Scaffold(
@@ -569,19 +669,37 @@ class _RouteSearchViewState extends State<_RouteSearchView>
           backgroundColor: Colors.transparent,
           elevation: 0,
           scrolledUnderElevation: 0,
-          toolbarHeight: 36,
+          toolbarHeight: _appBarHeight,
+          centerTitle: false,
           systemOverlayStyle: SystemUiOverlayStyle.light,
           titleSpacing: 0,
-          leadingWidth: 52,
+          // Rejim tanlagich orqaga tugmasi bilan bir qatorda — tepada bo'sh
+          // joy qolmaydi va scroll paytida doim ko'rinadi.
+          title: MySafarSdk.config.enableMultiSearch
+              ? Padding(
+                  padding: const EdgeInsets.only(left: 4, right: 16),
+                  child: _RouteModeTabBar(controller: _tabController),
+                )
+              : null,
+          // 7 + 44: ko'rinadigan 34 dp doira avvalgidek chetdan 12 dp.
+          leadingWidth: 51,
           leading: Padding(
-            padding: const EdgeInsets.only(left: 12),
+            padding: const EdgeInsets.only(left: 7),
             child:
                 _HeroBackButton(onTap: () => Navigator.of(context).maybePop()),
           ),
+          // Tepada shaffof; sahifa surilganda avvalgi fon (light — brend
+          // ko'k, dark — qora), pastki burchaklari yumaloq. Chegara yo'q.
           flexibleSpace: ValueListenableBuilder<double>(
             valueListenable: _headerColorT,
-            builder: (_, t, __) => ColoredBox(
-              color: Color.lerp(Colors.transparent, appBarFill, t)!,
+            builder: (_, t, __) => AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              decoration: BoxDecoration(
+                color: t > 0 ? appBarFill : appBarFill.withAlpha(0),
+                borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(16),
+                ),
+              ),
             ),
           ),
         ),
@@ -600,31 +718,31 @@ class _RouteSearchViewState extends State<_RouteSearchView>
                     duration: const Duration(milliseconds: 320),
                     curve: Curves.easeOutCubic,
                     alignment: Alignment.topCenter,
-                    child: (MySafarSdk.config.enableMultiSearch &&
-                            state.multiMode)
-                        ? const SizedBox(width: double.infinity)
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Padding(
-                                padding:
-                                    const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                                child: _PriceChartCard(
-                                  prices: state.monthPrices,
-                                  loading: state.monthLoading,
-                                  onTap: _openPriceChart,
-                                ),
+                    child:
+                        (MySafarSdk.config.enableMultiSearch && state.multiMode)
+                            ? const SizedBox(width: double.infinity)
+                            : Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Padding(
+                                    padding:
+                                        const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                                    child: _PriceChartCard(
+                                      prices: state.monthPrices,
+                                      loading: state.monthLoading,
+                                      onTap: _openPriceChart,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  _BestOffersSection(
+                                    offers: state.offers,
+                                    loading: state.offersLoading,
+                                    date: state.offersDate,
+                                    onTap: _openOffer,
+                                  ),
+                                  const SizedBox(height: 8),
+                                ],
                               ),
-                              const SizedBox(height: 16),
-                              _BestOffersSection(
-                                offers: state.offers,
-                                loading: state.offersLoading,
-                                date: state.offersDate,
-                                onTap: _openOffer,
-                              ),
-                              const SizedBox(height: 8),
-                            ],
-                          ),
                   ),
                 ],
               ),

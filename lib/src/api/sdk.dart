@@ -1,3 +1,5 @@
+import 'package:mysafar_sdk/src/cubit/booking/passenger/passenger_draft_store.dart'
+    show PassengerDraftStore;
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:appmetrica_plugin/appmetrica_plugin.dart';
 import 'package:flutter/foundation.dart'
@@ -36,6 +38,10 @@ import 'package:mysafar_sdk/src/service/deep_link_gateway.dart'
     show DeepLinkGateway;
 import 'package:mysafar_sdk/src/service/payment/card_token_encoder.dart'
     show CardTokenEncoder;
+import 'package:mysafar_sdk/src/service/avia/recent_search_cache.dart'
+    show RecentSearchCache;
+import 'package:mysafar_sdk/src/service/passenger/passenger_storage_service.dart'
+    show PassengerStorageService;
 
 /// SDK'ning markaziy kirish nuqtasi. Host app `runApp`dan oldin [init]ni
 /// chaqiradi; SDK ichidagi kod config/token/analytics'ga shu holder orqali
@@ -82,6 +88,7 @@ class MySafarSdk {
   /// jim tashlab yuboriladi.
   static void updateUserData(MySafarUserData userData) {
     _userData = userData.sanitized();
+    _userDataUnbound = true;
     _warnIfCardTokenCallbackMissing();
     if (kDebugMode) {
       final dropped = userData.uzsCards.length +
@@ -108,14 +115,64 @@ class MySafarSdk {
     }
   }
 
-  /// Host user chiqib ketganda karta/email ma'lumotlarini xotiradan o'chiradi.
-  static void clearUserData() => _userData = const MySafarUserData();
+  /// [updateUserData] bilan berilgan, lekin hali hech bir telefon
+  /// ([ensureRegistered]) bilan bog'lanmagan ma'lumot. Telefon almashganda
+  /// shu `false` bo'lsa — [_userData] oldingi foydalanuvchiniki (host yangi
+  /// user uchun [updateUserData] chaqirmagan) va o'chiriladi.
+  static bool _userDataUnbound = false;
 
-  /// SDK'ni ishga tayyorlaydi. `runApp`dan oldin chaqirilishi shart.
+  /// Host user chiqib ketganda karta/email ma'lumotlarini, bron formasi
+  /// qoralamasini va SDK'dagi barcha foydalanuvchiga tegishli keshlarni
+  /// (saqlangan yo'lovchilar, avtoto'ldirish, so'nggi qidiruvlar, profil,
+  /// biletlar, SDK sessiyasi) o'chiradi.
+  static void clearUserData() {
+    _userData = const MySafarUserData();
+    _userDataUnbound = false;
+    PassengerDraftStore.clear();
+    // init'dan oldin storage ochilmagan — tozalanadigan disk ma'lumoti yo'q.
+    if (isInitialized) clearUserScopedData().ignore();
+  }
+
+  /// №62: foydalanuvchiga tegishli BARCHA SDK ma'lumotini o'chiradigan
+  /// yagona joy — telefon almashganda ([ensureRegistered]), SDK ichidagi
+  /// "Chiqish" / "Hisobni o'chirish" va host [clearUserData] shu orqali.
   ///
-  /// Firebase'ga bog'liq funksiyalar (Firestore remote config, Google auth)
-  /// host app `Firebase.initializeApp`ni o'zi bajargan bo'lsagina ishlaydi.
-  /// SDK ekranlari faqat vertical (portrait) da ishlaydi.
+  /// Tozalanadi: tokenlar ([clearTokens] bo'lsa), bron qoralamasi, saqlangan
+  /// yo'lovchilar (`cached_users`), avtoto'ldirish ro'yxatlari, so'nggi
+  /// qidiruvlar (reys + shaharlar), profil/biletlar keshi, web-register
+  /// telefoni/emaili, analytics profil ID. Til va tema saqlanadi. Host
+  /// bergan [userData] bu yerda o'chirilmaydi (u host'niki).
+  static Future<void> clearUserScopedData({bool clearTokens = true}) async {
+    PassengerDraftStore.clear();
+    if (!isInitialized) return;
+    Future<void> guard(Future<void> Function() step) async {
+      try {
+        await step();
+      } catch (e) {
+        debugPrint('MySafarSdk.clearUserScopedData: $e');
+      }
+    }
+
+    if (clearTokens) await guard(tokens.clear);
+    final store = sdkStorage();
+    await guard(() => PassengerStorageService.clearUserScoped(store));
+    for (final key in const [
+      _kRegisteredPhoneKey,
+      _kRegisteredEmailKey,
+      'recent_from_airports',
+      'recent_to_airports',
+    ]) {
+      await guard(() => store.remove(key));
+    }
+    await guard(ProfileCache().clear);
+    await guard(TicketsCache().clear);
+    await guard(RecentSearchCache().clear);
+    await guard(AnalyticsService().clearUser);
+  }
+
+  /// SDK ekranlari faqat vertical (portrait) da ishlaydi. Faqat SDK ekranda
+  /// turganda qo'llanadi (`MySafarEmbed` / `MySafarApp`) — [init] host'ning
+  /// yo'nalishiga tegmaydi (№93).
   static Future<void> lockPortrait() => SystemChrome.setPreferredOrientations(
         const [
           DeviceOrientation.portraitUp,
@@ -123,9 +180,13 @@ class MySafarSdk {
         ],
       );
 
-  /// Embed yopilganda host app orientation'larini qayta ochadi.
+  /// Embed yopilganda host'ning o'z yo'nalish siyosatiga qaytaradi:
+  /// [MySafarConfig.hostOrientations] berilgan bo'lsa o'sha, aks holda bo'sh
+  /// ro'yxat — ya'ni host'ning Info.plist / AndroidManifest'dagi default'i.
+  /// Ilgari barcha yo'nalishlar yoqilardi va faqat-portret host buzilardi.
   static Future<void> restoreOrientations() =>
-      SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+      SystemChrome.setPreferredOrientations(
+          _config?.hostOrientations ?? const <DeviceOrientation>[]);
 
   static Future<void> init({
     required MySafarConfig config,
@@ -135,7 +196,8 @@ class MySafarSdk {
     MySafarUserData? userData,
   }) async {
     WidgetsFlutterBinding.ensureInitialized();
-    await lockPortrait();
+    // №93: bu yerda yo'nalish qulflanmaydi — butun host portretga
+    // o'tib qolardi. Portret faqat SDK ekranda turganda (embed/app).
 
     if (userData != null) updateUserData(userData);
 
@@ -172,6 +234,9 @@ class MySafarSdk {
       GetStorage.init(kMySafarStorageContainer),
       HiveService.init(),
     ]);
+    // №62: eski build'lar diskka yozgan pasport/tug'ilgan kun
+    // avtoto'ldirish ro'yxatlari o'chiriladi.
+    await PassengerStorageService.purgeSensitiveSuggestions();
 
     // Storage tayyor bo'lgach til yuklanadi (izolyatsiyalangan — host'ning
     // lokalizatsiyasiga tegilmaydi).
@@ -219,13 +284,54 @@ class MySafarSdk {
   static Future<bool> ensureRegistered(
     String phoneNumber, {
     String? email,
-  }) async {
+  }) {
     // Normalizatsiya: "+998 90 123-45-67" ham, "998901234567" ham bitta
     // raqam — formatlash farqi qayta-registratsiyaga sabab bo'lmasin.
     // Backend ham raqamni +siz (998...) formatda kutadi.
     final phone = phoneNumber.replaceAll(RegExp(r'[^0-9]'), '');
-    if (phone.isEmpty) return false;
+    if (phone.isEmpty) return Future.value(false);
 
+    // №92: bir vaqtda ikki chaqiruv (SDK ikki marta ochildi, token
+    // yangilanishi + embed) bitta webRegister'ni baham ko'radi.
+    final inFlight = _registering;
+    if (inFlight != null && _registeringPhone == phone) {
+      return inFlight.then((ok) async {
+        final hostEmail = email?.trim();
+        if (ok && hostEmail != null && hostEmail.isNotEmpty) {
+          await _ensureHostEmail(hostEmail);
+        }
+        return ok;
+      });
+    }
+    // Boshqa telefon uchun ro'yxatdan o'tish ketayotgan bo'lsa (masalan
+    // sessiya tiklanishi eski raqam bilan) — tugashini kutamiz: ikkita
+    // webRegister parallel ketsa oxirgisi tokenlarni yozib, B foydalanuvchi
+    // A ning sessiyasida qolishi mumkin edi.
+    if (inFlight != null) {
+      return inFlight
+          .catchError((_) => false)
+          .then((_) => ensureRegistered(phoneNumber, email: email));
+    }
+    final future = _ensureRegistered(phone, email: email);
+    _registering = future;
+    _registeringPhone = phone;
+    future.whenComplete(() {
+      if (identical(_registering, future)) {
+        _registering = null;
+        _registeringPhone = null;
+      }
+    }).ignore();
+    return future;
+  }
+
+  static Future<bool>? _registering;
+  static String? _registeringPhone;
+
+  static Future<bool> _ensureRegistered(
+    String phone, {
+    String? email,
+    bool bindUserData = true,
+  }) async {
     final store = sdkStorage();
     final registeredPhone = store.read<String>(_kRegisteredPhoneKey);
     final hostEmail = email?.trim();
@@ -237,12 +343,12 @@ class MySafarSdk {
       registered = true;
     } else {
       if (registeredPhone != null && registeredPhone != phone) {
-        // Boshqa user — oldingi sessiya va PII keshlari qoldirilmaydi.
-        await tokens.clear();
-        await ProfileCache().clear();
-        await TicketsCache().clear();
-        await store.remove(_kRegisteredPhoneKey);
-        await store.remove(_kRegisteredEmailKey);
+        // №62: boshqa user — oldingi sessiya va BARCHA PII keshlari
+        // (yo'lovchilar, avtoto'ldirish, qoralama, qidiruvlar) o'chiriladi.
+        await clearUserScopedData();
+        // Host yangi user uchun updateUserData chaqirmagan bo'lsa, xotiradagi
+        // kartalar/pasport oldingi odamniki — ular ham o'chadi.
+        if (!_userDataUnbound) _userData = const MySafarUserData();
       }
 
       final response = await AuthService().webRegister(phoneNumber: phone);
@@ -255,6 +361,9 @@ class MySafarSdk {
         return false;
       }
     }
+    // Host bergan userData endi shu telefonga tegishli (faqat host o'zi
+    // chaqirganda — jim sessiya tiklashda emas).
+    if (bindUserData) _userDataUnbound = false;
 
     if (registered && hasEmail) {
       await _ensureHostEmail(hostEmail);
@@ -262,6 +371,43 @@ class MySafarSdk {
 
     return registered;
   }
+
+  /// №76: refresh token haqiqatan bekor bo'lganda (tokenlar allaqachon
+  /// tozalangan) — saqlangan host telefoni bilan jim qayta ro'yxatdan
+  /// o'tadi. Telefon yo'q bo'lsa (oddiy login) `false`. Tsikl bo'lmasligi
+  /// uchun 60 soniyada ko'pi bilan bir marta urinadi.
+  static Future<bool> reRegisterAfterSessionLoss() async {
+    final phone = registeredPhone;
+    if (phone == null || phone.isEmpty) return false;
+    final now = DateTime.now();
+    final last = _lastReRegisterAt;
+    if (last != null && now.difference(last) < const Duration(seconds: 60)) {
+      return false;
+    }
+    // Host hozir boshqa foydalanuvchini ro'yxatdan o'tkazayotgan bo'lsa —
+    // eski raqam bilan tiklamaymiz (sessiyalar aralashmasin).
+    if (_registering != null) return false;
+    _lastReRegisterAt = now;
+    final future = _ensureRegistered(
+      phone,
+      email: registeredEmail,
+      bindUserData: false,
+    );
+    _registering = future;
+    _registeringPhone = phone;
+    try {
+      final ok = await future;
+      // Kutish paytida host boshqa telefonga o'tgan bo'lsa — natija eskirgan.
+      return ok && registeredPhone == phone;
+    } finally {
+      if (identical(_registering, future)) {
+        _registering = null;
+        _registeringPhone = null;
+      }
+    }
+  }
+
+  static DateTime? _lastReRegisterAt;
 
   /// Host emailini profilga yozadi (idempotent). Muvaffaqiyatsizlik
   /// register'ni buzmaydi — faqat log.

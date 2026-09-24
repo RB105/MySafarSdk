@@ -51,7 +51,7 @@ class _MapRouteButton extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      "Marshrutni xaritada ko'rish",
+                      "route_map_title".tr(),
                       style: context.textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w800,
                         color: brand,
@@ -60,7 +60,7 @@ class _MapRouteButton extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      "Parvoz yo'lini animatsiyada kuzating",
+                      "route_map_subtitle".tr(),
                       style: context.textTheme.titleSmall?.copyWith(
                         fontSize: 11.5,
                         color: secondary,

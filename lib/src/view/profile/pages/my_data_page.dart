@@ -139,7 +139,10 @@ class _MyDataPageState extends State<MyDataPage> {
   Future<void> _openAddPassenger(BuildContext context) async {
     final value = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const AddPassengerPage()),
+      MaterialPageRoute(
+        settings: const RouteSettings(name: AddPassengerPage.routeName),
+        builder: (_) => const AddPassengerPage(),
+      ),
     );
     if (value == true) context.read<UsersDataCubit>().fetchFromServer();
   }

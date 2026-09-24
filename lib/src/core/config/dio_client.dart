@@ -172,6 +172,8 @@ class TokenManager {
 
   static Future<bool> _doRefresh() async {
     final refreshToken = MySafarSdk.tokens.refreshToken;
+    // Refresh yo'q (masalan host o'z TokenStore'ida faqat access saqlaydi) —
+    // avvalgidek jim `false`, host tokenlariga tegilmaydi.
     if (refreshToken == null || refreshToken.isEmpty) return false;
 
     await AppConfig.ensureLoaded();
@@ -179,7 +181,7 @@ class TokenManager {
 
     // Bare client with no interceptor, so a 401 here cannot recurse.
     final dio = Dio(_baseOptions()..baseUrl = AppConfig.baseUrl);
-    var refreshed = false;
+    RefreshOutcome outcome;
     try {
       final response = await dio.post(
         EndPoints.api_v1_token_refresh,
@@ -195,19 +197,65 @@ class TokenManager {
       final access = response.data is Map ? response.data['access'] : null;
       if (response.statusCode == 200 && access != null) {
         await MySafarSdk.tokens.saveAccess('$access');
-        refreshed = true;
+        outcome = RefreshOutcome.refreshed;
+      } else {
+        // 2xx, lekin kutilmagan tana — server muammosi, tokenlar qoladi.
+        outcome = RefreshOutcome.networkError;
       }
-    } on DioException {
-      refreshed = false;
+    } on DioException catch (e) {
+      outcome = classifyRefreshFailure(e);
+    } catch (_) {
+      outcome = RefreshOutcome.networkError;
     } finally {
       dio.close();
     }
-    if (!refreshed) {
+
+    switch (outcome) {
+      case RefreshOutcome.refreshed:
+        return true;
+      case RefreshOutcome.networkError:
+        // №76: tarmoq uzilishi / 5xx — sessiya bekor qilinmaydi, tokenlar
+        // saqlanadi; keyingi so'rovda yana urinib ko'riladi.
+        if (kDebugMode) debugPrint('TokenManager: refresh tarmoq xatosi');
+        return false;
+      case RefreshOutcome.invalid:
+        return _onSessionInvalid();
+    }
+  }
+
+  /// №76: refresh token haqiqatan yaroqsiz — tokenlar tozalanadi
+  /// (`isLoggedIn == false`, keyingi so'rovlar 401 → refresh tsikliga
+  /// kirmaydi), host telefoni bo'lsa bir marta jim qayta ro'yxatdan
+  /// o'tiladi. Bo'lmasa host'ga `onAuthRequired`.
+  static Future<bool> _onSessionInvalid() async {
+    try {
+      await MySafarSdk.tokens.clear();
+    } catch (_) {}
+    var restored = false;
+    try {
+      restored = await MySafarSdk.reRegisterAfterSessionLoss();
+    } catch (_) {
+      restored = false;
+    }
+    if (!restored) {
       // Sessiya uzil-kesil tugadi — host o'z login oqimini ko'rsatishi mumkin.
       MySafarSdk.callbacks.onAuthRequired?.call();
     }
-    return refreshed;
+    return restored;
   }
+}
+
+/// Token refresh natijasi.
+enum RefreshOutcome { refreshed, networkError, invalid }
+
+/// Refresh so'rovi xatosini tasniflaydi: server tokenni rad etgan bo'lsa
+/// (400/401/403) — [RefreshOutcome.invalid], aks holda (ulanish, timeout,
+/// 5xx, bekor qilish) — [RefreshOutcome.networkError], tokenlar qoladi.
+@visibleForTesting
+RefreshOutcome classifyRefreshFailure(DioException e) {
+  final code = e.response?.statusCode;
+  if (code == 400 || code == 401 || code == 403) return RefreshOutcome.invalid;
+  return RefreshOutcome.networkError;
 }
 
 class _MainAuthInterceptor extends Interceptor {

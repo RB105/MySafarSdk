@@ -113,7 +113,7 @@ class OFDChequesPage extends StatelessWidget {
                 );
               case OfdChequesEmptyState _:
                 return Center(
-                  child: Text("Sizda chek mavjud emas"),
+                  child: Text("no_cheques".tr()),
                 );
               case OfdChequesSuccesState _:
                 return ListView.separated(
@@ -126,7 +126,8 @@ class OFDChequesPage extends StatelessWidget {
                             children: [
                               Text(
                                   state.cheques[index].createdAt
-                                      .formattedDotDate,
+                                          ?.formattedDotDate ??
+                                      '—',
                                   style: context.textTheme.headlineSmall
                                       ?.copyWith(fontSize: 14.0)),
                               context.szBoxHeight8,

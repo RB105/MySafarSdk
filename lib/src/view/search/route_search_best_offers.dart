@@ -21,6 +21,9 @@ class _BestOffersSection extends StatelessWidget {
 
   static const double _cardHeight = 152;
 
+  /// Karta soyasi kesilmasligi uchun ro'yxatning yuqori/pastki zaxirasi.
+  static const double _shadowSpace = 10;
+
   @override
   Widget build(BuildContext context) {
     if (!loading && offers.isEmpty) return const SizedBox.shrink();
@@ -34,16 +37,21 @@ class _BestOffersSection extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: _WebSectionTitle("best_offers_title".tr()),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 12 - _shadowSpace),
         SizedBox(
-          height: _cardHeight,
+          height: _cardHeight + _shadowSpace * 2,
           child: loading
-              ? _OffersShimmer(cardWidth: cardWidth)
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(vertical: _shadowSpace),
+                  child: _OffersShimmer(cardWidth: cardWidth),
+                )
               : ListView.separated(
                   scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  clipBehavior: Clip.none,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: _shadowSpace),
                   itemCount: offers.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 10),
+                  separatorBuilder: (_, __) => const SizedBox(width: 12),
                   itemBuilder: (context, i) => SizedBox(
                     width: cardWidth,
                     child: _OfferCard(
@@ -55,7 +63,7 @@ class _BestOffersSection extends StatelessWidget {
                   ),
                 ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 16 - _shadowSpace),
       ],
     );
   }
@@ -105,31 +113,39 @@ class _OfferCard extends StatelessWidget {
     final arr = segs.last.arr;
     final int transfers = flight.getTransferCount(0);
 
-    return Material(
-      color: isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: cheapest
-              ? _Web.switchOn
-              : (isDark ? ProjectTheme.borderDark : const Color(0xFFE7EDF6)),
-          width: cheapest ? 1.5 : 1,
-        ),
+    // Bosh sahifa kartalari uslubida: chegara o'rniga yumshoq soya; eng
+    // arzon taklif yashil chegara bilan ajralib turadi.
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: context.shadowDown,
       ),
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _badgeRow(context, isDark, dep),
-              const SizedBox(height: 10),
-              _timesRow(context, isDark, dep, arr, transfers),
-              const Spacer(),
-              _footer(context, isDark, currency),
-            ],
+      child: Material(
+        color:
+            isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: cheapest
+              ? const BorderSide(color: _Web.switchOn, width: 1.5)
+              : (isDark
+                  ? BorderSide(color: ProjectTheme.borderDark)
+                  : BorderSide.none),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _badgeRow(context, isDark, dep),
+                const SizedBox(height: 10),
+                _timesRow(context, isDark, dep, arr, transfers),
+                const Spacer(),
+                _footer(context, isDark, currency),
+              ],
+            ),
           ),
         ),
       ),

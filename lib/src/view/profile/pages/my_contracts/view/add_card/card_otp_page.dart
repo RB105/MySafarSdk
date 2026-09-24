@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
 import 'package:mysafar_sdk/src/core/widgets/sdk_dialog.dart';
+import 'package:mysafar_sdk/src/service/profile/profile_cache.dart'
+    show ProfileCache;
 import 'package:mysafar_sdk/src/view/profile/pages/my_contracts/view/add_card/add_card_service.dart';
 import 'package:pinput/pinput.dart';
 
@@ -35,7 +37,11 @@ class _CardOtpPageState extends State<CardOtpPage> {
   final ValueNotifier<int> _seconds = ValueNotifier(120);
   Timer? _timer;
   bool _verifying = false;
+  bool _resending = false;
   String? _errorText;
+
+  /// №75: qayta yuborilgach server yangi OTP id beradi — tekshiruv shu bilan.
+  late String _otpId = widget.otpId;
 
   @override
   void initState() {
@@ -68,6 +74,49 @@ class _CardOtpPageState extends State<CardOtpPage> {
     });
   }
 
+  /// №75: "Kodni qayta yuborish" haqiqatan yangi SMS so'raydi
+  /// (ilgari faqat taymer qayta boshlanardi).
+  Future<void> _resend() async {
+    if (_resending) return;
+    final phone =
+        ProfileCache().read()?['phone_number']?.toString().trim() ?? '';
+    final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) {
+      setState(() => _errorText = "phone_required".tr());
+      return;
+    }
+    setState(() {
+      _resending = true;
+      _errorText = null;
+    });
+    final response = await _service.sendCardOtp(
+      cardNumber: widget.cardNumber,
+      expire: widget.expiry,
+      cardType: widget.cardType,
+      phone: '+$digits',
+    );
+    if (!mounted) return;
+    String? newId;
+    if (response is NetworkSuccessResponse && response.data is Map) {
+      final data = response.data as Map;
+      final result = data['result'];
+      newId = (result is Map ? result['id'] : null)?.toString() ??
+          data['id']?.toString();
+    }
+    setState(() {
+      _resending = false;
+      if (newId != null) {
+        _otpId = newId;
+        _otpController.clear();
+        _startTimer();
+      } else {
+        _errorText = response is NetworkErrorResponse
+            ? response.getError()
+            : "error_other".tr();
+      }
+    });
+  }
+
   String get _maskedCard {
     if (widget.cardNumber.length < 4) return widget.cardNumber;
     return "•••• ${widget.cardNumber.substring(widget.cardNumber.length - 4)}";
@@ -80,7 +129,7 @@ class _CardOtpPageState extends State<CardOtpPage> {
     });
 
     final response = await _service.verifyCardOtp(
-      id: widget.otpId,
+      id: _otpId,
       code: code,
       cardType: widget.cardType,
     );
@@ -365,10 +414,7 @@ class _CardOtpPageState extends State<CardOtpPage> {
                     );
                   }
                   return TextButton.icon(
-                    onPressed: () {
-                      _otpController.clear();
-                      _startTimer();
-                    },
+                    onPressed: _resending ? null : _resend,
                     icon: Icon(Icons.refresh_rounded, color: brand),
                     label: Text(
                       "resend_code".tr(),

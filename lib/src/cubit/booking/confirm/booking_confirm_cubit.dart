@@ -33,7 +33,9 @@ class BookingConfirmCubit extends Cubit<BookingConfirmStates>
   /// Butun tekshiruv uchun umumiy chegara.
   static const Duration paymentCheckDeadline = Duration(seconds: 90);
 
-  bool _checkingPayment = false;
+  /// Har [checkPaymentStatus] chaqiruvi oshiradi — eskirgan tekshiruv
+  /// natijasi chiqarilmaydi.
+  int _checkGeneration = 0;
 
   Future<void> confirmBooking({
     required Map<String, dynamic> params,
@@ -72,7 +74,7 @@ class BookingConfirmCubit extends Cubit<BookingConfirmStates>
         emit(BookingConfirmErrorState(response.getError()));
       }
     } catch (e) {
-      debugPrint('MySafarSdk: card-info xatosi ($e)');
+      debugPrint('MySafarSdk: card-info xatosi (${e.runtimeType})');
       if (isClosed) return;
       emit(BookingConfirmErrorState('error_other'.tr()));
     }
@@ -114,7 +116,7 @@ class BookingConfirmCubit extends Cubit<BookingConfirmStates>
       final NetworkResponse response = await withNetworkCancel(
         () => bookingService.getTicketStatus(billingId: billingId),
       );
-      if (isClosed || _checkingPayment) return;
+      if (isClosed || _checkGeneration > 0) return;
       if (response is NetworkSuccessResponse && response.data is Map) {
         final data = Map<String, dynamic>.from(response.data as Map);
         final status = BookingPaymentStatus.fromTicketData(data);
@@ -134,15 +136,29 @@ class BookingConfirmCubit extends Cubit<BookingConfirmStates>
   /// ([paymentCheckDelays] bo'yicha, jami ~60 s). Natija: to'langan /
   /// to'lanmagan / hali aniq emas holatlaridan biri.
   Future<void> checkPaymentStatus({required String billingId}) async {
-    if (_checkingPayment || billingId.isEmpty) return;
-    _checkingPayment = true;
+    if (billingId.isEmpty) return;
+    // Yangi tekshiruv (masalan boshqa usul bilan qayta to'lab yopilgan) eskisini
+    // bekor qiladi — "allaqachon tekshirilmoqda" deb jim qaytib, sahifani
+    // yuklanishda qoldirmaydi.
+    final generation = ++_checkGeneration;
+    bool stale() => isClosed || generation != _checkGeneration;
     emit(const BookingConfirmPaymentCheckingState());
     try {
       final result = await pollPaymentStatus(
         fetch: () => _fetchPaymentStatus(billingId),
-        isCancelled: () => isClosed,
+        isCancelled: stale,
+        onFirstStatus: (status) {
+          if (stale()) return;
+          // To'lov jarayonda bo'lsa (pending) kutamiz; to'lanmagan yoki javob
+          // yo'q bo'lsa — sahifa ochiladi, tekshiruv fonda davom etadi.
+          if (status == null ||
+              status.state == BookingPaymentState.unpaid ||
+              status.state == BookingPaymentState.failed) {
+            emit(const BookingConfirmPaymentBackgroundCheckState());
+          }
+        },
       );
-      if (isClosed) return;
+      if (stale()) return;
       switch (result.state) {
         case BookingPaymentState.paid:
           emit(BookingConfirmPaidState(result.status!));
@@ -154,10 +170,8 @@ class BookingConfirmCubit extends Cubit<BookingConfirmStates>
       }
     } catch (e) {
       debugPrint('MySafarSdk: to\'lov holatini tekshirishda xato ($e)');
-      if (isClosed) return;
+      if (stale()) return;
       emit(const BookingConfirmPaymentPendingState(null));
-    } finally {
-      _checkingPayment = false;
     }
   }
 
@@ -189,13 +203,21 @@ class BookingConfirmCubit extends Cubit<BookingConfirmStates>
     List<Duration> delays = paymentCheckDelays,
     Duration deadline = paymentCheckDeadline,
     bool Function()? isCancelled,
+    void Function(BookingPaymentStatus? status)? onFirstStatus,
   }) async {
     final watch = Stopwatch()..start();
     BookingPaymentStatus? last;
+    var first = true;
     for (final delay in delays) {
       if (delay > Duration.zero) await Future<void>.delayed(delay);
       if (isCancelled?.call() == true || watch.elapsed > deadline) break;
       final status = await fetch();
+      if (first) {
+        first = false;
+        if (status?.state != BookingPaymentState.paid) {
+          onFirstStatus?.call(status);
+        }
+      }
       if (status == null) continue;
       last = status;
       if (status.state == BookingPaymentState.paid) {

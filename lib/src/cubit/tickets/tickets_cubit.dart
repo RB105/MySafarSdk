@@ -3,10 +3,12 @@ import 'package:mysafar_sdk/src/core/config/network_request_scope.dart'
 import 'package:mysafar_sdk/src/core/config/response_config.dart';
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:mysafar_sdk/src/core/tools/project_utils.dart';
+import 'package:mysafar_sdk/src/cubit/tickets/flight_results_utils.dart';
 import 'package:mysafar_sdk/src/model/centrum/get_centrum_recommendation_model.dart';
 import 'package:mysafar_sdk/src/model/local/recom_req_model.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_model.dart';
 import 'package:mysafar_sdk/src/service/avia_service.dart';
+import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart';
 import 'package:mysafar_sdk/src/service/config/remote_config_service.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
@@ -50,6 +52,10 @@ class TicketCubit extends Bloc<TicketEvent, TicketsState> with NetworkCancel {
     final int generation = ++_requestGeneration;
 
     emit(TicketLoadingState());
+    // Sahifa ichidagi qayta qidiruvlar ham hisoblanadi (router bilan 3 s
+    // ichidagi dublikat analitika tomonida tashlanadi).
+    AnalyticsService()
+        .trackTicketSearchedFor(event.requestBody, source: 'results_page');
 
     await withNetworkCancel(() async {
       await _runRecommendations(event, emit, generation);
@@ -207,6 +213,14 @@ class TicketCubit extends Bloc<TicketEvent, TicketsState> with NetworkCancel {
 
     if (isStale()) return;
 
+    if (anyShown) {
+      final body = event.requestBody;
+      AnalyticsService().trackSearchResults(
+        count: accumulated?.recommedations?.flights.length ?? 0,
+        passengers: body.adt + body.chd + body.inf,
+      );
+    }
+
     // Hech qaysi manba reys bermadi — endi (faqat shu holatda) xato yoki bo'sh
     // holatni ko'rsatamiz (tartib: [resolveNoResultsOutcome]).
     if (!anyShown) {
@@ -217,13 +231,21 @@ class TicketCubit extends Bloc<TicketEvent, TicketsState> with NetworkCancel {
         hasUnexpectedError: unexpectedError != null,
       )) {
         case TicketNoResultsOutcome.empty:
+          AnalyticsService().trackSearchResults(count: 0);
           emit(const TicketEmptyState());
         case TicketNoResultsOutcome.error:
           // Vaqtinchalik xato bo'lsa o'shani ko'rsatamiz — dialog sarlavhasi
           // ("Ulanishda muammo" / "Server xatosi") aynan shunga mos.
           final error = lastTransientError ?? lastError!;
+          AnalyticsService().trackSearchFailed(
+            errorType: error.errorType?.name,
+            passengers: event.requestBody.adt +
+                event.requestBody.chd +
+                event.requestBody.inf,
+          );
           emit(TicketErrorState(error.getError(), errorType: error.errorType));
         case TicketNoResultsOutcome.unexpectedError:
+          AnalyticsService().trackSearchFailed(errorType: 'unexpected');
           emit(TicketErrorState("error_other".tr()));
       }
     }
@@ -272,7 +294,7 @@ class TicketCubit extends Bloc<TicketEvent, TicketsState> with NetworkCancel {
   }
 
   /// Ikki manba natijasini birlashtiradi: `base` reyslari ustiga `extra`
-  /// reyslarini qo'shadi (id bo'yicha takrorlanmaslik bilan). Eski emit'langan
+  /// reyslarini qo'shadi (id va bir xil taklif bo'yicha takrorlanmaslik bilan). Eski emit'langan
   /// modelni o'zgartirmaslik va Equatable yangi holatni sezishi uchun har doim
   /// YANGI obyekt qaytaradi.
   GetRecommendationResModel _mergeRecommendations(
@@ -284,13 +306,11 @@ class TicketCubit extends Bloc<TicketEvent, TicketsState> with NetworkCancel {
     if (baseRec == null) return extra;
     if (extraRec == null) return base;
 
-    final combinedFlights = <FlightElement>[...baseRec.flights];
-    final seenIds = combinedFlights.map((f) => f.id).toSet();
-    for (final flight in extraRec.flights) {
-      if (seenIds.add(flight.id)) {
-        combinedFlights.add(flight);
-      }
-    }
+    // id bo'yicha, hamda turli manbalardan kelgan AYNAN bir xil taklif
+    // (reyslar, vaqtlar, tarif shartlari) bo'yicha takrorlar olib tashlanadi —
+    // faqat eng arzoni qoladi ([FlightResultsUtils.mergeDedupe]).
+    final combinedFlights =
+        FlightResultsUtils.mergeDedupe(baseRec.flights, extraRec.flights);
 
     final combinedAirlines = <FilterAirLineItemsModel>[
       ...?base.filterAirLineItems,

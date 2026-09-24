@@ -20,11 +20,17 @@ import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart';
 import 'package:mysafar_sdk/src/core/tools/project_utils.dart';
 import 'package:mysafar_sdk/src/core/tools/sdk_sheets.dart';
+import 'package:mysafar_sdk/src/model/remote/avia/ticket_tariff_model.dart'
+    show FlightTariffModel;
+import 'package:mysafar_sdk/src/core/widgets/ticket_tariffs_widget.dart'
+    show TariffPickerWidget;
+import 'package:mysafar_sdk/src/cubit/booking/create/booking_gate.dart'
+    show BookingGate, FlightValidation;
 import 'package:mysafar_sdk/src/cubit/tickets/tariff/ticket_tariff_cubit.dart';
 import 'package:mysafar_sdk/src/model/local/recom_req_model.dart'
     show RecommendationRequestBody;
 import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_model.dart'
-    show FlightElement, FlightSegment, Upgrade;
+    show FlightElement, FlightPrice, FlightSegment, Upgrade;
 import 'package:flutter_svg/flutter_svg.dart' show SvgPicture;
 import 'package:flutter/material.dart';
 import 'package:mysafar_sdk/src/view/booking/passenger_information_page.dart';
@@ -73,9 +79,26 @@ class _TicketInfoPageState extends State<TicketInfoPage> {
   bool _checkStarted = false;
   bool _checkErrorDialogOpen = false;
 
+  // Reysni qayta tekshirish (GDS) fonda ketadi — "Bron qilish" tugmasi
+  // shu paytda ham bosiladi va yo'lovchi sahifasi DARHOL ochiladi (№36):
+  // tugallanmagan tekshiruv ([FlightValidation]) sahifaga beriladi, bron
+  // yaratishdan oldin kutiladi (id/token va narx tekshirilgan elementdan).
+  // Tekshiruv sheet ochiq turganda xato bersa — tugma o'chadi (dialog).
+  FlightValidation? _validation;
+
+  /// Oxirgi boshlangan tekshiruv raqami — eskirgan tekshiruv (masalan tarif
+  /// almashgandan keyin kelgan asl reys natijasi) holatni o'zgartirmaydi.
+  int _checkSeq = 0;
+
+  /// Foydalanuvchi ko'rgan (va qabul qilgan) narx: kartadagi yoki tarif
+  /// oynasida tanlangan tarif narxi. Tekshiruv natijasi shu bilan
+  /// solishtiriladi (№60) — allaqachon yangilangan narx bilan emas.
+  FlightPrice? _acceptedPrice;
+
   @override
   void initState() {
     flightElement = widget.flightElement;
+    _acceptedPrice = widget.flightElement.price;
     super.initState();
   }
 
@@ -89,28 +112,98 @@ class _TicketInfoPageState extends State<TicketInfoPage> {
   }
 
   Future<void> _checkFlight(String lang) async {
+    final seq = ++_checkSeq;
     final id = flightElement.id;
     if (id.isEmpty) {
+      _validation = null;
       if (mounted) setState(() => _checking = false);
       return;
     }
 
-    final response = await _aviaService.getFlightInfo(id, lang: lang);
-    if (!mounted) return;
+    // So'rov sheet yopilsa ham davom etadi — natijasini yo'lovchi sahifasi
+    // kutadi. Qayta urinish ham xuddi shu tilda.
+    final request = _aviaService.getFlightInfo(id, lang: lang);
+    _validation = FlightValidation.fromResponse(
+      id,
+      request,
+      fetch: (tid) => AviaService().getFlightInfo(tid, lang: lang),
+    );
+
+    final response = await request;
+    // Tekshiruv paytida boshqa tarif tanlangan bo'lsa — u o'z tekshiruvini
+    // boshlagan; bu (eskirgan) natija tanlovni almashtirmaydi.
+    if (!mounted || seq != _checkSeq) return;
 
     NetworkErrorResponse? error;
+    FlightElement? validated;
     setState(() {
       _checking = false;
       if (response is NetworkSuccessResponse) {
         _checkError = null;
-        flightElement = response.data as FlightElement;
+        validated = response.data as FlightElement;
+        flightElement = validated!;
       } else if (response is NetworkErrorResponse) {
         _checkError = response.getError();
         error = response;
       }
     });
 
-    if (error != null) await _showCheckErrorDialog(error!, lang);
+    if (error != null) {
+      await _showCheckErrorDialog(error!, lang);
+    } else if (validated != null) {
+      await _confirmPriceChange(validated!);
+    }
+  }
+
+  /// Tekshiruv boshqa narx qaytarsa — "narx o'zgardi: eski → yangi" oynasi
+  /// (№60). Ilgari faqat tugmadagi narx jimgina o'zgarardi. Rad etilsa sheet
+  /// yopiladi (natijalarga qaytiladi).
+  Future<void> _confirmPriceChange(FlightElement validated) async {
+    final change = BookingGate.priceChange(
+        _acceptedPrice, validated.price, context.currencyProvider.currency);
+    if (change == null) return;
+    final confirmed = await ProjectDialogs.showPriceIncreasedConfirm(
+      context,
+      oldPrice: change.oldPrice,
+      newPrice: change.newPrice,
+      currencyLabel: change.currencyLabel,
+    );
+    if (!mounted) return;
+    if (confirmed) {
+      // Faqat hali shu element tanlangan bo'lsa (oyna ochiqligida tarif
+      // almashmagan).
+      if (identical(flightElement, validated)) _acceptedPrice = validated.price;
+    } else {
+      Navigator.of(context).maybePop();
+    }
+  }
+
+  /// Tarif oynasidan boshqa tarif tanlandi (№61): tanlangan tarif ko'rsatiladi
+  /// va DARHOL qayta tekshiriladi — bron token'i va narxi shu tarifniki
+  /// bo'ladi (ilgari tekshiruvsiz bron qilinardi). Taqqoslash asosi —
+  /// tarif oynasida ko'rilgan narx.
+  void _selectTariff(FlightElement tariff) {
+    setState(() {
+      flightElement = tariff;
+      _acceptedPrice = tariff.price;
+      _checking = true;
+      _checkError = null;
+    });
+    unawaited(_checkFlight(dataLang()));
+  }
+
+  /// Tarif oynasi qaytargan tarif hozirgisi bilan bir xilmi (id yoki
+  /// barqaror kalit bo'yicha) — bir xil bo'lsa tekshirilgan element qoladi.
+  bool _isCurrentTariff(FlightElement tariff, List<FlightTariffModel> tariffs) {
+    if (identical(tariff, flightElement) || tariff.id == flightElement.id) {
+      return true;
+    }
+    // Barqaror kalit faqat ro'yxatda AYNAN bitta mos tarif bo'lsa ishonchli —
+    // bir xil kalitli ikki tarif bo'lsa foydalanuvchi tanlovi e'tiborsiz
+    // qolmasin (tanlangani qayta tekshiriladi).
+    final index = TariffPickerWidget.indexOfCurrent(
+        tariffs, flightElement.id, flightElement);
+    return index >= 0 && identical(tariffs[index].flight, tariff);
   }
 
   Future<void> _showCheckErrorDialog(
@@ -133,7 +226,44 @@ class _TicketInfoPageState extends State<TicketInfoPage> {
     }
   }
 
-  bool get _canBook => !_checking && _checkError == null;
+  /// Tekshiruv davom etayotganda ham bosish mumkin (natija yo'lovchi
+  /// sahifasida kutiladi); faqat tekshiruv xato bergan bo'lsa o'chiq.
+  bool get _canBook => _checking || _checkError == null;
+
+  /// "Bron qilish" bosildi — yo'lovchi sahifasi darhol ochiladi. Tekshiruv
+  /// hali tugamagan bo'lsa, u sahifaga beriladi va bron yaratishdan oldin
+  /// kutiladi (xato — dialog + natijalarga qaytish; narx o'zgardi — eski →
+  /// yangi narx bilan tasdiq).
+  void _onBookTap(RecommendationRequestBody params) {
+    HapticFeedback.lightImpact();
+    // Tekshiruv doim joriy (tanlangan tarif) elementniki — tarif tanlanganda
+    // qayta boshlanadi ([_selectTariff]), shuning uchun `keeping` kerak emas.
+    final FlightValidation? pending = _checking ? _validation : null;
+    _openPassengerPage(params, pending);
+  }
+
+  void _openPassengerPage(
+      RecommendationRequestBody params, FlightValidation? pending) {
+    // Sheet ochiq qolsa uning ListenableBuilder eski parent context bilan
+    // rebuild bo'lishi mumkin — avval sheetni yopib, keyin yo'lovchi
+    // sahifasini push qilamiz.
+    final navigator = Navigator.of(context);
+    final element = flightElement;
+    final adt = params.adt;
+    final chd = params.chd;
+    final inf = params.inf;
+    navigator.pop();
+    navigator.push(MaterialPageRoute(
+      settings: RouteSettings(name: PassengerInformationPage.routeName),
+      builder: (_) => PassengerInformationPage(
+        adt: adt,
+        chd: chd,
+        inf: inf,
+        element: element,
+        pendingValidation: pending,
+      ),
+    ));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -197,12 +327,15 @@ class _TicketInfoPageState extends State<TicketInfoPage> {
                                             context,
                                             state.tariffs,
                                             flightElement.id,
+                                            current: flightElement,
                                           );
-                                          if (result != null) {
-                                            setState(() {
-                                              flightElement = result;
-                                            });
+                                          if (result == null ||
+                                              !mounted ||
+                                              _isCurrentTariff(
+                                                  result, state.tariffs)) {
+                                            return;
                                           }
+                                          _selectTariff(result);
                                         },
                                       )
                                     : const SizedBox(
@@ -236,32 +369,13 @@ class _TicketInfoPageState extends State<TicketInfoPage> {
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                     child: _BookButton(
                       enabled: _canBook,
-                      isLoading: _checking,
+                      // Tekshiruv natijasi yo'lovchi sahifasida kutiladi —
+                      // bu yerda spinner kerak emas (№36).
+                      isLoading: false,
                       passengerCount: params.adt + params.chd + params.inf,
                       priceLabel:
                           currencyProvider.getElementPrice(flightElement.price),
-                      onTap: () {
-                        HapticFeedback.lightImpact();
-                        // Sheet ochiq qolsa uning ListenableBuilder eski parent
-                        // context bilan rebuild bo'lishi mumkin — avval sheetni
-                        // yopib, keyin yo'lovchi sahifasini push qilamiz.
-                        final navigator = Navigator.of(context);
-                        final element = flightElement;
-                        final adt = params.adt;
-                        final chd = params.chd;
-                        final inf = params.inf;
-                        navigator.pop();
-                        navigator.push(MaterialPageRoute(
-                          settings: RouteSettings(
-                              name: PassengerInformationPage.routeName),
-                          builder: (_) => PassengerInformationPage(
-                            adt: adt,
-                            chd: chd,
-                            inf: inf,
-                            element: element,
-                          ),
-                        ));
-                      },
+                      onTap: () => _onBookTap(params),
                     ),
                   ),
                 ),
@@ -335,6 +449,7 @@ class _TicketInfoPageState extends State<TicketInfoPage> {
     if (outbound.length < 2) return;
     Navigator.of(context).push(
       MaterialPageRoute(
+        settings: const RouteSettings(name: FlightRouteMapTestPage.routeName),
         builder: (_) => FlightRouteMapTestPage(
           outboundCodes: outbound,
           returnCodes: ret.length >= 2 ? ret : null,
@@ -401,7 +516,7 @@ class _TicketSheetTopBar extends StatelessWidget {
               children: [
                 IconButton(
                   onPressed: onClose,
-                  visualDensity: VisualDensity.compact,
+                  tooltip: "close".tr(),
                   icon: const Icon(
                     Icons.close_rounded,
                     color: Colors.white,

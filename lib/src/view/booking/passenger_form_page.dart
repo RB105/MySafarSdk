@@ -3,6 +3,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
@@ -59,6 +60,14 @@ class PassengerFormPage extends StatefulWidget {
   final DateTime? firstFlightDate;
   final DateTime? lastFlightDate;
 
+  /// Boshqa slotlarda tanlangan hujjat raqamlari — saqlangan yo'lovchilar
+  /// ro'yxatida ko'rsatilmaydi.
+  final Set<String> excludedDocnums;
+
+  /// "Davom etish" bosilmay orqaga qaytilganda chala kiritilganlar (qoralama)
+  /// shu orqali qaytariladi — keyingi ochilishda yo'qolmaydi.
+  final ValueChanged<PassengerFormResult>? onDraft;
+
   const PassengerFormPage({
     super.key,
     required this.initial,
@@ -68,6 +77,8 @@ class PassengerFormPage extends StatefulWidget {
     this.initialSaveToProfile = false,
     this.firstFlightDate,
     this.lastFlightDate,
+    this.excludedDocnums = const {},
+    this.onDraft,
   });
 
   @override
@@ -99,22 +110,62 @@ class _PassengerFormPageState extends State<PassengerFormPage> {
 
   late PassengerModel _passenger = widget.initial;
 
+  /// Mehmon (tizimga kirmagan) uchun hech narsa saqlanmaydi
+  /// (`BookingPassengerSaver`) — "Saqlangan yo'lovchilarga qo'shish"
+  /// ko'rsatilmaydi va o'chiq (№91).
+  final bool _canSaveToProfile = MySafarSdk.tokens.isLoggedIn;
+
   /// Yangi yo'lovchi uchun default yoqiq; avval to'ldirilgan (va
   /// foydalanuvchi o'chirgan) bo'lsa — o'sha tanlov saqlanadi.
-  late bool _saveToProfile =
-      widget.initialSaveToProfile || !widget.initial.isValid;
+  late bool _saveToProfile = _canSaveToProfile &&
+      (widget.initialSaveToProfile || !widget.initial.isValid);
   bool _showErrors = false;
 
   // Sahifa ochiq turganda saqlangan ma'lumotlar o'zgarmaydi — bir marta
   // o'qib keshlaymiz (har klaviatura bosilishida storage o'qilmasin).
   late final List<dynamic> _cachedUsers = _storage.getCachedUsers();
+
+  late final Set<String> _excludedDocnums =
+      widget.excludedDocnums.map(_normalizeDocnum).toSet();
+
+  /// Saqlangan yo'lovchi shu slotga mosmi: boshqa slotda tanlanmagan va
+  /// tug'ilgan sanasi slotning yosh toifasiga (katta / bola / chaqaloq) mos.
+  bool _savedUserFits(UsersModel user) {
+    final doc = _normalizeDocnum(user.docnum);
+    if (doc.isNotEmpty && _excludedDocnums.contains(doc)) return false;
+    return PassengerRules.fitsAgeType(
+      user.birthdate,
+      _passenger.age,
+      firstFlight: widget.firstFlightDate,
+      lastFlight: widget.lastFlightDate,
+    );
+  }
+
+  /// Formada to'g'ridan-to'g'ri ko'rsatiladigan saqlangan yo'lovchilar
+  /// (keshdan, slotga mos kelganlari).
+  late final List<UsersModel> _savedUsers = [
+    for (final raw in _cachedUsers)
+      if (raw is Map)
+        if (_tryParseUser(raw) case final UsersModel user
+            when _savedUserFits(user))
+          user,
+  ];
+
+  static UsersModel? _tryParseUser(Map raw) {
+    try {
+      return UsersModel.fromJson(Map<String, dynamic>.from(raw));
+    } catch (_) {
+      return null;
+    }
+  }
+
   final Map<String, List<String>> _suggestionCache = {};
 
   List<String> _suggestions(String key) =>
       _suggestionCache.putIfAbsent(key, () => _storage.getSuggestions(key));
 
   static String _normalizeDocnum(String? raw) =>
-      (raw ?? '').trim().toUpperCase().replaceAll(RegExp(r'\s+'), '');
+      PassengerRules.normalizeDocnum(raw);
 
   /// Hujjat raqami saqlangan yo'lovchilarda allaqachon bor bo'lsa, qo'shish
   /// tugmasi ma'nosiz — ko'rsatilmaydi.
@@ -148,22 +199,30 @@ class _PassengerFormPageState extends State<PassengerFormPage> {
     _controller.docexpController.text = _passenger.docexp;
   }
 
+  /// Matn maydonlari o'z controller'ida yangilanadi — sahifa har harfda
+  /// qayta qurilmaydi. Faqat ekrandagi holatga ta'sir qiladigan o'zgarishda
+  /// (jins, "saqlangan" belgisi) qayta quriladi.
   void _updateField(String field, String value) {
-    setState(() {
-      _passenger = switch (field) {
-        'firstname' =>
-          _passenger.copyWith(firstname: PassengerCubit.sanitizeName(value)),
-        'lastname' =>
-          _passenger.copyWith(lastname: PassengerCubit.sanitizeName(value)),
-        'middlename' =>
-          _passenger.copyWith(middlename: PassengerCubit.sanitizeName(value)),
-        'birthdate' => _passenger.copyWith(birthdate: value),
-        'docnum' => _passenger.copyWith(docnum: value),
-        'docexp' => _passenger.copyWith(docexp: value),
-        'gender' => _passenger.copyWith(gender: value),
-        _ => _passenger,
-      };
-    });
+    final wasSaved = _alreadySaved;
+    _passenger = _withField(field, value);
+    if (field == 'gender' || wasSaved != _alreadySaved) setState(() {});
+  }
+
+  PassengerModel _withField(String field, String value) {
+    return switch (field) {
+      'firstname' =>
+        _passenger.copyWith(firstname: PassengerCubit.sanitizeName(value)),
+      'lastname' =>
+        _passenger.copyWith(lastname: PassengerCubit.sanitizeName(value)),
+      'middlename' =>
+        _passenger.copyWith(middlename: PassengerCubit.sanitizeName(value)),
+      'birthdate' => _passenger.copyWith(birthdate: value),
+      'docnum' =>
+        _passenger.copyWith(docnum: PassengerRules.typingDocnum(value)),
+      'docexp' => _passenger.copyWith(docexp: value),
+      'gender' => _passenger.copyWith(gender: value),
+      _ => _passenger,
+    };
   }
 
   void _applyUser(UsersModel user) {
@@ -212,6 +271,13 @@ class _PassengerFormPageState extends State<PassengerFormPage> {
           ? _controller.docexpController
           : _controller.birthdateController,
       isFutureOnly: isDocexp,
+      // Bola / chaqaloq uchun 1990-yildan emas, yosh toifasiga mos yildan.
+      initialDate: isDocexp
+          ? null
+          : PassengerRules.suggestedBirthdate(
+              _passenger.age,
+              firstFlight: widget.firstFlightDate,
+            ),
       title: isDocexp ? 'passport_validity'.tr() : 'birth_date'.tr(),
       onDateSelected: (date) => _updateField(
         isDocexp ? 'docexp' : 'birthdate',
@@ -221,8 +287,9 @@ class _PassengerFormPageState extends State<PassengerFormPage> {
   }
 
   /// Klaviaturadagi "keyingi": joriy maydondan keyingi bo'sh majburiy maydonga
-  /// o'tadi; fuqarolik bo'sh bo'lsa tanlagich ochiladi, hammasi to'lsa
-  /// klaviatura yopiladi.
+  /// o'tadi, hammasi to'lsa klaviatura yopiladi. Fuqarolik tanlagichi bu
+  /// yerdan o'zi OCHILMAYDI (yozish o'rtasida kutilmaganda ochilib ketardi) —
+  /// faqat maydon bosilganda.
   void _goToNextEmptyField() => _focusNextEmptyField();
 
   /// [after] maydonidan (berilmasa — fokusdagi maydondan) keyingi bo'sh
@@ -246,11 +313,8 @@ class _PassengerFormPageState extends State<PassengerFormPage> {
     for (var i = current + 1; i < order.length; i++) {
       final (field, node) = order[i];
       if (!empty.contains(field)) continue;
-      if (field == 'citizen') {
-        _showCitizenPicker();
-      } else {
-        node.requestFocus();
-      }
+      if (field == 'citizen') continue;
+      node.requestFocus();
       return;
     }
     _dismissKeyboard();
@@ -376,8 +440,17 @@ class _PassengerFormPageState extends State<PassengerFormPage> {
 
   @override
   Widget build(BuildContext context) {
-    return StableKeyboardInsets(
-      child: _buildScaffold(context),
+    return PopScope<PassengerFormResult>(
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop || result != null) return;
+        widget.onDraft?.call(PassengerFormResult(
+          passenger: _passenger,
+          saveToProfile: _saveToProfile && !_alreadySaved,
+        ));
+      },
+      child: StableKeyboardInsets(
+        child: _buildScaffold(context),
+      ),
     );
   }
 
@@ -390,6 +463,7 @@ class _PassengerFormPageState extends State<PassengerFormPage> {
         backgroundColor: Colors.transparent,
         leading: IconButton(
           onPressed: () => Navigator.of(context).maybePop(),
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 19),
         ),
         title: Column(
@@ -412,62 +486,83 @@ class _PassengerFormPageState extends State<PassengerFormPage> {
           ],
         ),
       ),
-      body: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: _dismissKeyboard,
-        child: SingleChildScrollView(
-          controller: _scrollController,
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              PassengerCardWidget(
-                passenger: _passenger,
-                controller: _controller,
-                showErrors: _showErrors,
-                cachedUsers: _cachedUsers,
-                getSuggestions: _suggestions,
-                onFieldChanged: _updateField,
-                onUserSelected: _applyUser,
-                onScanTap: _openDocumentScanner,
-                ruleError: _ruleError,
-                onCitizenTap: _showCitizenPicker,
-                onDocexpCalendarTap: () => _showDatePicker(isDocexp: true),
-                onBirthdateCalendarTap: () => _showDatePicker(isDocexp: false),
-                onNextField: _goToNextEmptyField,
-                docexpFormatter: _docexpFormatter,
-                birthdateFormatter: _birthdateFormatter,
-                citizenKey: _citizenKey,
-                docnumKey: _docnumKey,
-                docexpKey: _docexpKey,
-                firstnameKey: _firstnameKey,
-                lastnameKey: _lastnameKey,
-                middlenameKey: _middlenameKey,
-                birthdateKey: _birthdateKey,
-                genderKey: _genderKey,
-              ),
-              if (!_alreadySaved) ...[
-                const SizedBox(height: 20),
-                _SaveToProfileCard(
-                  value: _saveToProfile,
-                  onChanged: (value) => setState(() => _saveToProfile = value),
+      // "Davom etish" tugmasi body ichida, scroll ostida — klaviatura
+      // ochilganda uning USTIDA turadi (bottomNavigationBar klaviatura ostida
+      // qolib ketardi).
+      body: Column(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _dismissKeyboard,
+              child: SingleChildScrollView(
+                controller: _scrollController,
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    PassengerCardWidget(
+                      passenger: _passenger,
+                      controller: _controller,
+                      showErrors: _showErrors,
+                      cachedUsers: _cachedUsers,
+                      getSuggestions: _suggestions,
+                      onFieldChanged: _updateField,
+                      onUserSelected: _applyUser,
+                      onScanTap: _openDocumentScanner,
+                      ruleError: _ruleError,
+                      savedUsers: _savedUsers,
+                      savedUserFilter: _savedUserFits,
+                      onCitizenTap: _showCitizenPicker,
+                      onDocexpCalendarTap: () =>
+                          _showDatePicker(isDocexp: true),
+                      onBirthdateCalendarTap: () =>
+                          _showDatePicker(isDocexp: false),
+                      onNextField: _goToNextEmptyField,
+                      docexpFormatter: _docexpFormatter,
+                      birthdateFormatter: _birthdateFormatter,
+                      citizenKey: _citizenKey,
+                      docnumKey: _docnumKey,
+                      docexpKey: _docexpKey,
+                      firstnameKey: _firstnameKey,
+                      lastnameKey: _lastnameKey,
+                      middlenameKey: _middlenameKey,
+                      birthdateKey: _birthdateKey,
+                      genderKey: _genderKey,
+                    ),
+                    if (_canSaveToProfile && !_alreadySaved) ...[
+                      const SizedBox(height: 20),
+                      _SaveToProfileCard(
+                        value: _saveToProfile,
+                        onChanged: (value) =>
+                            setState(() => _saveToProfile = value),
+                      ),
+                    ],
+                  ],
                 ),
-              ],
-            ],
+              ),
+            ),
           ),
-        ),
+          Builder(builder: _buildContinueButton),
+        ],
       ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: MainButtonWidget(
-            title: 'continue'.tr(),
-            analyticsId: 'booking_passenger_form_continue',
-            onTap: _submit,
-          ),
-        ),
+    );
+  }
+
+  /// Klaviatura ochiq bo'lsa tugma klaviatura ustida (safe area'siz), yopiq
+  /// bo'lsa pastki safe area ustida turadi.
+  Widget _buildContinueButton(BuildContext context) {
+    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final bottomSafe =
+        keyboardOpen ? 0.0 : MediaQuery.viewPaddingOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 8, 16, 12 + bottomSafe),
+      child: MainButtonWidget(
+        title: 'continue'.tr(),
+        analyticsId: 'booking_passenger_form_continue',
+        onTap: _submit,
       ),
     );
   }

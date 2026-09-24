@@ -1,3 +1,5 @@
+import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
+import 'package:mysafar_sdk/src/api/user_data.dart';
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mysafar_sdk/src/core/tools/phone_format.dart';
@@ -9,6 +11,7 @@ import 'package:mysafar_sdk/src/model/remote/profile/profile_model.dart';
 import 'package:mysafar_sdk/src/model/remote/profile/users_model.dart';
 import 'package:mysafar_sdk/src/service/passenger/passenger_storage_service.dart';
 import 'package:mysafar_sdk/src/service/profile/profile_cache.dart';
+import 'passenger_draft_store.dart';
 import 'passenger_state.dart';
 
 class PassengerCubit extends Cubit<PassengerState> {
@@ -16,8 +19,11 @@ class PassengerCubit extends Cubit<PassengerState> {
   final int adultCount;
   final int childCount;
   final int infantCount;
-  final String trId;
-  final FlightPrice? price;
+
+  /// Bron tokeni va narx — reys fonda qayta tekshirilgach ([updateFlight])
+  /// tasdiqlangan element qiymatlari bilan almashtiriladi (№36).
+  String trId;
+  FlightPrice? price;
 
   /// Birinchi uchish / oxirgi qo'nish — yosh toifasi va pasport muddati
   /// shular bo'yicha tekshiriladi ([PassengerRules]).
@@ -34,9 +40,51 @@ class PassengerCubit extends Cubit<PassengerState> {
     this.lastFlightDate,
     PassengerStorageService? storageService,
   })  : _storageService = storageService ?? PassengerStorageService(),
+        _draftGeneration = PassengerDraftStore.generation,
         super(const PassengerInitial());
 
+  final int _draftGeneration;
+
   int get totalPassengers => adultCount + childCount + infantCount;
+
+  /// Fuqarolik berilmaganda standart qiymat (asosiy auditoriya).
+  static const String defaultCitizen = 'UZ';
+
+  String get _draftKey =>
+      PassengerDraftStore.keyFor(adultCount, childCount, infantCount);
+
+  /// Oxirgi [PassengerLoaded] — sahifa yopilganda qoralama shundan olinadi
+  /// (holat o'sha paytda xato / saqlandi bo'lishi mumkin).
+  PassengerLoaded? _latestLoaded;
+
+  @override
+  void onChange(Change<PassengerState> change) {
+    super.onChange(change);
+    final next = change.nextState;
+    if (next is PassengerLoaded) _latestLoaded = next;
+  }
+
+  @override
+  Future<void> close() {
+    _saveDraft();
+    return super.close();
+  }
+
+  /// Kiritilganlarni faqat xotiradagi qoralamaga yozadi (diskka emas).
+  void _saveDraft() {
+    final loaded = _latestLoaded;
+    if (loaded == null) return;
+    PassengerDraftStore.write(
+      generation: _draftGeneration,
+      _draftKey,
+      PassengerDraft(
+        passengers: loaded.passengers,
+        email: loaded.email,
+        phone: loaded.phone,
+        saveToProfile: loaded.saveToProfile,
+      ),
+    );
+  }
 
   void initialize() {
     final passengers = List.generate(totalPassengers, (index) {
@@ -48,7 +96,9 @@ class PassengerCubit extends Cubit<PassengerState> {
       } else {
         ageType = PassengerConstants.ageInfant;
       }
-      return PassengerModel(age: ageType);
+      // Jins jimgina "Erkak" bo'lib qolmasin — foydalanuvchi o'zi tanlaydi.
+      return PassengerModel(age: ageType, gender: '')
+          .copyWithCitizen(defaultCitizen);
     });
 
     String email = '';
@@ -58,6 +108,20 @@ class PassengerCubit extends Cubit<PassengerState> {
     if (profileData != null) {
       email = profileData.email ?? '';
       phone = normalizePhoneDigits(profileData.phoneNumber ?? '');
+    }
+
+    // Orqaga qaytib kelinganda (yoki boshqa reys tanlanganda) avval
+    // kiritilganlar tiklanadi.
+    final draft = PassengerDraftStore.read(_draftKey);
+    if (draft != null && draft.passengers.length == passengers.length) {
+      if (draft.email.isNotEmpty) email = draft.email;
+      if (draft.phone.isNotEmpty) phone = draft.phone;
+      for (int i = 0; i < passengers.length; i++) {
+        passengers[i] = draft.passengers[i].copyWith(age: passengers[i].age);
+      }
+    } else if (passengers.isNotEmpty &&
+        passengers.first.age == PassengerConstants.ageAdult) {
+      passengers[0] = prefillFromUserData(passengers[0], MySafarSdk.userData);
     }
 
     final updatedPassengers = passengers
@@ -71,8 +135,76 @@ class PassengerCubit extends Cubit<PassengerState> {
       passengers: updatedPassengers,
       email: email,
       phone: phone,
+      saveToProfile:
+          draft != null && draft.passengers.length == passengers.length
+              ? draft.saveToProfile
+              : const {},
     ));
   }
+
+  /// Host bergan xaridor ma'lumotlari ([MySafarUserData]) bilan yo'lovchining
+  /// faqat BO'SH maydonlarini to'ldiradi.
+  static PassengerModel prefillFromUserData(
+      PassengerModel passenger, MySafarUserData data) {
+    String pick(String? value, String current) =>
+        current.isEmpty && (value?.trim().isNotEmpty ?? false)
+            ? value!.trim()
+            : current;
+    String pickName(String? value, String current) =>
+        current.isEmpty ? PassengerRules.normalizeName(value) : current;
+    String date(DateTime? value) => value == null
+        ? ''
+        : '${value.day.toString().padLeft(2, '0')}.'
+            '${value.month.toString().padLeft(2, '0')}.'
+            '${value.year.toString().padLeft(4, '0')}';
+
+    var result = passenger.copyWith(
+      firstname: pickName(data.firstName, passenger.firstname),
+      lastname: pickName(data.lastName, passenger.lastname),
+      middlename: pickName(data.middleName, passenger.middlename),
+      birthdate: pick(date(data.birthDate), passenger.birthdate),
+      docnum: pick(
+        PassengerRules.normalizeDocnum(data.documentNumber),
+        passenger.docnum,
+      ),
+      docexp: pick(date(data.documentExpiry), passenger.docexp),
+      gender: pick(
+        switch (data.gender) {
+          MySafarGender.male => PassengerConstants.genderMale,
+          MySafarGender.female => PassengerConstants.genderFemale,
+          null => null,
+        },
+        passenger.gender,
+      ),
+    );
+    final citizen = data.citizenship?.trim().toUpperCase() ?? '';
+    // Standart "UZ" ni host bergan fuqarolik almashtiradi.
+    if (citizen.length == 2 &&
+        (result.citizen.isEmpty || result.citizen == defaultCitizen)) {
+      result = result.copyWithCitizen(citizen);
+    }
+    return result;
+  }
+
+  /// [index] dan boshqa slotlarda tanlangan hujjat raqamlari — saqlangan
+  /// yo'lovchilar ro'yxatida qayta ko'rsatilmaydi.
+  Set<String> docnumsUsedExcept(int index) {
+    final current = state;
+    final loaded = current is PassengerLoaded ? current : _latestLoaded;
+    if (loaded == null) return const {};
+    return {
+      for (int i = 0; i < loaded.passengers.length; i++)
+        if (i != index && loaded.passengers[i].docnum.trim().isNotEmpty)
+          loaded.passengers[i].docnum.trim().toUpperCase(),
+    };
+  }
+
+  /// Oddiy email formati tekshiruvi: `nom@domen.zona`.
+  static bool isValidEmail(String value) => RegExp(
+        // Yumshoq tekshiruv: faqat aniq xatolar (bo'shliq, @ yo'q, domen nuqtasiz)
+        // ushlanadi — kirill / IDN manzillar (user@почта.рф) rad etilmaydi.
+        r"^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)*\.[^\s@.]{2,}$",
+      ).hasMatch(value.trim());
 
   ProfileModel? _getCachedProfile() {
     final cachedData = ProfileCache().read();
@@ -156,7 +288,8 @@ class PassengerCubit extends Cubit<PassengerState> {
       case 'birthdate':
         return passenger.copyWith(birthdate: value);
       case 'docnum':
-        return passenger.copyWith(docnum: value);
+        return passenger.copyWith(
+            docnum: PassengerRules.typingDocnum(value));
       case 'docexp':
         return passenger.copyWith(docexp: value);
       case 'gender':
@@ -252,6 +385,15 @@ class PassengerCubit extends Cubit<PassengerState> {
         return;
       }
 
+      if (!isValidEmail(currentState.email)) {
+        emit(PassengerValidationError(
+          message: 'srv_invalid_email'.tr(),
+          fieldName: 'email',
+        ));
+        emit(currentState.copyWith(showErrors: true));
+        return;
+      }
+
       if (currentState.phone.isEmpty) {
         emit(PassengerValidationError(
           message: requiredFieldMessage('phone'),
@@ -300,6 +442,22 @@ class PassengerCubit extends Cubit<PassengerState> {
         return;
       }
 
+      // Bola/chaqaloq bilan kamida bitta 18+ hamroh (№71) — aks holda server
+      // bronni `srv_adult_required_for_child` bilan rad etadi.
+      final adultIssue = PassengerRules.accompanyingAdultIssue(
+        currentState.passengers,
+        firstFlight: firstFlightDate,
+      );
+      if (adultIssue != null) {
+        emit(PassengerValidationError(
+          message: 'srv_adult_required_for_child'.tr(),
+          passengerIndex: adultIssue,
+          fieldName: 'birthdate',
+        ));
+        emit(currentState.copyWith(showErrors: true));
+        return;
+      }
+
       emit(const PassengerSaving());
 
       _storageService.savePassengerFields(
@@ -308,7 +466,7 @@ class PassengerCubit extends Cubit<PassengerState> {
       );
 
       // Profilga faqat "Saqlangan yo'lovchilarga qo'shish" yoqilganlar
-      // saqlanadi (bron muvaffaqiyatli bo'lgach BookingCreatePage'da).
+      // saqlanadi (bron muvaffaqiyatli bo'lgach BookingCreateFlow'da).
       final toSave = [
         for (int i = 0; i < currentState.passengers.length; i++)
           if (currentState.saveToProfile.contains(i))
@@ -318,8 +476,17 @@ class PassengerCubit extends Cubit<PassengerState> {
       _lastLoadedState = currentState;
 
       emit(PassengerSaved(
-        passengersJson: currentState.passengers.map((p) => p.toJson()).toList(),
-        passengersToSaveJson: toSave.map((p) => p.toJson()).toList(),
+        // Hujjat raqami butun qiymat bo'yicha normallashtiriladi (№69).
+        passengersJson: currentState.passengers
+            .map((p) => p
+                .copyWith(docnum: PassengerRules.normalizeDocnum(p.docnum))
+                .toJson())
+            .toList(),
+        passengersToSaveJson: toSave
+            .map((p) => p
+                .copyWith(docnum: PassengerRules.normalizeDocnum(p.docnum))
+                .toJson())
+            .toList(),
         trId: trId,
         price: price,
       ));
@@ -327,6 +494,12 @@ class PassengerCubit extends Cubit<PassengerState> {
   }
 
   PassengerLoaded? _lastLoadedState;
+
+  /// Fondagi tekshiruvdan o'tgan reys id'si (bron tokeni) va narxi (№36).
+  void updateFlight({required String trId, required FlightPrice? price}) {
+    this.trId = trId;
+    this.price = price;
+  }
 
   void restoreState() {
     if (_lastLoadedState != null) {

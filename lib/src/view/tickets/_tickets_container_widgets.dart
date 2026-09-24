@@ -34,7 +34,9 @@ class _TixTheme {
   static const _light = _TixTheme(
     card: Colors.white,
     hi: Color(0xFF16244A),
-    mid: Color(0xFF7A849E),
+    // Ikkilamchi matn oq fonda ≥4.5:1 kontrastli bo'lsin (ilgari #7A849E ~3.8:1
+    // edi — mayda yorliqlar xira o'qilardi).
+    mid: Color(0xFF687290),
     line: Color(0xFFE8ECF3),
     tonal: Color(0xFFF1F4F9),
     dark: false,
@@ -171,6 +173,7 @@ class _FigmaTicketCardState extends State<_FigmaTicketCard> {
             onTap: () {
               HapticFeedback.lightImpact();
               AnalyticsService().trackButtonTap('ticket_select');
+              AnalyticsService().trackFlightSelected(source: 'results');
               TicketInfoPage.show(context, f);
             },
             onTapDown: (_) => _setPressed(true),
@@ -670,8 +673,9 @@ class _AirlineCircle extends StatelessWidget {
           cacheManager: AppCacheManager.instance,
           imageUrl: ProjectAssets.getSegmentProviderImg(code),
           fit: BoxFit.contain,
+          // Faqat bitta tomon — ikkalasi berilsa kvadrat bo'lmagan logo
+          // cho'zilib dekodlanadi (№43).
           memCacheWidth: 72,
-          memCacheHeight: 72,
           fadeInDuration: Duration.zero,
           fadeOutDuration: Duration.zero,
           placeholder: (_, __) => const SizedBox(),

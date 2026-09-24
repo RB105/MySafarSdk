@@ -7,6 +7,7 @@ import 'package:flutter/services.dart'
     show HapticFeedback, SystemUiOverlayStyle;
 import 'package:showcaseview/showcaseview.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart';
+import 'package:mysafar_sdk/src/core/router/navigation_service.dart';
 import 'package:mysafar_sdk/src/service/deep_link_gateway.dart';
 import 'package:mysafar_sdk/src/view/destinations/destinations_list_page.dart';
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
@@ -28,6 +29,9 @@ class BottomNavBarPage extends StatefulWidget {
   State<BottomNavBarPage> createState() => _BottomNavBarPageState();
   static const routeName = '/bottom_nav_bar';
 
+  /// "Buyurtmalar" tabi indeksi.
+  static const int ordersTabIndex = 1;
+
   /// Ichki sahifalardan tab almashtirish so'rovi (masalan bosh sahifadagi
   /// "Hammasi" → Yo'nalishlar tabi). `null` — so'rov yo'q.
   static final ValueNotifier<int?> tabRequest = ValueNotifier<int?>(null);
@@ -35,6 +39,23 @@ class BottomNavBarPage extends StatefulWidget {
   /// Hozirgi tab indeksi (0-bosh, 1-buyurtmalar, 2-yo'nalishlar, 3-profil).
   /// Embed back handler Main vs boshqa tabni shu orqali biladi.
   static final ValueNotifier<int> currentTabIndex = ValueNotifier<int>(0);
+
+  /// Tablar uchun screen_view nomlari (№19) — tablar bitta route ichida
+  /// almashgani uchun navigator observer ularni route nomi orqali ko'rmaydi.
+  static const List<String> tabScreenNames = [
+    'tab_home',
+    'tab_orders',
+    'tab_destinations',
+    'tab_profile',
+  ];
+
+  /// Hozir ko'rinib turgan tab ekran nomi (navigator observer alias'i).
+  static String currentScreenName() {
+    final index = currentTabIndex.value;
+    return index >= 0 && index < tabScreenNames.length
+        ? tabScreenNames[index]
+        : routeName;
+  }
 
   /// Berilgan indeksdagi tabga o'tishni so'raydi (0-bosh, 1-buyurtmalar,
   /// 2-yo'nalishlar, 3-profil).
@@ -88,6 +109,11 @@ class _BottomNavBarPageState extends State<BottomNavBarPage> {
       _loaded[index] = true;
     });
     BottomNavBarPage.currentTabIndex.value = index;
+    // screen_view faqat navbar tepada bo'lsa; markScreen takrorni tashlaydi
+    // va joriy ekran nomini (api_error/button_tap uchun) yangilaydi.
+    if (ModalRoute.of(context)?.isCurrent ?? false) {
+      NavigationService.markScreen(BottomNavBarPage.currentScreenName());
+    }
   }
 
   void _onTabRequest() {

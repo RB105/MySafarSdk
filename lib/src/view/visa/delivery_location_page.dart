@@ -168,6 +168,7 @@ class _DeliveryLocationPageState extends State<DeliveryLocationPage> {
 
     Navigator.of(context).push(
       MaterialPageRoute(
+        settings: const RouteSettings(name: '/orderingVisaCard'),
         builder: (context) => OrderingVisaCardPage(deliveryAddress: address),
       ),
     );

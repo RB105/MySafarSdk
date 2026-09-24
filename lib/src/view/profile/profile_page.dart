@@ -248,7 +248,9 @@ class _ProfilePageState extends State<ProfilePage> {
               title: "logout".tr(),
               danger: true,
               showChevron: false,
-              onTap: () => ProjectDialogs.showDeleteAccountDialog(context),
+              // O'z tasdiqlash matni (№90) — "Hisobni o'chirasizmi?" emas;
+              // amal bir xil: sessiya va foydalanuvchi ma'lumotlari tozalanadi.
+              onTap: () => ProjectDialogs.showLogoutDialog(context),
             ),
           ],
         ),
@@ -498,7 +500,7 @@ class _GuestCard extends StatelessWidget {
             child: ElevatedButton(
               onPressed: () {
                 // MainButtonWidget bilan bir xil analytics identifikatori.
-                AnalyticsService().trackButtonTap('enter_login'.tr());
+                AnalyticsService().trackButtonTap('enter_login');
                 onLogin();
               },
               style: ElevatedButton.styleFrom(

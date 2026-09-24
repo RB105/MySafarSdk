@@ -116,6 +116,11 @@ class PassengerModel {
   /// Hujjat skaneri natijasini formaga qo'llaydi: faqat tanilgan (bo'sh
   /// bo'lmagan) maydonlar yoziladi — skaner o'qiy olmagan maydonga
   /// foydalanuvchi kiritgan qiymat o'chib ketmaydi.
+  ///
+  /// Sanalar forma ko'rinishiga (`dd.MM.yyyy`, №68), hujjat raqami
+  /// normallashtiriladi (№69). Hujjat turi skaner bergan turdan emas,
+  /// qo'lda kiritishdagi qoida bilan fuqarolikdan olinadi ([copyWithCitizen],
+  /// №70) — aks holda skanerlangan UZ yo'lovchi P, qo'lda kiritilgan A olardi.
   PassengerModel mergeScan(UsersModel scan) {
     String pick(String? value, String current) =>
         (value != null && value.trim().isNotEmpty) ? value.trim() : current;
@@ -124,43 +129,49 @@ class PassengerModel {
       return name.isNotEmpty ? name : current;
     }
 
-    return copyWith(
+    final merged = copyWith(
       firstname: pickName(scan.firstname, firstname),
       lastname: pickName(scan.lastname, lastname),
       middlename: pickName(scan.middlename, middlename),
-      birthdate: pick(scan.birthdate, birthdate),
-      docexp: pick(scan.docexp, docexp),
-      docnum: pick(
-        (scan.docnum ?? '').toUpperCase().replaceAll(' ', ''),
-        docnum,
-      ),
+      birthdate: pick(PassengerRules.toFormDate(scan.birthdate), birthdate),
+      docexp: pick(PassengerRules.toFormDate(scan.docexp), docexp),
+      docnum: pick(PassengerRules.normalizeDocnum(scan.docnum), docnum),
       gender: pick(scan.gender, gender),
-      citizen: pick(scan.citizen, citizen),
+      citizen: pick(scan.citizen?.toUpperCase(), citizen),
       doctype: pick(scan.doctype, doctype),
     );
+    return merged._withDerivedDoctype();
   }
 
-  /// Saqlangan yo'lovchi yoki skaner natijasini formaga qo'llaydi. Jins,
-  /// fuqarolik va hujjat turi bo'sh kelsa — joriy qiymati saqlanib qoladi.
+  /// Saqlangan yo'lovchi yoki skaner natijasini formaga qo'llaydi. Jins va
+  /// fuqarolik bo'sh kelsa — joriy qiymati saqlanib qoladi. Sanalar serverda
+  /// ISO (`1990-03-12`) — forma `dd.MM.yyyy` kutadi (№68). Hujjat turi
+  /// fuqarolikdan olinadi (№70).
   PassengerModel copyFromUser(UsersModel user) {
     String keep(String? value, String current) =>
         (value != null && value.isNotEmpty) ? value : current;
 
-    return copyWith(
+    final copied = copyWith(
       firstname: _sanitizeName(user.firstname),
       lastname: _sanitizeName(user.lastname),
       middlename: _sanitizeName(user.middlename),
-      birthdate: user.birthdate ?? '',
-      docexp: user.docexp ?? '',
-      docnum: (user.docnum ?? '').toUpperCase().replaceAll(' ', ''),
+      birthdate: PassengerRules.toFormDate(user.birthdate),
+      docexp: PassengerRules.toFormDate(user.docexp),
+      docnum: PassengerRules.normalizeDocnum(user.docnum),
       gender: keep(user.gender, gender),
-      citizen: keep(user.citizen, citizen),
+      citizen: keep(user.citizen?.trim().toUpperCase(), citizen),
       doctype: keep(user.doctype, doctype),
     );
+    return copied._withDerivedDoctype();
   }
 
-  /// Ismni aviachipta ko'rinishiga keltiradi (lotin A–Z, kirill o'giriladi,
-  /// apostrof/raqam/bo'sh joy tashlanadi) — `PassengerCubit.sanitizeName`
+  /// Fuqarolik ma'lum bo'lsa hujjat turi qo'lda tanlashdagi qoida bilan
+  /// ([copyWithCitizen]) belgilanadi.
+  PassengerModel _withDerivedDoctype() =>
+      citizen.isEmpty ? this : copyWithCitizen(citizen);
+
+  /// Ismni aviachipta ko'rinishiga keltiradi (lotin A–Z, apostrof/raqam
+  /// tashlanadi, ichki bo'sh joy bittaga qisqaradi) — `PassengerCubit.sanitizeName`
   /// bilan bir xil qoida.
   static String _sanitizeName(String? value) =>
       PassengerRules.normalizeName(value);

@@ -17,7 +17,7 @@ class AiSearchCubit extends Cubit<AiSearchState> with NetworkCancel {
     final response = await withNetworkCancel(() => _fornexRepository.searchAiChat(prompt: prompt));
     if (isClosed) return;
     if (response is NetworkSuccessResponse) {
-      emit(AiSearchSuccessState(response.data));
+      _emitBody(response.data);
     } else if (response is NetworkErrorResponse) {
       if (response.error is Map && response.error['error'] is Map) {
         final msg = response.error['error']['message'];
@@ -35,9 +35,20 @@ class AiSearchCubit extends Cubit<AiSearchState> with NetworkCancel {
     final response = await withNetworkCancel(() => _fornexRepository.searchAiChatVoice(prompt: prompt));
     if (isClosed) return;
     if (response is NetworkSuccessResponse) {
-      emit(AiSearchSuccessState(response.data));
+      _emitBody(response.data);
     } else if (response is NetworkErrorResponse) {
       emit(AiSearchErrorState(response.getError()));
+    }
+  }
+
+  /// AI javobida sana yo'q yoki o'qib bo'lmasa (№78) natijalar sahifasi
+  /// OCHILMAYDI (ilgari build ichida FormatException bilan qulardi) —
+  /// foydalanuvchidan sanani aytishini so'raymiz.
+  void _emitBody(Object? data) {
+    if (data is RecommendationRequestBody && data.hasValidDates) {
+      emit(AiSearchSuccessState(data));
+    } else {
+      emit(AiSearchErrorState('ai_search_date_missing'.tr()));
     }
   }
 }

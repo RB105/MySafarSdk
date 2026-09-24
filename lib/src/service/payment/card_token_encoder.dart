@@ -63,6 +63,27 @@ class CardTokenEncoder {
     return base64Url.encode(token).replaceAll('=', '');
   }
 
+  /// Imzolangan to'lov URL'iga `key=value` ni XOM satr ustida qo'shadi —
+  /// boshqa parametrlar qayta kodlanmaydi (№64). `Uri.replace` butun query'ni
+  /// qayta yozadi (`|` → `%7C`, `+` → `%20` ...) va shlyuz imzosi buziladi
+  /// (qarang `WebViewCompat.changesWhenParsed`). Faqat yangi qiymat kodlanadi;
+  /// `#fragment` bo'lsa parametr undan oldin qo'yiladi.
+  static String appendQueryParam(String url, String key, String value) {
+    final hashIndex = url.indexOf('#');
+    final base = hashIndex < 0 ? url : url.substring(0, hashIndex);
+    final fragment = hashIndex < 0 ? '' : url.substring(hashIndex);
+    final String separator;
+    if (!base.contains('?')) {
+      separator = '?';
+    } else if (base.endsWith('?') || base.endsWith('&')) {
+      separator = '';
+    } else {
+      separator = '&';
+    }
+    return '$base$separator${Uri.encodeQueryComponent(key)}='
+        '${Uri.encodeQueryComponent(value)}$fragment';
+  }
+
   static Uint8List _parseKey(String keyHex) {
     final hex = keyHex.trim();
     if (!isValidKey(hex)) {

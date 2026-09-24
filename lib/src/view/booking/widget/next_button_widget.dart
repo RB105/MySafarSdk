@@ -22,8 +22,12 @@ class NextButtonWidget extends StatelessWidget {
   /// Funnel analytics uchun barqaror tugma identifikatori.
   /// Berilmasa [nextTittle] (tarjima kaliti) ishlatiladi.
   final String? analyticsId;
+
+  /// Tugma ostidagi ixtiyoriy qator (masalan, oferta shartlari — №22).
+  final Widget? footer;
   const NextButtonWidget(
       {super.key,
+      this.footer,
       this.isLoading,
       required this.nextTittle,
       required this.passenger,
@@ -105,8 +109,10 @@ class NextButtonWidget extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
               ],
-              SizedBox(
-                height: 52,
+              // Qat'iy balandlik emas — katta tizim shriftida matn
+              // sig'maganda tugma o'sadi (№32).
+              ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 52),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(14),
@@ -143,15 +149,16 @@ class NextButtonWidget extends StatelessWidget {
                                 ),
                               )
                             : Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 16),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 8),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Flexible(
                                       child: Text(
                                         nextTittle.tr(),
-                                        maxLines: 1,
+                                        maxLines: 2,
+                                        textAlign: TextAlign.center,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
                                           fontFamily:
@@ -178,6 +185,10 @@ class NextButtonWidget extends StatelessWidget {
                   ),
                 ),
               ),
+              if (footer != null) ...[
+                const SizedBox(height: 8),
+                footer!,
+              ],
             ],
           ),
         ),

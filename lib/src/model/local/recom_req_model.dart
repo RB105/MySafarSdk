@@ -66,26 +66,29 @@ class RecommendationRequestBody {
   });
 
   RecommendationRequestBody.fromJson(Map<String, dynamic> json) {
-    adt = json['adt'];
-    chd = json['chd'];
-    inf = json['inf'];
-    ins = json['ins'];
-    src = json['src'];
-    yth = json['yth'];
-    lang = json['lang'];
-    token = json['token'];
-    klass = json['class_'];
-    segments = json['segments'] != null
-        ? (json['segments'] as List)
-            .map(
-              (e) => RecommendationReqBodySegment.fromJson(e),
-            )
-            .toList()
+    // AI/ovozli qidiruv va tarix javoblari: son o'rniga satr yoki null kelishi
+    // mumkin — ilgari `late final int` ga null/String TypeError tashlardi.
+    adt = _intOr(json['adt'], 1);
+    chd = _intOr(json['chd'], 0);
+    inf = _intOr(json['inf'], 0);
+    ins = _intOrNull(json['ins']);
+    src = _intOrNull(json['src']);
+    yth = _intOrNull(json['yth']);
+    lang = json['lang']?.toString();
+    token = json['token']?.toString();
+    klass = json['class_']?.toString();
+    segments = json['segments'] is List
+        ? [
+            for (final e in json['segments'] as List)
+              if (e is Map)
+                RecommendationReqBodySegment.fromJson(
+                    Map<String, dynamic>.from(e))
+          ]
         : [];
 
-    isBaggage = json['is_baggage'] ?? false;
-    isCharter = json['is_charter'] ?? false;
-    priceOrder = json['price_order'] ?? 0;
+    isBaggage = _flag(json['is_baggage']);
+    isCharter = _flag(json['is_charter']);
+    priceOrder = _intOr(json['price_order'], 0);
     gdsBlackList = json['gds_black_list'] != null
         ? (json['gds_black_list'] as List)
             .map(
@@ -100,7 +103,7 @@ class RecommendationRequestBody {
             )
             .toList()
         : [];
-    isDirectOnly = json['is_direct_only'] ?? 0;
+    isDirectOnly = _flag(json['is_direct_only']) ? 1 : 0;
     filterAirlines = json['filter_airlines'] != null
         ? (json['filter_airlines'] as List)
             .map(
@@ -109,8 +112,81 @@ class RecommendationRequestBody {
             .toList()
         : <RequestBodyAirlineModel>[];
 
-    flight_Type = segments != null && segments!.length > 1 ? 1 : 0;
+    flight_Type = flightTypeOf(segments);
   }
+
+  /// Segmentlardan qidiruv turi: 1 ta — bir tomonga (0); 2 ta va ikkinchisi
+  /// birinchisining teskarisi — borib-kelish (1); qolgan hollar — murakkab
+  /// yo'nalish (2). Ilgari 2+ segmentli AI qidiruv doim "borib-kelish" deb
+  /// ko'rsatilardi (№78).
+  static int flightTypeOf(List<RecommendationReqBodySegment>? segments) {
+    final segs = segments ?? const <RecommendationReqBodySegment>[];
+    if (segs.length <= 1) return 0;
+    if (segs.length == 2) {
+      String code(AirPortsModel? a) =>
+          (a?.cityIataCode ?? '').trim().toUpperCase();
+      final a = segs[0], b = segs[1];
+      if (code(a.from).isNotEmpty &&
+          code(a.from) == code(b.to) &&
+          code(a.to) == code(b.from)) {
+        return 1;
+      }
+    }
+    return 2;
+  }
+
+  /// Barcha segmentlarda o'qiladigan sana bormi. AI/ovozli qidiruv sanasiz
+  /// javob qaytarsa `false` — natijalar sahifasi ochilmasligi kerak.
+  bool get hasValidDates {
+    final segs = segments;
+    if (segs == null || segs.isEmpty) return false;
+    return segs.every((s) => parseSegmentDate(s.date) != null);
+  }
+
+  /// Segment sanasini o'qiydi: `dd.MM.yyyy`, `dd-MM-yyyy` yoki ISO
+  /// `yyyy-MM-dd` (vaqt qismi bilan ham). Bo'sh/yaroqsiz — `null` (istisno
+  /// tashlanmaydi). Ilgari "2026-09-30" DateTime(30, 9, 2026) bo'lardi.
+  static DateTime? parseSegmentDate(String? raw) {
+    var text = (raw ?? '').trim();
+    if (text.isEmpty) return null;
+    final tIndex = text.indexOf(RegExp(r'[T ]'));
+    if (tIndex > 0) text = text.substring(0, tIndex);
+    final parts = text.contains('-') ? text.split('-') : text.split('.');
+    if (parts.length != 3) return null;
+    final yearFirst = parts[0].trim().length == 4;
+    final day = int.tryParse((yearFirst ? parts[2] : parts[0]).trim());
+    final month = int.tryParse(parts[1].trim());
+    final year = int.tryParse((yearFirst ? parts[0] : parts[2]).trim());
+    if (day == null || month == null || year == null) return null;
+    if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1900) {
+      return null;
+    }
+    final date = DateTime(year, month, day);
+    // 31.02 kabi "toshib o'tgan" sanalarni rad etamiz.
+    if (date.month != month || date.day != day) return null;
+    return date;
+  }
+
+  /// Sanani so'rov formatiga (`dd.MM.yyyy`) keltiradi; o'qib bo'lmasa — "".
+  static String normalizeSegmentDate(String? raw) {
+    final d = parseSegmentDate(raw);
+    if (d == null) return '';
+    return '${d.day.toString().padLeft(2, '0')}.'
+        '${d.month.toString().padLeft(2, '0')}.${d.year}';
+  }
+
+  static int? _intOrNull(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is String) return int.tryParse(v.trim());
+    return null;
+  }
+
+  static int _intOr(dynamic v, int fallback) => _intOrNull(v) ?? fallback;
+
+  /// true / 1 / "1" / "true" → true; qolgani false.
+  static bool _flag(dynamic v) =>
+      v == true || v == 1 || v == '1' || v == 'true';
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> data = <String, dynamic>{};
     data['adt'] = adt;
@@ -119,7 +195,9 @@ class RecommendationRequestBody {
     data['ins'] = ins ?? 0;
     data['src'] = src ?? 0;
     data['yth'] = yth ?? 0;
-    data['lang'] = lang ?? "en";
+    // Til berilmasa — SDK faol tili (uz/ru/en ga moslangan, №81). Ilgari
+    // doim "en" ketib, natijalarda shahar nomlari inglizcha chiqardi.
+    data['lang'] = lang ?? dataLang();
     if (token?.isNotEmpty ?? false) {
       data['token'] = token ?? "";
     }
@@ -167,21 +245,17 @@ class RecommendationRequestBody {
   }
 
   String get params {
-    late String date = "";
-    if (flight_Type == 0) {
-      final tmp = _parseDate(segments?[0].date ?? "");
-      date = tmp.dateWithMonthLowerCase;
-    } else if (flight_Type == 1) {
-      final tmp1 = _parseDate(segments?[0].date ?? "");
-      date = tmp1.dateWithMonthLowerCase;
-      final tmp2 = _parseDate(segments?[1].date ?? "");
-      date += " - ${tmp2.dateWithMonthLowerCase}";
-    } else {
-      final tmp1 = _parseDate(segments?[0].date ?? "");
-      date = tmp1.dateWithMonthLowerCase;
-      final tmp2 = _parseDate(segments?.last.date ?? "");
-      date += " - ${tmp2.dateWithMonthLowerCase}";
-    }
+    // Sana bo'sh yoki yaroqsiz bo'lsa — build ichida istisno tashlamaymiz
+    // (ilgari FormatException natijalar sahifasini qulatardi, №78).
+    final segs = segments ?? const <RecommendationReqBodySegment>[];
+    final first = segs.isEmpty ? null : parseSegmentDate(segs.first.date);
+    final DateTime? second = flight_Type == 0 || segs.length < 2
+        ? null
+        : parseSegmentDate(flight_Type == 1 ? segs[1].date : segs.last.date);
+    String date = [
+      if (first != null) first.dateWithMonthLowerCase,
+      if (second != null) second.dateWithMonthLowerCase,
+    ].join(" - ");
 
     String getPassCount() {
       final count = adt + chd + inf;
@@ -201,7 +275,8 @@ class RecommendationRequestBody {
       }
     }
 
-    return "$date, ${getPassCount()}., ${getKlassName()}";
+    final prefix = date.isEmpty ? "" : "$date, ";
+    return "$prefix${getPassCount()}., ${getKlassName()}";
   }
 
   /// Foydalanuvchi filtrda aniq tanlagan aviakompaniya kodlari. Bo'sh
@@ -356,23 +431,6 @@ class RecommendationRequestBody {
     );
   }
 
-  DateTime _parseDate(String dateStr) {
-    List<String> parts = [];
-    if (dateStr.contains('-')) {
-      parts = dateStr.split('-');
-    } else {
-      parts = dateStr.split('.');
-    }
-    if (parts.length != 3) {
-      throw FormatException("Invalid date format. Expected dd.MM.yyyy");
-    }
-
-    final day = int.parse(parts[0]);
-    final month = int.parse(parts[1]);
-    final year = int.parse(parts[2]);
-
-    return DateTime(year, month, day);
-  }
 }
 
 /// this segment is schema used in [RecommendationRequestBody](/Users/rb105/Projects/avia_mobile/lib/model/local/get_recom_req_model.dart#L4)
@@ -384,9 +442,10 @@ class RecommendationReqBodySegment {
   RecommendationReqBodySegment({this.to, this.date, this.from});
 
   RecommendationReqBodySegment.fromJson(Map<String, dynamic> json) {
-    to = AirPortsModel(cityIataCode: json['to'] ?? "");
-    from = AirPortsModel(cityIataCode: json['from'] ?? "");
-    date = json['date'] ?? "";
+    to = AirPortsModel(cityIataCode: "${json['to'] ?? ""}");
+    from = AirPortsModel(cityIataCode: "${json['from'] ?? ""}");
+    // ISO (yyyy-MM-dd) sana ham `dd.MM.yyyy` ga keltiriladi; yaroqsiz — "".
+    date = RecommendationRequestBody.normalizeSegmentDate(json['date']?.toString());
   }
 
   Map<String, dynamic> toJson() {
@@ -409,18 +468,9 @@ class RecommendationReqBodySegment {
     );
   }
 
-  DateTime? get getDateTime {
-    if (date == null) {
-      return null;
-    }
-    final parts = date!.split('.');
-
-    final day = int.parse(parts[0]);
-    final month = int.parse(parts[1]);
-    final year = int.parse(parts[2]);
-
-    return DateTime(year, month, day);
-  }
+  /// Yaroqsiz/bo'sh sana — `null` (istisno yo'q).
+  DateTime? get getDateTime =>
+      RecommendationRequestBody.parseSegmentDate(date);
 
   @override
   String toString() {

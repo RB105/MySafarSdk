@@ -36,14 +36,30 @@ class BookingcreateCubit extends Cubit<BookingcreateStates> with NetworkCancel {
         );
         emit(BookingcreateSuccessState(response.data));
       } else if (response is NetworkErrorResponse) {
-        emit(BookingcreateErrorState(response.getError()));
+        final error = response.getError();
+        AnalyticsService().trackBookingFailed(
+          tid: tid,
+          passengers: passenger.length,
+          error: error,
+        );
+        emit(BookingcreateErrorState(error));
       } else {
+        AnalyticsService().trackBookingFailed(
+          tid: tid,
+          passengers: passenger.length,
+          error: 'unknown_response',
+        );
         emit(BookingcreateErrorState('error_other'.tr()));
       }
     } catch (e) {
       // Kutilmagan xato — yuklanish dialogi qotib qolmasin.
       debugPrint('MySafarSdk: booking-create xatosi ($e)');
       if (isClosed) return;
+      AnalyticsService().trackBookingFailed(
+        tid: tid,
+        passengers: passenger.length,
+        error: e,
+      );
       emit(BookingcreateErrorState('error_other'.tr()));
     }
   }
