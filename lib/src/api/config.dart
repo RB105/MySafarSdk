@@ -1,6 +1,7 @@
 import 'dart:ui' show Locale, Offset;
 
 import 'package:flutter/material.dart' show Color, EdgeInsets, ThemeMode;
+import 'package:flutter/services.dart' show DeviceOrientation;
 
 /// SDK'ning tashqi konfiguratsiyasi. Host app `MySafarSdk.init` orqali beradi —
 /// ilgari native `MySafarChannel` (BuildConfig/xcconfig) dan o'qilgan qiymatlar
@@ -27,7 +28,8 @@ class MySafarConfig {
       this.bottomBarStyle,
       this.homeHeaderStyle,
       this.support,
-      this.cardTokenSecret});
+      this.cardTokenSecret,
+      this.hostOrientations});
 
   /// Asosiy backend (masalan `https://api.mysafar.ru`).
   final String baseUrl;
@@ -121,6 +123,14 @@ class MySafarConfig {
   /// (env.json) dan olinadi.
   final String? cardTokenSecret;
 
+  /// Host ilovaning o'z ekran yo'nalishlari (masalan faqat
+  /// `[DeviceOrientation.portraitUp]`). SDK ochiq ekan portret qulflanadi,
+  /// yopilganda shu ro'yxat qaytariladi. `null` bo'lsa bo'sh ro'yxat —
+  /// platforma default'i (Info.plist / AndroidManifest). Host yo'nalishni
+  /// kodda (`SystemChrome.setPreferredOrientations`) o'rnatgan bo'lsa shu
+  /// maydonni bering.
+  final List<DeviceOrientation>? hostOrientations;
+
   /// Support telefon (UI + `tel:`). Host bermasa default.
   String get supportPhone {
     return partnerSupportPhone ?? MySafarSupportConfig.defaultPhone;
@@ -175,6 +185,7 @@ class MySafarConfig {
     MySafarHomeHeaderStyle? homeHeaderStyle,
     MySafarSupportConfig? support,
     String? cardTokenSecret,
+    List<DeviceOrientation>? hostOrientations,
   }) {
     return MySafarConfig(
       baseUrl: baseUrl ?? this.baseUrl,
@@ -197,6 +208,7 @@ class MySafarConfig {
       homeHeaderStyle: homeHeaderStyle ?? this.homeHeaderStyle,
       support: support ?? this.support,
       cardTokenSecret: cardTokenSecret ?? this.cardTokenSecret,
+      hostOrientations: hostOrientations ?? this.hostOrientations,
     );
   }
 }

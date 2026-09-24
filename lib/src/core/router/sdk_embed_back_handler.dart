@@ -41,16 +41,37 @@ class SdkEmbedBackHandler extends StatelessWidget {
   static bool handleSystemBack() {
     final nav = NavigationService.navigatorKey.currentState;
     MySafarSdk.logBack('handleSystemBack(canPop: ${nav?.canPop()})');
-    if (nav != null && nav.canPop()) {
-      _internalPopDepth++;
-      try {
-        nav.pop();
-      } finally {
-        _internalPopDepth--;
-      }
+    if (nav == null || !nav.canPop()) return false;
+
+    // Yuqoridagi route `PopScope(canPop: false)` bilan himoyalangan bo'lsa
+    // (to'lov sahifasi, to'lov WebView'i, bron yuklanish oynasi) — pop
+    // qilmaymiz, o'sha sahifaning o'z handleri ishlasin ("to'lovdan
+    // chiqasizmi?" dialogi, WebView ichida orqaga). `Navigator.maybePop` bilan
+    // bir xil qoida, lekin sinxron: bu metod darhol `true/false` qaytarishi
+    // shart. Oddiy `nav.pop()` bu himoyalarni chetlab o'tardi.
+    final top = _topRoute(nav);
+    if (top != null && top.popDisposition == RoutePopDisposition.doNotPop) {
+      top.onPopInvokedWithResult(false, null);
       return true;
     }
-    return false;
+
+    _internalPopDepth++;
+    try {
+      nav.pop();
+    } finally {
+      _internalPopDepth--;
+    }
+    return true;
+  }
+
+  /// Navigator'dagi eng yuqori route (hech narsani yopmaydi).
+  static Route<dynamic>? _topRoute(NavigatorState nav) {
+    Route<dynamic>? top;
+    nav.popUntil((route) {
+      top = route;
+      return true;
+    });
+    return top;
   }
 
   /// SDK ichki stack → pop; root → non-home tab'dan Main yoki host'ga chiqish.

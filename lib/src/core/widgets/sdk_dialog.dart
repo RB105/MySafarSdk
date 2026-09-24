@@ -150,9 +150,10 @@ class SdkDialogButton extends StatelessWidget {
         ),
     };
 
-    return SizedBox(
-      width: double.infinity,
-      height: 52,
+    return ConstrainedBox(
+      // Katta shriftda matn sig'ishi uchun balandlik qat'iy emas (№32).
+      constraints:
+          const BoxConstraints(minWidth: double.infinity, minHeight: 52),
       child: ElevatedButton(
         onPressed: () {
           HapticFeedback.selectionClick();
@@ -286,12 +287,31 @@ class SdkDialogCloseButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final VoidCallback handleTap = onTap ?? () => Navigator.of(context).pop();
+    // Ko'rinishi 34 dp doira, bosish maydoni 44 dp (№32); ekran o'quvchi
+    // uchun "Yopish" nomi.
+    return Semantics(
+      button: true,
+      label: MaterialLocalizations.of(context).closeButtonTooltip,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: handleTap,
+        child: SizedBox.square(
+          dimension: 44,
+          child: Center(child: _circle(context, handleTap)),
+        ),
+      ),
+    );
+  }
+
+  Widget _circle(BuildContext context, VoidCallback handleTap) {
     return Material(
       color: sdkDialogMutedFill(context),
       shape: const CircleBorder(),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: onTap ?? () => Navigator.of(context).pop(),
+        onTap: handleTap,
         child: SizedBox.square(
           dimension: 34,
           child: Center(
@@ -386,7 +406,8 @@ class SdkSheetFrame extends StatelessWidget {
             ),
           ),
           if (showCloseButton)
-            const Positioned(top: 14, right: 14, child: SdkDialogCloseButton()),
+            // 44 dp bosish maydoni: ko'rinadigan doira avvalgidek 14 dp da.
+            const Positioned(top: 9, right: 9, child: SdkDialogCloseButton()),
         ],
       ),
     );

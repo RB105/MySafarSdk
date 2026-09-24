@@ -59,36 +59,44 @@ class _PriceChartCard extends StatelessWidget {
       if (cheapIndex == -1 || days[i].$2 < days[cheapIndex].$2) cheapIndex = i;
     }
 
-    return Material(
-      color: isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight,
-      borderRadius: BorderRadius.circular(18),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _header(context, isDark),
-              const SizedBox(height: 14),
-              if (loading)
-                const _PriceChartBarsShimmer()
-              else if (days.isEmpty)
-                const SizedBox(height: 50)
-              else
-                _bars(days, cheapIndex, isDark: isDark),
-              if (!loading && cheapIndex != -1) ...[
-                const SizedBox(height: 16),
-                _cheapestRow(
-                  context,
-                  isDark,
-                  days[cheapIndex].$1,
-                  days[cheapIndex].$2,
-                  currency,
-                ),
+    // Bosh sahifa kartalari bilan bir xil: 20 radius, yumshoq soya.
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: context.shadowDown,
+      ),
+      child: Material(
+        color:
+            isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight,
+        borderRadius: BorderRadius.circular(20),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _header(context, isDark),
+                const SizedBox(height: 14),
+                if (loading)
+                  const _PriceChartBarsShimmer()
+                else if (days.isEmpty)
+                  const SizedBox(height: 50)
+                else
+                  _bars(days, cheapIndex, isDark: isDark),
+                if (!loading && cheapIndex != -1) ...[
+                  const SizedBox(height: 16),
+                  _cheapestRow(
+                    context,
+                    isDark,
+                    days[cheapIndex].$1,
+                    days[cheapIndex].$2,
+                    currency,
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -101,30 +109,31 @@ class _PriceChartCard extends StatelessWidget {
   Widget _header(BuildContext context, bool isDark) {
     return Row(
       children: [
+        // Ikonka plitkasi — qidiruv maydonlaridagi bilan bir xil o'lcham.
         Container(
-          width: 28,
-          height: 28,
+          width: 36,
+          height: 36,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: isDark ? ProjectTheme.brandColor : _Web.iconBoxBg,
-            borderRadius: BorderRadius.circular(8),
+            color: isDark ? Colors.white.withAlpha(18) : _Web.iconBoxBg,
+            borderRadius: BorderRadius.circular(11),
           ),
           child: _SvgIcon(
             Assets.iconsSearchChartIcon,
-            size: 17,
-            color: isDark ? Colors.white : _Web.blue,
+            size: 18,
+            color: isDark ? Colors.white : ProjectTheme.brandColor,
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 10),
         Expanded(
           child: Text(
             "price_chart_title".tr(),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 14.5,
-              fontWeight: FontWeight.w700,
-              color: isDark ? ProjectTheme.textColorDark : _Web.toggleText,
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: isDark ? ProjectTheme.textColorDark : _Web.sectionTitle,
             ),
           ),
         ),
@@ -345,8 +354,22 @@ class _PriceChartBarsShimmer extends StatelessWidget {
 
   /// Skelet ustunlarining nisbiy balandliklari (0..1) — takrorlanadi.
   static const List<double> _pattern = [
-    0.5, 0.72, 0.44, 0.66, 0.9, 0.58, 0.8, 0.48,
-    0.62, 0.86, 0.54, 0.7, 0.42, 0.76, 0.6, 0.88,
+    0.5,
+    0.72,
+    0.44,
+    0.66,
+    0.9,
+    0.58,
+    0.8,
+    0.48,
+    0.62,
+    0.86,
+    0.54,
+    0.7,
+    0.42,
+    0.76,
+    0.6,
+    0.88,
   ];
 
   @override
@@ -367,7 +390,8 @@ class _PriceChartBarsShimmer extends StatelessWidget {
                   height: _PriceChartCard._barMaxH * _pattern[i],
                   decoration: const BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(4)),
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(4)),
                   ),
                 ),
               ),
@@ -459,6 +483,11 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
   _ChartDay? _dep;
   _ChartDay? _ret;
 
+  // So'rov raqamlari (№84): filtr tez o'zgartirilsa ESKI so'rov javobi
+  // yangisini bosib ketmasligi uchun faqat oxirgi so'rov natijasi olinadi.
+  int _depReq = 0;
+  int _retReq = 0;
+
   @override
   void initState() {
     super.initState();
@@ -467,6 +496,7 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
   }
 
   Future<void> _loadDep() async {
+    final int req = ++_depReq;
     try {
       final response = await AviaService().getPriceByMonth(
         widget.from.cityIataCode ?? '',
@@ -474,11 +504,11 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
         adt: widget.adt,
         chd: widget.chd,
         inf: widget.inf,
-        klass: widget.klass,
+        klass: MonthPriceParams.normalizeKlass(widget.klass),
         direct: _direct,
         baggage: _baggage,
       );
-      if (!mounted) return;
+      if (!mounted || req != _depReq) return;
       setState(() {
         _depLoading = false;
         if (response is NetworkSuccessResponse) {
@@ -486,7 +516,7 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
         }
       });
     } catch (_) {
-      if (mounted) setState(() => _depLoading = false);
+      if (mounted && req == _depReq) setState(() => _depLoading = false);
     }
   }
 
@@ -494,6 +524,7 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
   Future<void> _loadRet() async {
     if (_retRequested) return;
     _retRequested = true;
+    final int req = ++_retReq;
     setState(() => _retLoading = true);
     try {
       final response = await AviaService().getPriceByMonth(
@@ -502,11 +533,11 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
         adt: widget.adt,
         chd: widget.chd,
         inf: widget.inf,
-        klass: widget.klass,
+        klass: MonthPriceParams.normalizeKlass(widget.klass),
         direct: _direct,
         baggage: _baggage,
       );
-      if (!mounted) return;
+      if (!mounted || req != _retReq) return;
       setState(() {
         _retLoading = false;
         if (response is NetworkSuccessResponse) {
@@ -514,11 +545,13 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
         }
       });
     } catch (_) {
-      if (mounted) setState(() => _retLoading = false);
+      if (mounted && req == _retReq) setState(() => _retLoading = false);
     }
   }
 
   void _reloadPrices() {
+    // Eski filtrlar bilan ketayotgan qaytish so'rovi natijasi ham tashlansin.
+    _retReq++;
     setState(() {
       _depLoading = true;
       _depPrices = null;
@@ -589,12 +622,15 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
     }
     final ret = _ret;
     if (ret == null) return;
-    // Qaytish jo'nashdan oldin bo'lsa — tartibini to'g'irlaymiz.
-    final DateTime start = dep.date.isBefore(ret.date) ? dep.date : ret.date;
-    final DateTime end = dep.date.isBefore(ret.date) ? ret.date : dep.date;
+    // Qaytish jo'nashdan oldin bo'lsa — sanalarni jimgina almashtirmaymiz
+    // (№84): foydalanuvchi boshqa qaytish sanasini tanlashi kerak.
+    if (ret.date.isBefore(dep.date)) {
+      showToastTr("return_before_departure", type: AppMessageType.warning);
+      return;
+    }
     Navigator.of(context).pop(_PriceChartPick(
-      start: start,
-      end: end,
+      start: dep.date,
+      end: ret.date,
       direct: _direct,
       baggage: _baggage,
     ));
@@ -628,7 +664,8 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
         maxHeight: MediaQuery.of(context).size.height * 0.92,
       ),
       decoration: BoxDecoration(
-        color: isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight,
+        color:
+            isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: const EdgeInsets.only(top: 10),
@@ -674,16 +711,17 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
                     ),
                   ),
                   IconButton(
+                    tooltip:
+                        MaterialLocalizations.of(context).closeButtonTooltip,
                     onPressed: () {
                       HapticFeedback.lightImpact();
                       Navigator.of(context).maybePop();
                     },
-                    visualDensity: VisualDensity.compact,
                     icon: _SvgIcon(
                       Assets.iconsSearchCloseIcon,
                       size: 22,
-                      color: context.textTheme.headlineSmall?.color ??
-                          _Web.label,
+                      color:
+                          context.textTheme.headlineSmall?.color ?? _Web.label,
                     ),
                   ),
                 ],
@@ -767,8 +805,7 @@ class _PriceChartSheetState extends State<_PriceChartSheet> {
                 height: 56,
                 child: ElevatedButton(
                   style: ProjectTheme.orangeButtonStyle.copyWith(
-                    backgroundColor:
-                        WidgetStateProperty.resolveWith((states) {
+                    backgroundColor: WidgetStateProperty.resolveWith((states) {
                       if (states.contains(WidgetState.disabled)) {
                         return _Web.gold.withAlpha(90);
                       }
@@ -1020,6 +1057,41 @@ class _PriceChartViewState extends State<_PriceChartView> {
 
   static int _key(DateTime d) => d.year * 10000 + d.month * 100 + d.day;
 
+  // 365 kunlik ro'yxat keshi (№40): aylantirishda har bir kun o'tganda
+  // qayta qurilmaydi — faqat narxlar, valyuta yoki kun o'zgarganda.
+  List<_ChartDay>? _daysCache;
+  TicketDatePriceModel? _daysCachePrices;
+  AppCurrency? _daysCacheCurrency;
+  DateTime? _daysCacheToday;
+  double _minV = double.infinity;
+  double _maxV = 0;
+
+  List<_ChartDay> _days(AppCurrency currency) {
+    final today = _today;
+    final cached = _daysCache;
+    if (cached != null &&
+        identical(_daysCachePrices, widget.prices) &&
+        _daysCacheCurrency == currency &&
+        _daysCacheToday == today) {
+      return cached;
+    }
+    final days = _buildDays(currency);
+    double minV = double.infinity, maxV = 0;
+    for (final d in days) {
+      final v = d.value;
+      if (v == null) continue;
+      if (v < minV) minV = v;
+      if (v > maxV) maxV = v;
+    }
+    _minV = minV;
+    _maxV = maxV;
+    _daysCache = days;
+    _daysCachePrices = widget.prices;
+    _daysCacheCurrency = currency;
+    _daysCacheToday = today;
+    return days;
+  }
+
   /// 365 kunlik jadval kunlari (narxi bo'lganlar to'ldirilgan).
   List<_ChartDay> _buildDays(AppCurrency currency) {
     final Map<int, double> byDay = {};
@@ -1041,23 +1113,17 @@ class _PriceChartViewState extends State<_PriceChartView> {
   }
 
   _ChartDay _dayAt(int index) {
-    final days = _buildDays(widget.currency);
+    final days = _days(widget.currency);
     return days[index.clamp(0, days.length - 1)];
   }
 
   @override
   Widget build(BuildContext context) {
     final currency = widget.currency;
-    final days = _buildDays(currency);
+    final days = _days(currency);
     final _ChartDay centeredDay = days[_centered];
 
-    double minV = double.infinity, maxV = 0;
-    for (final d in days) {
-      final v = d.value;
-      if (v == null) continue;
-      if (v < minV) minV = v;
-      if (v > maxV) maxV = v;
-    }
+    final double minV = _minV, maxV = _maxV;
     const double minBar = 34, maxBar = 120, unknownBar = 14;
     double barHeight(_ChartDay d) {
       final v = d.value;
@@ -1170,7 +1236,7 @@ class _PriceChartViewState extends State<_PriceChartView> {
                                         Text(
                                           _weekDayShort(day.date),
                                           style: TextStyle(
-                                            fontSize: 10.5,
+                                            fontSize: 12,
                                             fontWeight: isCentered
                                                 ? FontWeight.w700
                                                 : FontWeight.w500,
@@ -1202,7 +1268,8 @@ class _PriceChartViewState extends State<_PriceChartView> {
                           child: Center(
                             child: _PriceBubble(
                               text: centeredDay.value != null
-                                  ? _priceWithSuffix(centeredDay.value!, currency)
+                                  ? _priceWithSuffix(
+                                      centeredDay.value!, currency)
                                   : "price_unknown".tr(),
                               subtitle: ElementFormatter.formatWithWeekDay(
                                 "${centeredDay.date.day.toString().padLeft(2, '0')}."

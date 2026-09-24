@@ -113,6 +113,15 @@ class RouteSearchState extends Equatable {
 
   int get passengerCount => adt + chd + inf;
 
+  /// Klass nomining tarjima kaliti ("1 yo'lovchi, Ekonom" xulosasi uchun).
+  String get klassLabelKey => switch (klass) {
+        'e' => 'klass_e',
+        'b' => 'klass_b',
+        'f' => 'klass_f',
+        'w' => 'klass_w',
+        _ => 'klass_a_short',
+      };
+
   /// Yana yo'nalish qo'shish mumkinmi (maksimum [maxLegs] ta).
   bool get canAddLeg => legs.length < maxLegs;
 

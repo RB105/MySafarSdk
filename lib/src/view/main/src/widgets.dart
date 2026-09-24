@@ -84,7 +84,7 @@ class ServiceTypeCell extends StatelessWidget {
             _getTitle(),
             style: isActive
                 ? context.textTheme.headlineSmall
-                ?.copyWith(color: ProjectTheme.brandColor)
+                    ?.copyWith(color: ProjectTheme.brandColor)
                 : context.textTheme.headlineSmall,
           )
         ],
@@ -169,6 +169,8 @@ class _MainHotTicketsState extends State<MainHotTickets> {
                             borderRadius: BorderRadius.circular(8),
                             onTap: () => Navigator.of(context).push(
                               MaterialPageRoute(
+                                settings: const RouteSettings(
+                                    name: AllHotTicketsPage.routeName),
                                 builder: (_) =>
                                     AllHotTicketsPage(flights: state.flights),
                               ),
@@ -251,7 +253,10 @@ class _HomeHotTicketCard extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: () {
+            AnalyticsService().trackFlightSelected(source: 'hot_tickets');
             Navigator.of(context).push(MaterialPageRoute(
+              settings:
+                  const RouteSettings(name: PassengerInformationPage.routeName),
               builder: (context) => PassengerInformationPage(
                 element: flight.ticket.getFlightElement(),
                 adt: 1,
@@ -273,7 +278,8 @@ class _HomeHotTicketCard extends StatelessWidget {
                     DestinationImageCarousel(
                       key: ValueKey('hot-$destCity'),
                       query: destCity,
-                      fallbackAsset: "packages/mysafar_sdk/assets/img/tickets/ticket_bg.png",
+                      fallbackAsset:
+                          "packages/mysafar_sdk/assets/img/tickets/ticket_bg.png",
                     ),
                     Positioned(
                       top: 10,
@@ -359,8 +365,7 @@ class _HomeHotTicketCard extends StatelessWidget {
             .tr(namedArgs: {"price": "\u0001"}).split('\u0001');
         final prefix = parts.isNotEmpty ? parts.first : '';
         final suffix = parts.length > 1 ? parts.last : '';
-        final grey =
-            context.textTheme.headlineSmall?.copyWith(fontSize: 13.5);
+        final grey = context.textTheme.headlineSmall?.copyWith(fontSize: 13.5);
 
         return Text.rich(
           TextSpan(children: [
@@ -412,13 +417,22 @@ class _RecentSearchesWidgetState extends State<RecentSearchesWidget> {
     final today = DateTime.now();
     final startOfDay = DateTime(today.year, today.month, today.day);
     final visible = <RecommendationRequestBody>[];
+    // Yo'nalish kalitlari — sanasi o'tgan bir xil yo'nalish takrorlanmasin.
+    final seenRoutes = <String>{};
 
     for (final p in list) {
       final s = p.segments;
       if (s == null || s.isEmpty) continue;
+      if (s.first.from == null || s.first.to == null) continue;
       final date = _parseRecentDate(s.first.date);
-      // O'tib ketgan sanali qidiruvni takrorlab bo'lmaydi — ko'rsatilmaydi.
-      if (date == null || date.isBefore(startOfDay)) continue;
+      final routeKey =
+          '${s.first.from?.cityIataCode}-${s.first.to?.cityIataCode}';
+      // Sanasi o'tgan qidiruv ham ko'rsatiladi (№31) — bosilganda yo'nalish
+      // va yo'lovchilar saqlanib, faqat yangi sana so'raladi. Bir xil
+      // yo'nalish bir marta chiqadi.
+      final bool past = date == null || date.isBefore(startOfDay);
+      if (past && seenRoutes.contains(routeKey)) continue;
+      seenRoutes.add(routeKey);
       visible.add(p);
       if (visible.length >= _maxVisible) break;
     }
@@ -429,6 +443,23 @@ class _RecentSearchesWidgetState extends State<RecentSearchesWidget> {
 
   void _repeatSearch(RecommendationRequestBody p) {
     HapticFeedback.selectionClick();
+    final first = p.segments!.first;
+    if (_isRecentPast(p)) {
+      // Sanasi o'tgan — yo'nalish sahifasi ochiladi: shaharlar, yo'lovchilar
+      // va klass shu qidiruvdan, kalendar avtomatik ochiladi.
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          settings: const RouteSettings(name: '/routeSearch'),
+          builder: (_) => RouteSearchPage(
+            from: first.from!,
+            to: first.to!,
+            lastSearch: p,
+            autoPromptDatePassengers: true,
+          ),
+        ),
+      );
+      return;
+    }
     ProjectUtils.setRecommendationParams(p);
     Navigator.of(context)
         .pushNamed(RecommendationsTicketPage.routeName, arguments: p);
@@ -438,64 +469,44 @@ class _RecentSearchesWidgetState extends State<RecentSearchesWidget> {
   Widget build(BuildContext context) {
     if (_items.isEmpty) return const SizedBox.shrink();
 
+    // Bosh sahifaning boshqa bo'limlari ("Eng ommabop yo'nalishlar") bilan
+    // bir xil tuzilma: sarlavha + oq kartalar (rasm ustida emas).
     return Padding(
-      padding: const EdgeInsets.only(top: 18),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                SvgPicture.asset(
-                  Assets.iconsPlaceRecentIcon,
-                  width: 16,
-                  height: 16,
-                  colorFilter:
-                      const ColorFilter.mode(Colors.white, BlendMode.srcIn),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    "home_recent_searches".tr(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: context.textTheme.bodyMedium?.copyWith(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      shadows: [
-                        Shadow(
-                          color: Colors.black.withOpacity(0.35),
-                          blurRadius: 6,
-                          offset: const Offset(0, 1),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Text(
+              "home_recent_searches".tr(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: context.textTheme.displayLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                fontSize: 19,
+              ),
             ),
           ),
-          const SizedBox(height: 10),
           LayoutBuilder(
             builder: (context, constraints) {
-              // Bitta qidiruv — to'liq kenglikda; bir nechta bo'lsa keyingi
-              // karta chetdan ko'rinib turadi (surish mumkinligi seziladi).
-              final double cardWidth = _items.length == 1
-                  ? constraints.maxWidth - 32
-                  : (constraints.maxWidth * 0.74).clamp(0.0, 300.0);
+              // Karta kontent kengligida (qisqa yo'nalish — ixcham karta),
+              // uzun shahar nomlari uchun yuqori chegara bor.
+              final double maxCardWidth =
+                  (constraints.maxWidth * 0.78).clamp(0.0, 300.0);
               return SizedBox(
-                height: _RecentSearchCard.height,
+                // Soya kesilmasin — yuqori/pastdan joy.
+                height: _RecentSearchCard.height + 20,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   clipBehavior: Clip.none,
                   physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   itemCount: _items.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 10),
-                  itemBuilder: (context, index) => SizedBox(
-                    width: cardWidth,
+                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  itemBuilder: (context, index) => ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: maxCardWidth),
                     child: _RecentSearchCard(
                       search: _items[index],
                       onTap: () => _repeatSearch(_items[index]),
@@ -509,6 +520,15 @@ class _RecentSearchesWidgetState extends State<RecentSearchesWidget> {
       ),
     );
   }
+}
+
+/// Qidiruvning birinchi sanasi bugundan oldinmi (yoki o'qib bo'lmaydimi).
+bool _isRecentPast(RecommendationRequestBody p) {
+  final segments = p.segments;
+  if (segments == null || segments.isEmpty) return true;
+  final date = _parseRecentDate(segments.first.date);
+  final now = DateTime.now();
+  return date == null || date.isBefore(DateTime(now.year, now.month, now.day));
 }
 
 /// Keshdagi sana formati: `dd.MM.yyyy`.
@@ -526,7 +546,7 @@ DateTime? _parseRecentDate(String? d) {
 /// So'ngi qidiruv kartasi: chapda samolyot belgisi, yo'nalish ("Toshkent →
 /// Dubay", borib-kelishda ⇄), ostida sana(lar) va yo'lovchilar soni.
 class _RecentSearchCard extends StatefulWidget {
-  static const double height = 72;
+  static const double height = 60;
 
   final RecommendationRequestBody search;
   final VoidCallback onTap;
@@ -560,12 +580,23 @@ class _RecentSearchCardState extends State<_RecentSearchCard> {
     final bool isRoundTrip = !isMulti && segments.length == 2;
 
     final from = _cityName(first.from);
-    final to = _cityName(isMulti ? segments.last.to : first.to);
+    // Ko'p segmentli (open-jaw: TAS→IST, SAW→TAS) oxirgi nuqta boshlanish
+    // bilan bir xil bo'lsa "TAS → TAS" emas, birinchi manzil ko'rsatiladi.
+    final lastTo = segments.last.to;
+    final to = _cityName(isMulti &&
+            lastTo?.cityIataCode != null &&
+            lastTo?.cityIataCode != first.from?.cityIataCode
+        ? lastTo
+        : first.to);
 
     final start = _parseRecentDate(first.date);
-    final end = segments.length > 1 ? _parseRecentDate(segments.last.date) : null;
+    final end =
+        segments.length > 1 ? _parseRecentDate(segments.last.date) : null;
     final String dates;
-    if (start == null) {
+    if (_isRecentPast(search)) {
+      // Sana o'tib ketgan — bosilganda yangi sana so'raladi.
+      dates = "choice_date".tr();
+    } else if (start == null) {
       dates = first.date ?? '';
     } else if (end == null || end.isSame(start)) {
       dates = start.dateWithMonthLowerCase;
@@ -577,29 +608,23 @@ class _RecentSearchCardState extends State<_RecentSearchCard> {
     }
     final passengers = search.adt + search.chd + search.inf;
 
-    // Qidiruv kartasi (MainSearchForm._homeCard) bilan bir xil shisha.
-    final Color glass =
-        isDark ? Colors.black.withOpacity(0.28) : Colors.white.withOpacity(0.94);
-    final Color border =
-        isDark ? Colors.white.withOpacity(0.22) : Colors.white.withOpacity(0.55);
-    final Color titleColor = isDark ? Colors.white : ProjectTheme.textColorLight;
-    final Color muted =
-        isDark ? Colors.white.withOpacity(0.72) : const Color(0xFF5B6B85);
+    // "24/7 yordam" kartasi bilan bir xil: oq karta, 24 radius, soya.
+    final Color cardColor =
+        isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight;
+    final Color muted = isDark
+        ? ProjectTheme.secondaryTextDark
+        : ProjectTheme.secondaryTextLight;
     final Color tileBg =
-        isDark ? Colors.white.withOpacity(0.14) : const Color(0xFFEAF1FF);
-    final Color tileFg = isDark ? Colors.white : ProjectTheme.brandColor;
-    const radius = 18.0;
+        isDark ? Colors.white.withOpacity(0.08) : ProjectTheme.swimmer200;
+    const radius = 20.0;
 
-    final base = context.textTheme.bodyMedium ?? const TextStyle();
-    final titleStyle = base.copyWith(
-      color: titleColor,
+    final titleStyle = context.textTheme.displayLarge?.copyWith(
       fontSize: 15,
       fontWeight: FontWeight.w700,
       height: 1.2,
     );
-    final metaStyle = base.copyWith(
-      color: muted,
-      fontSize: 12.5,
+    final metaStyle = context.textTheme.headlineMedium?.copyWith(
+      fontSize: 13,
       fontWeight: FontWeight.w500,
       height: 1.2,
     );
@@ -625,118 +650,102 @@ class _RecentSearchCardState extends State<_RecentSearchCard> {
           scale: _pressed ? 0.97 : 1,
           duration: const Duration(milliseconds: 140),
           curve: Curves.easeOut,
-          child: DecoratedBox(
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(10, 10, 16, 10),
             decoration: BoxDecoration(
+              color: cardColor,
               borderRadius: BorderRadius.circular(radius),
-              boxShadow: isDark
-                  ? null
-                  : [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.10),
-                        blurRadius: 14,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
+              boxShadow: context.shadowDown,
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(radius),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(10, 10, 8, 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: glass,
-                    borderRadius: BorderRadius.circular(radius),
-                    border: Border.all(color: border),
+                    color: tileBg,
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Row(
+                  child: icon(
+                    Assets.iconsRecentPlaneIcon,
+                    20,
+                    isDark ? Colors.white : ProjectTheme.brandColor,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: tileBg,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: icon(Assets.iconsRecentPlaneIcon, 22, tileFg),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    from,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: titleStyle,
-                                  ),
-                                ),
-                                Padding(
-                                  padding:
-                                      const EdgeInsets.symmetric(horizontal: 5),
-                                  child: icon(
-                                    isRoundTrip
-                                        ? Assets.iconsRecentRoundTripIcon
-                                        : Assets.iconsCalendarRouteArrowIcon,
-                                    15,
-                                    muted,
-                                  ),
-                                ),
-                                Flexible(
-                                  child: Text(
-                                    to,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: titleStyle,
-                                  ),
-                                ),
-                              ],
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              from,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: titleStyle,
                             ),
-                            const SizedBox(height: 5),
-                            Row(
-                              children: [
-                                icon(Assets.iconsRecentCalendarIcon, 14, muted),
-                                const SizedBox(width: 4),
-                                Flexible(
-                                  child: Text(
-                                    dates,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: metaStyle,
-                                  ),
-                                ),
-                                Padding(
-                                  padding:
-                                      const EdgeInsets.symmetric(horizontal: 6),
-                                  child: Container(
-                                    width: 3,
-                                    height: 3,
-                                    decoration: BoxDecoration(
-                                      color: muted,
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                ),
-                                icon(Assets.iconsRecentPassengerIcon, 14, muted),
-                                const SizedBox(width: 3),
-                                Text('$passengers', style: metaStyle),
-                              ],
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 5),
+                            child: icon(
+                              isRoundTrip
+                                  ? Assets.iconsRecentRoundTripIcon
+                                  : Assets.iconsCalendarRouteArrowIcon,
+                              14,
+                              muted,
                             ),
-                          ],
-                        ),
+                          ),
+                          Flexible(
+                            child: Text(
+                              to,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: titleStyle,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 4),
-                      icon(Assets.iconsRecentChevronIcon, 18, muted),
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          icon(Assets.iconsRecentCalendarIcon, 13, muted),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              dates,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: metaStyle,
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            child: Container(
+                              width: 3,
+                              height: 3,
+                              decoration: BoxDecoration(
+                                color: muted,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                          icon(Assets.iconsRecentPassengerIcon, 13, muted),
+                          const SizedBox(width: 3),
+                          Text('$passengers', style: metaStyle),
+                        ],
+                      ),
                     ],
                   ),
                 ),
-              ),
+              ],
             ),
           ),
         ),
@@ -758,9 +767,8 @@ class HomeSupportBanner extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(16, 20, 16, 0),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: isDark
-            ? ProjectTheme.cardColorDark
-            : ProjectTheme.cardColorLight,
+        color:
+            isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight,
         borderRadius: BorderRadius.circular(24),
         boxShadow: context.shadowDown,
       ),
@@ -768,8 +776,8 @@ class HomeSupportBanner extends StatelessWidget {
         color: Colors.transparent,
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-            onTap: () => ProjectDialogs.showSupportMenu(context),
-            child: Padding(
+          onTap: () => ProjectDialogs.showSupportMenu(context),
+          child: Padding(
             padding: const EdgeInsets.all(14),
             child: Row(
               children: [
@@ -810,18 +818,18 @@ class HomeSupportBanner extends StatelessWidget {
                     ],
                   ),
                 ),
-                  const SizedBox(width: 6),
-                  Icon(Icons.chevron_right_rounded,
-                      size: 24,
-                      color: isDark
-                          ? ProjectTheme.secondaryTextDark
-                          : ProjectTheme.secondaryTextLight),
-                ],
-              ),
+                const SizedBox(width: 6),
+                Icon(Icons.chevron_right_rounded,
+                    size: 24,
+                    color: isDark
+                        ? ProjectTheme.secondaryTextDark
+                        : ProjectTheme.secondaryTextLight),
+              ],
             ),
           ),
         ),
-      );
+      ),
+    );
   }
 }
 
@@ -839,7 +847,10 @@ class HotTicketCard extends StatelessWidget {
         flight.ticket.segments.last.arr?.city?.title ?? flight.route.toCity;
     return InkWell(
       onTap: () {
+        AnalyticsService().trackFlightSelected(source: 'hot_tickets');
         Navigator.of(context).push(MaterialPageRoute(
+          settings:
+              const RouteSettings(name: PassengerInformationPage.routeName),
           builder: (context) => PassengerInformationPage(
             element: flight.ticket.getFlightElement(),
             adt: 1,
@@ -856,7 +867,8 @@ class HotTicketCard extends StatelessWidget {
             DestinationImageCarousel(
               key: ValueKey(flight.ticket.id),
               query: destCity,
-              fallbackAsset: "packages/mysafar_sdk/assets/img/tickets/ticket_bg.png",
+              fallbackAsset:
+                  "packages/mysafar_sdk/assets/img/tickets/ticket_bg.png",
             ),
             DecoratedBox(
               decoration: BoxDecoration(
@@ -895,8 +907,8 @@ class HotTicketCard extends StatelessWidget {
                             cacheManager: AppCacheManager.instance,
                             cacheKey:
                                 flight.ticket.provider.supplier.code ?? "",
+                            // Faqat bitta tomon — logo cho'zilmasin (№43).
                             memCacheWidth: 88,
-                            memCacheHeight: 88,
                             errorWidget: (context, url, error) =>
                                 const SizedBox(),
                             imageUrl: ProjectAssets.getSegmentProviderImg(
@@ -1215,7 +1227,6 @@ class _PopularDestinationsWidgetState extends State<PopularDestinationsWidget> {
   }
 }
 
-
 /// Mashhur manzil kartasi — rasm samolyot oynasi shaklida (vertikal oval),
 /// atrofida ranglari almashib aylanib turadigan gradient chegara, nomi esa
 /// ostida joylashadi (2 qator, sig'masa "..." bilan qisqaradi).
@@ -1299,8 +1310,10 @@ class _PopularDestinationCardState extends State<_PopularDestinationCard>
                       fit: BoxFit.cover,
                       width: w,
                       height: h,
-                      memCacheWidth: 340,
-                      memCacheHeight: 440,
+                      // Joy o'lchami × DPR, faqat bitta tomon — rasm
+                      // cho'zilmaydi (№43).
+                      memCacheWidth: coverImageCacheSize(context, w, h).width,
+                      memCacheHeight: coverImageCacheSize(context, w, h).height,
                       fadeInDuration: const Duration(milliseconds: 200),
                       placeholder: (_, __) =>
                           Container(color: Colors.grey.shade200),
@@ -1383,7 +1396,6 @@ class _RotatingBorderPainter extends CustomPainter {
       oldDelegate.radius != radius ||
       oldDelegate.strokeWidth != strokeWidth;
 }
-
 
 class HotTicketsShimmer extends StatelessWidget {
   const HotTicketsShimmer({super.key});
@@ -1491,7 +1503,7 @@ class AnimatedGradientButton extends StatelessWidget {
                         ? Assets.iconsSearchWhiteIcon
                         : Assets.iconsStarsIcon,
                     colorFilter:
-                    ColorFilter.mode(Colors.white, BlendMode.srcIn),
+                        ColorFilter.mode(Colors.white, BlendMode.srcIn),
                   ))
             ],
           ),
@@ -1623,19 +1635,19 @@ class _PassengerCount extends State<PassengerCount> {
               getKlass(
                 'e',
                 'klass_e'.tr(),
-                    (type) => setState(() => klass = type),
+                (type) => setState(() => klass = type),
               ),
               context.szBoxHeight12,
               getKlass(
                 'b',
                 'klass_b'.tr(),
-                    (type) => setState(() => klass = type),
+                (type) => setState(() => klass = type),
               ),
               context.szBoxHeight12,
               getKlass(
                 'a',
                 'klass_a'.tr(),
-                    (type) => setState(() => klass = type),
+                (type) => setState(() => klass = type),
               ),
               context.szBoxHeight12,
               Row(
@@ -1687,8 +1699,8 @@ class _PassengerCount extends State<PassengerCount> {
     );
   }
 
-  InkWell getKlass(String type, String title,
-      void Function(String type) callback) {
+  InkWell getKlass(
+      String type, String title, void Function(String type) callback) {
     return InkWell(
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
@@ -1722,10 +1734,11 @@ class _PassengerCount extends State<PassengerCount> {
   /// 1 for chd
   ///
   /// 2 for inf
-  Widget getPassengerCounter({required int type,
-    required String title,
-    required void Function() remove,
-    required void Function() add}) {
+  Widget getPassengerCounter(
+      {required int type,
+      required String title,
+      required void Function() remove,
+      required void Function() add}) {
     return Row(
       children: [
         Expanded(
@@ -1858,31 +1871,55 @@ class _SmartSearchWidgetState extends State<SmartSearchWidget> {
     super.initState();
     _aiSearchCubit = AiSearchCubit();
     _startTyping();
-    _initPermissions();
+    // №96: mikrofon ruxsati tab ochilganda emas — faqat mikrofon
+    // tugmasi bosilganda so'raladi ([_ensureMicPermission]).
   }
 
-  Future<void> _initPermissions() async {
-    final micStatus = await Permission.microphone.request();
-    if (!micStatus.isGranted) {
-      debugPrint("Microphone permission denied");
+  /// Mikrofon ruxsati: bor bo'lsa `true`; bo'lmasa so'raydi. Rad etilsa
+  /// xabar ko'rsatadi, butunlay rad etilgan bo'lsa Sozlamalarni ochadi.
+  Future<bool> _ensureMicPermission() async {
+    try {
+      var status = await Permission.microphone.status;
+      if (status.isGranted) return true;
+      if (!status.isPermanentlyDenied && !status.isRestricted) {
+        status = await Permission.microphone.request();
+        if (status.isGranted) return true;
+      }
+      if (!mounted) return false;
+      showToastTr('microphone_permission_required',
+          type: AppMessageType.warning);
+      if (status.isPermanentlyDenied || status.isRestricted) {
+        await openAppSettings();
+      }
+    } catch (e) {
+      debugPrint('Microphone permission error: $e');
     }
+    return false;
   }
 
   Future<void> _startRecording() async {
+    if (!await _ensureMicPermission()) return;
+    // record paketining o'z tekshiruvi (iOS'da ruxsat holati farq qilsa).
+    if (!await _recorder.hasPermission()) return;
     final dir = await getTemporaryDirectory();
     _filePath =
-    '${dir.path}/audio_${DateTime
-        .now()
-        .millisecondsSinceEpoch}.wav';
+        '${dir.path}/audio_${DateTime.now().millisecondsSinceEpoch}.wav';
 
-    await _recorder.start(
-      const RecordConfig(
-        encoder: AudioEncoder.wav,
-        bitRate: 128000,
-        sampleRate: 44100,
-      ),
-      path: _filePath!,
-    );
+    try {
+      await _recorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.wav,
+          bitRate: 128000,
+          sampleRate: 44100,
+        ),
+        path: _filePath!,
+      );
+    } catch (e) {
+      debugPrint('Recorder start error: $e');
+      showToastTr('error_other');
+      return;
+    }
+    if (!mounted) return;
 
     setState(() {
       _isRecording = true;
@@ -1971,149 +2008,148 @@ class _SmartSearchWidgetState extends State<SmartSearchWidget> {
               break;
           }
         },
-        builder: (context, state) =>
-            Column(
-              mainAxisSize: MainAxisSize.min,
+        builder: (context, state) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            context.szBoxHeight12,
+            Text(
+              "smart_search_widget_subtitle".tr(),
+              maxLines: 3,
+              textAlign: TextAlign.start,
+              style: context.textTheme.titleSmall,
+            ),
+            context.szBoxHeight12,
+            Stack(
               children: [
-                context.szBoxHeight12,
-                Text(
-                  "smart_search_widget_subtitle".tr(),
+                TextFormField(
+                  controller: _controller,
+                  style: context.textTheme.bodyMedium,
                   maxLines: 3,
-                  textAlign: TextAlign.start,
-                  style: context.textTheme.titleSmall,
+                  textInputAction: TextInputAction.done,
+                  onTapOutside: (event) => FocusScope.of(context).unfocus(),
+                  onFieldSubmitted: (value) {
+                    if (value.isNotEmpty) {
+                      BlocProvider.of<AiSearchCubit>(context)
+                          .searchAiChat(value);
+                    }
+                  },
+                  onChanged: (value) {
+                    setState(() {});
+                  },
+                  decoration: InputDecoration(
+                    fillColor: context.backgroundColor,
+                    filled: true,
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.fromLTRB(16, 12, 48, 12),
+                  ),
                 ),
-                context.szBoxHeight12,
-                Stack(
-                  children: [
-                    TextFormField(
-                      controller: _controller,
-                      style: context.textTheme.bodyMedium,
-                      maxLines: 3,
-                      textInputAction: TextInputAction.done,
-                      onTapOutside: (event) => FocusScope.of(context).unfocus(),
-                      onFieldSubmitted: (value) {
-                        if (value.isNotEmpty) {
-                          BlocProvider.of<AiSearchCubit>(context)
-                              .searchAiChat(value);
-                        }
-                      },
-                      onChanged: (value) {
-                        setState(() {});
-                      },
-                      decoration: InputDecoration(
-                        fillColor: context.backgroundColor,
-                        filled: true,
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide.none,
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.fromLTRB(
-                            16, 12, 48, 12),
-                      ),
-                    ),
-                    // Animatsion placeholder — maydon bo'sh bo'lsa ko'rinadi.
-                    // Faqat shu matn har tick'da qayta chiziladi.
-                    Positioned(
-                      left: 16,
-                      top: 12,
-                      right: 48,
-                      child: IgnorePointer(
-                        child: ValueListenableBuilder<String>(
-                          valueListenable: _animatedText,
-                          builder: (context, txt, _) => _controller.text.isEmpty
-                              ? Text(
-                                  txt,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: context.textTheme.bodyMedium?.copyWith(
-                                    color: context.disabledTextColor,
-                                  ),
-                                )
-                              : const SizedBox.shrink(),
-                        ),
-                      ),
-                    ),
-                    _controller.text.isEmpty
-                        ? Positioned(
-                      right: 16,
-                      top: 12,
-                      child: GestureDetector(
-                        onTap: () async {
-                          if (_isRecording) {
-                            await _stopRecording();
-                          } else {
-                            await _startRecording();
-                          }
-                        },
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            AnimatedContainer(
-                              duration: const Duration(milliseconds: 300),
-                              width: _isRecording ? 72 : 0,
-                              height: _isRecording ? 72 : 0,
-                              decoration: BoxDecoration(
-                                color:
-                                ProjectTheme.brandColor.withOpacity(0.15),
-                                shape: BoxShape.circle,
+                // Animatsion placeholder — maydon bo'sh bo'lsa ko'rinadi.
+                // Faqat shu matn har tick'da qayta chiziladi.
+                Positioned(
+                  left: 16,
+                  top: 12,
+                  right: 48,
+                  child: IgnorePointer(
+                    child: ValueListenableBuilder<String>(
+                      valueListenable: _animatedText,
+                      builder: (context, txt, _) => _controller.text.isEmpty
+                          ? Text(
+                              txt,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: context.textTheme.bodyMedium?.copyWith(
+                                color: context.disabledTextColor,
                               ),
-                            ),
-                            _isRecording
-                                ? SvgPicture.asset(
-                              Assets.homeSendIcon,)
-                                : Icon(
-                              Icons.mic_none_rounded,
-                              color: ProjectTheme.brandColor,
-                              size: 28,
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                        : const SizedBox(),
-                  ],
-                ),
-                context.szBoxHeight12,
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 56,
-                        child: ElevatedButton(
-                            style: context.disabledButtonStyle,
-                            onPressed: () {
-                              _controller.clear();
-                            },
-                            child: Text(
-                              "reset".tr(),
-                              style: context.textTheme.bodyMedium,
-                            )),
-                      ),
+                            )
+                          : const SizedBox.shrink(),
                     ),
-                    context.szBoxWidth12,
-                    Expanded(
-                      child: SizedBox(
-                        height: 56,
-                        child: ElevatedButton(
-                            style: ProjectTheme.blueButtonStyle,
-                            onPressed: () {
-                              if (_controller.text.isNotEmpty) {
-                                BlocProvider.of<AiSearchCubit>(context)
-                                    .searchAiChat(_controller.text);
-                              }
-                            },
-                            child: Text("search_tickets_button".tr())),
-                      ),
-                    )
-                  ],
+                  ),
                 ),
+                _controller.text.isEmpty
+                    ? Positioned(
+                        right: 16,
+                        top: 12,
+                        child: GestureDetector(
+                          onTap: () async {
+                            if (_isRecording) {
+                              await _stopRecording();
+                            } else {
+                              await _startRecording();
+                            }
+                          },
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              AnimatedContainer(
+                                duration: const Duration(milliseconds: 300),
+                                width: _isRecording ? 72 : 0,
+                                height: _isRecording ? 72 : 0,
+                                decoration: BoxDecoration(
+                                  color:
+                                      ProjectTheme.brandColor.withOpacity(0.15),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              _isRecording
+                                  ? SvgPicture.asset(
+                                      Assets.homeSendIcon,
+                                    )
+                                  : Icon(
+                                      Icons.mic_none_rounded,
+                                      color: ProjectTheme.brandColor,
+                                      size: 28,
+                                    ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : const SizedBox(),
               ],
             ),
+            context.szBoxHeight12,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 56,
+                    child: ElevatedButton(
+                        style: context.disabledButtonStyle,
+                        onPressed: () {
+                          _controller.clear();
+                        },
+                        child: Text(
+                          "reset".tr(),
+                          style: context.textTheme.bodyMedium,
+                        )),
+                  ),
+                ),
+                context.szBoxWidth12,
+                Expanded(
+                  child: SizedBox(
+                    height: 56,
+                    child: ElevatedButton(
+                        style: ProjectTheme.blueButtonStyle,
+                        onPressed: () {
+                          if (_controller.text.isNotEmpty) {
+                            BlocProvider.of<AiSearchCubit>(context)
+                                .searchAiChat(_controller.text);
+                          }
+                        },
+                        child: Text("search_tickets_button".tr())),
+                  ),
+                )
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2144,6 +2180,18 @@ class _DestinationImageCarouselState extends State<DestinationImageCarousel> {
   int _index = 0;
   Timer? _timer;
 
+  /// Xotiradagi dekod o'lchami — joy o'lchami × DPR, faqat bitta tomon
+  /// (ikkalasi berilsa rasm cho'ziladi, №43). Birinchi layout'da hisoblanadi.
+  ({int? width, int? height}) _cacheSize = (width: null, height: null);
+
+  /// Ko'rsatiladigan rasm bilan bir xil (o'lchamli) provider — oldindan
+  /// yuklash aynan shu kesh kalitiga tushadi.
+  ImageProvider _provider(String url) => ResizeImage.resizeIfNeeded(
+        _cacheSize.width,
+        _cacheSize.height,
+        CachedNetworkImageProvider(url, cacheManager: AppCacheManager.instance),
+      );
+
   @override
   void initState() {
     super.initState();
@@ -2158,7 +2206,8 @@ class _DestinationImageCarouselState extends State<DestinationImageCarousel> {
   }
 
   Future<void> _loadImages() async {
-    final imgs = await PexelsService.instance.getImages(widget.query, perPage: 3);
+    final imgs =
+        await PexelsService.instance.getImages(widget.query, perPage: 3);
     if (!mounted || imgs.isEmpty) return;
     setState(() => _images = imgs);
     _precache(imgs);
@@ -2167,8 +2216,7 @@ class _DestinationImageCarouselState extends State<DestinationImageCarousel> {
 
   void _precache(List<String> imgs) {
     for (final url in imgs) {
-      precacheImage(CachedNetworkImageProvider(url), context)
-          .catchError((_) {});
+      precacheImage(_provider(url), context).catchError((_) {});
     }
   }
 
@@ -2196,6 +2244,14 @@ class _DestinationImageCarouselState extends State<DestinationImageCarousel> {
 
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, constraints) {
+      _cacheSize = coverImageCacheSize(
+          context, constraints.maxWidth, constraints.maxHeight);
+      return _buildImage();
+    });
+  }
+
+  Widget _buildImage() {
     if (_images.isEmpty) {
       // Javob kelguncha — hozirgi ko'rinish
       return _fallback();
@@ -2209,8 +2265,8 @@ class _DestinationImageCarouselState extends State<DestinationImageCarousel> {
         fit: BoxFit.cover,
         width: double.infinity,
         height: double.infinity,
-        memCacheWidth: 800,
-        memCacheHeight: 600,
+        memCacheWidth: _cacheSize.width,
+        memCacheHeight: _cacheSize.height,
         fadeInDuration: const Duration(milliseconds: 300),
         placeholder: (_, __) => _fallback(),
         errorWidget: (_, __, ___) => _fallback(),

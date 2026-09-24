@@ -45,6 +45,10 @@ class _SearchCityWidgetState extends State<SearchCityWidget> {
   /// Ro'yxat surilganda qidiruv maydoni ostida chiziq ko'rsatiladi.
   final ValueNotifier<bool> _isScrolled = ValueNotifier(false);
 
+  /// Oyna ochilganda qidiruv maydoniga avtomatik fokus.
+  final FocusNode _searchFocus = FocusNode();
+  Animation<double>? _routeAnimation;
+
   // Cache keys
   static const String _recentFromKey = 'recent_from_airports';
   static const String _recentToKey = 'recent_to_airports';
@@ -61,13 +65,40 @@ class _SearchCityWidgetState extends State<SearchCityWidget> {
   void initState() {
     super.initState();
     _loadRecentSearches();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _focusWhenOpened());
   }
 
   @override
   void dispose() {
     _searchDebounce?.cancel();
+    _routeAnimation?.removeListener(_onRouteAnimation);
+    _searchFocus.dispose();
     _isScrolled.dispose();
     super.dispose();
+  }
+
+  /// Sheet ochilish animatsiyasining shu qismidan keyin fokus beriladi.
+  /// `easeOutCubic` bilan bu paytda sheet yo'lining ~2/3 qismini o'tgan
+  /// bo'ladi — klaviatura sheet bilan deyarli parallel chiqadi. Animatsiya
+  /// to'liq tugashini kutish (~380 ms) klaviaturani sezilarli kechiktirardi.
+  static const double _focusAtAnimation = 0.3;
+
+  void _focusWhenOpened() {
+    if (!mounted) return;
+    final animation = ModalRoute.of(context)?.animation;
+    if (animation == null || animation.value >= _focusAtAnimation) {
+      _searchFocus.requestFocus();
+      return;
+    }
+    _routeAnimation = animation..addListener(_onRouteAnimation);
+  }
+
+  void _onRouteAnimation() {
+    final animation = _routeAnimation;
+    if (animation == null || animation.value < _focusAtAnimation) return;
+    animation.removeListener(_onRouteAnimation);
+    _routeAnimation = null;
+    if (mounted) _searchFocus.requestFocus();
   }
 
   void _loadRecentSearches() {
@@ -225,8 +256,9 @@ class _SearchCityWidgetState extends State<SearchCityWidget> {
   Widget _buildHeader(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
-      child: SizedBox(
-        height: 48,
+      // Qat'iy balandlik emas — katta shriftda sarlavha kesilmaydi (№32).
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
         child: Stack(
           alignment: Alignment.center,
           children: [
@@ -266,6 +298,7 @@ class _SearchCityWidgetState extends State<SearchCityWidget> {
 
     return TextField(
       controller: cubit.controller,
+      focusNode: _searchFocus,
       keyboardType: TextInputType.name,
       textInputAction: TextInputAction.search,
       textAlignVertical: TextAlignVertical.center,
@@ -320,6 +353,7 @@ class _SearchCityWidgetState extends State<SearchCityWidget> {
           builder: (context, value, _) {
             if (value.text.isEmpty) return const SizedBox.shrink();
             return IconButton(
+              tooltip: MaterialLocalizations.of(context).deleteButtonTooltip,
               onPressed: () {
                 _searchDebounce?.cancel();
                 cubit.controller.clear();

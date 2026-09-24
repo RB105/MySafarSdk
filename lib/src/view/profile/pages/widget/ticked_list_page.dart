@@ -43,8 +43,16 @@ class TicketList extends StatelessWidget {
           padding: EdgeInsets.fromLTRB(16, 14, 16, 16 + bottomInset),
           itemCount: tickets.length,
           separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (context, index) =>
-              MyTicketWidget(ticketsModel: tickets[index]),
+          // Key — yangilanishdan keyin karta holati (taymer, yuklanish)
+          // boshqa buyurtmaga o'tib qolmasin (№88). Indeks — takroriy/bo'sh
+          // id'larda ham kalit yagona bo'lsin.
+          itemBuilder: (context, index) {
+            final t = tickets[index];
+            return MyTicketWidget(
+              key: ValueKey('order-$index-${t.id}-${t.billingId}'),
+              ticketsModel: t,
+            );
+          },
         ),
       );
     }

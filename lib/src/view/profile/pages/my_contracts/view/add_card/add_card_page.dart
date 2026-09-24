@@ -122,7 +122,10 @@ class _AddCardPageState extends State<AddCardPage> {
   Future<void> _openOferta() async {
     final result = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(builder: (_) => const OfertaPage()),
+      MaterialPageRoute(
+        settings: const RouteSettings(name: OfertaPage.routeName),
+        builder: (_) => const OfertaPage(),
+      ),
     );
     if (!mounted) return;
     if (result == true) {
@@ -182,6 +185,7 @@ class _AddCardPageState extends State<AddCardPage> {
       final added = await Navigator.push<bool>(
         context,
         MaterialPageRoute(
+          settings: const RouteSettings(name: CardOtpPage.routeName),
           builder: (_) => CardOtpPage(
             otpId: id,
             cardType: cardType,

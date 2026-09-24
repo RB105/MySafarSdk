@@ -1,3 +1,4 @@
+import 'package:mysafar_sdk/src/view/destinations/cover_image_cache_size.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:mysafar_sdk/src/core/enum/currency.dart'
@@ -6,7 +7,8 @@ import 'package:mysafar_sdk/src/core/tools/app_cache_manager.dart'
     show AppCacheManager;
 import 'package:mysafar_sdk/src/core/tools/currency_provider.dart'
     show CurrencyProvider;
-import 'package:mysafar_sdk/src/core/tools/formatters.dart' show ElementFormatter;
+import 'package:mysafar_sdk/src/core/tools/formatters.dart'
+    show ElementFormatter;
 import 'package:mysafar_sdk/src/cubit/destinations/destination_list_cubit.dart';
 import 'package:mysafar_sdk/src/model/remote/destination/destination_detail_model.dart'
     show DestLocalizedText;
@@ -296,15 +298,24 @@ class _DestinationGridCard extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 if (item.image.isNotEmpty)
-                  CachedNetworkImage(
-                    cacheManager: AppCacheManager.instance,
-                    imageUrl: item.image,
-                    fit: BoxFit.cover,
-                    fadeInDuration: const Duration(milliseconds: 150),
-                    placeholder: (_, __) =>
-                        Container(color: const Color(0xFFE8ECF2)),
-                    errorWidget: (_, __, ___) =>
-                        Container(color: const Color(0xFF16244A)),
+                  // Karta o'lchamida dekodlanadi (№43).
+                  LayoutBuilder(
+                    builder: (context, c) {
+                      final size =
+                          coverImageCacheSize(context, c.maxWidth, c.maxHeight);
+                      return CachedNetworkImage(
+                        cacheManager: AppCacheManager.instance,
+                        imageUrl: item.image,
+                        fit: BoxFit.cover,
+                        memCacheWidth: size.width,
+                        memCacheHeight: size.height,
+                        fadeInDuration: const Duration(milliseconds: 150),
+                        placeholder: (_, __) =>
+                            Container(color: const Color(0xFFE8ECF2)),
+                        errorWidget: (_, __, ___) =>
+                            Container(color: const Color(0xFF16244A)),
+                      );
+                    },
                   )
                 else
                   Container(color: const Color(0xFF16244A)),
@@ -402,8 +413,7 @@ class _PriceBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final number = ElementFormatter.formatNumberWithSpaces(amount);
     final pricePart = '$number ${currency.label}';
-    final template =
-        "home_price_from".tr(namedArgs: {"price": '\u0001'});
+    final template = "home_price_from".tr(namedArgs: {"price": '\u0001'});
     final parts = template.split('\u0001');
     final prefix = parts.isNotEmpty ? parts.first : '';
     final suffix = parts.length > 1 ? parts.last : '';

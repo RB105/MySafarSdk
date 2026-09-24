@@ -1,5 +1,7 @@
 // ignore_for_file: use_build_context_synchronously
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
@@ -7,23 +9,45 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
-import 'package:mysafar_sdk/src/core/tools/formatters.dart'
-    show ElementFormatter;
+import 'package:mysafar_sdk/src/core/tools/lang_helper.dart' show dataLang;
 import 'package:mysafar_sdk/src/core/tools/phone_format.dart';
+import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart'
+    show ErrorDialogAction, ProjectDialogs;
+import 'package:mysafar_sdk/src/core/widgets/booking_create_loading_widget.dart';
+import 'package:mysafar_sdk/src/core/widgets/sdk_dialog.dart'
+    show
+        SdkDialogAction,
+        SdkDialogButtonVariant,
+        SdkDialogTone,
+        showSdkSheetAlert;
 import 'package:mysafar_sdk/src/core/widgets/stable_keyboard_insets.dart';
 import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
+import 'package:mysafar_sdk/src/cubit/booking/create/booking_gate.dart';
 import 'package:mysafar_sdk/src/cubit/booking/passenger/passenger_cubit.dart';
 import 'package:mysafar_sdk/src/cubit/booking/passenger/passenger_state.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart';
+import 'package:mysafar_sdk/src/model/local/passenger_model.dart'
+    show PassengerModel;
+import 'package:mysafar_sdk/src/model/local/passenger_rules.dart';
 import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_model.dart'
     show FlightElement;
-import 'package:mysafar_sdk/src/view/booking/booking_create_page.dart';
+import 'package:mysafar_sdk/src/view/booking/booking_create_flow.dart';
 import 'package:mysafar_sdk/src/view/booking/passenger_form_page.dart';
+import 'package:mysafar_sdk/src/view/booking/webview_page.dart'
+    show WebViewScreen;
 import 'package:mysafar_sdk/src/view/booking/widget/booking_form_fields.dart'
     show BookingFormStyle;
 import 'package:mysafar_sdk/src/view/booking/widget/contact_form_widget.dart';
+import 'package:mysafar_sdk/src/view/booking/widget/flight_details_sheet.dart';
 import 'package:mysafar_sdk/src/view/booking/widget/next_button_widget.dart';
-import 'package:mysafar_sdk/src/view/booking/widget/support_widget.dart';
+import 'package:mysafar_sdk/src/view/booking/widget/route_arc_hero.dart';
+import 'package:mysafar_sdk/src/view/booking/widget/support_widget.dart'
+    show BookingCard;
+import 'package:mysafar_sdk/src/view/tickets/ticket_page.dart'
+    show RecommendationsTicketPage;
+
+/// O'zbekiston telefon kodi — bo'sh telefon maydoniga fokusda qo'yiladi.
+const String _kUzPhonePrefix = '998';
 
 class PassengerInformationPage extends StatefulWidget {
   final FlightElement element;
@@ -31,12 +55,18 @@ class PassengerInformationPage extends StatefulWidget {
   final int inf;
   final int chd;
 
+  /// "Bron qilish" bosilganda hali tugamagan reys tekshiruvi (№36). Bron
+  /// yaratishdan oldin kutiladi: bron tokeni (trId) va narx tekshirilgan
+  /// elementdan olinadi. `null` — reys allaqachon tekshirilgan.
+  final FlightValidation? pendingValidation;
+
   const PassengerInformationPage({
     super.key,
     required this.element,
     required this.adt,
     required this.chd,
     required this.inf,
+    this.pendingValidation,
   });
 
   static const routeName = '/passengerInformation';
@@ -58,6 +88,8 @@ class _PassengerInformationPageState extends State<PassengerInformationPage> {
       infantCount: widget.inf,
       trId: widget.element.id,
       price: widget.element.price,
+      firstFlightDate: _firstFlightDate(widget.element),
+      lastFlightDate: _lastFlightDate(widget.element),
     )..initialize();
   }
 
@@ -73,6 +105,7 @@ class _PassengerInformationPageState extends State<PassengerInformationPage> {
       value: _cubit,
       child: _PassengerInformationView(
         element: widget.element,
+        pendingValidation: widget.pendingValidation,
         adt: widget.adt,
         chd: widget.chd,
         inf: widget.inf,
@@ -83,12 +116,14 @@ class _PassengerInformationPageState extends State<PassengerInformationPage> {
 
 class _PassengerInformationView extends StatefulWidget {
   final FlightElement element;
+  final FlightValidation? pendingValidation;
   final int adt;
   final int inf;
   final int chd;
 
   const _PassengerInformationView({
     required this.element,
+    this.pendingValidation,
     required this.adt,
     required this.chd,
     required this.inf,
@@ -100,6 +135,18 @@ class _PassengerInformationView extends StatefulWidget {
 }
 
 class _PassengerInformationViewState extends State<_PassengerInformationView> {
+  /// Joriy reys — fondagi tekshiruvdan so'ng tasdiqlangan element bilan
+  /// almashtiriladi (yangi narx pastki panelda ham ko'rinadi).
+  late FlightElement _element = widget.element;
+
+  /// Hali kutilmagan reys tekshiruvi (№36); natija qo'llangach `null`.
+  late FlightValidation? _pendingValidation = widget.pendingValidation;
+
+  /// Bron yaratish oqimi (№22) — alohida tasdiqlash sahifasi o'rniga shu
+  /// sahifadagi tugma bronni yaratadi va to'lov sahifasini ochadi.
+  final BookingCreateFlow _bookingFlow = BookingCreateFlow();
+  bool _bookingBusy = false;
+
   final _scrollController = ScrollController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -118,8 +165,65 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
 
   int get _totalPassengers => widget.adt + widget.chd + widget.inf;
 
+  /// Tugma ostidagi teskari sanoq: 15:00 dan 00:00 gacha. Faqat shu yozuv
+  /// qayta quriladi, butun sahifa emas.
+  static const Duration _holdDuration = Duration(minutes: 15);
+  final ValueNotifier<Duration> _holdLeft = ValueNotifier(_holdDuration);
+  Timer? _holdTimer;
+
+  /// Vaqt tugadi — narx/joy eskirgan hisoblanadi: tugma o'chadi va
+  /// foydalanuvchi natijalar sahifasiga qaytariladi.
+  bool _holdExpired = false;
+
+  void _startHoldCountdown() {
+    _holdTimer?.cancel();
+    _holdLeft.value = _holdDuration;
+    _holdTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      final left = _holdLeft.value - const Duration(seconds: 1);
+      if (left <= Duration.zero) {
+        _holdLeft.value = Duration.zero;
+        timer.cancel();
+        _onHoldExpired();
+        return;
+      }
+      _holdLeft.value = left;
+    });
+  }
+
+  Future<void> _onHoldExpired() async {
+    if (!mounted || _holdExpired) return;
+    setState(() => _holdExpired = true);
+
+    // Sahifa ustida boshqa ekran (yo'lovchi formasi, varaq, bron/to'lov)
+    // bo'lsa — dialog hozir emas, shu sahifaga qaytilgach chiqadi.
+    while (mounted && !(ModalRoute.of(context)?.isCurrent ?? true)) {
+      await Future<void>.delayed(const Duration(seconds: 1));
+    }
+    if (!mounted) return;
+
+    final searchAgain = await ProjectDialogs.showPricesOutdatedDialog(context);
+    if (!mounted) return;
+    // "Qayta qidirish" — natijalar sahifasiga qaytib, xuddi shu parametrlar
+    // bilan yangi so'rov. Aks holda shunchaki natijalarga qaytiladi.
+    // Kiritilgan yo'lovchilar qoralamada saqlanib qoladi.
+    if (searchAgain && RecommendationsTicketPage.returnAndSearchAgain(context)) {
+      return;
+    }
+    Navigator.of(context).popUntil(
+      (r) => r.isFirst || r.settings.name == RecommendationsTicketPage.routeName,
+    );
+  }
+
+  static String _mmss(Duration d) {
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${two(d.inMinutes)}:${two(d.inSeconds % 60)}';
+  }
+
   bool _isContactControllersFilled = false;
-  bool _formFieldFocused = false;
+
+  /// Kontakt maydoni fokusdami — faqat pastki panel shunga qarab qayta
+  /// quriladi (butun sahifa emas).
+  final ValueNotifier<bool> _formFieldFocused = ValueNotifier(false);
 
   /// Klaviatura ustidagi "Keyingi" paneli. Sahifa yopilayotganda
   /// ([StableKeyboardInsets.isLeaving]) oxirgi holatida qoladi.
@@ -149,6 +253,51 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
     for (final node in _allFormFocusNodes) {
       node.addListener(_updateFormFocusState);
     }
+    _phoneFocusNode.addListener(_onPhoneFocusChanged);
+    _passengerCubit = context.read<PassengerCubit>();
+    // To'lov usullarini oldindan (fonda) keshlaymiz — bron yaratilgach to'lov
+    // sahifasida ro'yxat darhol chiqadi (№38).
+    BookingCreateFlow.prefetchPaymentTypes();
+    _startHoldCountdown();
+  }
+
+  /// Fokus listener'lari sahifa yopilayotganda ham chaqirilishi mumkin —
+  /// o'shanda `context.read` xavfli, shuning uchun oldindan olinadi.
+  late final PassengerCubit _passengerCubit;
+
+  /// Telefon bo'sh bo'lsa fokusda `+998` o'zi qo'yiladi (asosiy auditoriya);
+  /// boshqa davlat kodi uchun o'chirib yozish mumkin. Faqat prefiks qolib
+  /// fokus ketsa — maydon yana bo'shatiladi.
+  void _onPhoneFocusChanged() {
+    if (!mounted) return;
+    if (_phoneFocusNode.hasFocus) {
+      if (_rawPhoneDigits.isEmpty && _phoneController.text.isEmpty) {
+        if (!_shouldPrefixUzPhone()) return;
+        const prefix = _kUzPhonePrefix;
+        _rawPhoneDigits = prefix;
+        _phoneController.value = TextEditingValue(
+          text: formatInternationalPhone(prefix),
+          selection: TextSelection.collapsed(
+              offset: formatInternationalPhone(prefix).length),
+        );
+        _passengerCubit.updatePhone(prefix);
+      }
+    } else if (_rawPhoneDigits == _kUzPhonePrefix) {
+      _rawPhoneDigits = '';
+      _phoneController.clear();
+      if (!_passengerCubit.isClosed) _passengerCubit.updatePhone('');
+    }
+  }
+
+  /// Oldin kiritilgan telefonlar bo'lsa va ularning hech biri `998` bilan
+  /// boshlanmasa — foydalanuvchi boshqa davlatdan, prefiks qo'yilmaydi.
+  bool _shouldPrefixUzPhone() {
+    final previous = _cachedSuggestions('phone')
+        .map(normalizePhoneDigits)
+        .where((p) => p.isNotEmpty)
+        .toList();
+    return previous.isEmpty ||
+        previous.any((p) => p.startsWith(_kUzPhonePrefix));
   }
 
   /// Bron sahifasida faqat kontakt maydonlari qoldi — yo'lovchilar alohida
@@ -162,9 +311,7 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
     final focused = FocusManager.instance.primaryFocus;
     final hasFormFocus =
         focused != null && _allFormFocusNodes.contains(focused);
-    if (hasFormFocus != _formFieldFocused && mounted) {
-      setState(() => _formFieldFocused = hasFormFocus);
-    }
+    if (mounted) _formFieldFocused.value = hasFormFocus;
   }
 
   @override
@@ -173,11 +320,16 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
     for (final node in _allFormFocusNodes) {
       node.removeListener(_updateFormFocusState);
     }
+    _phoneFocusNode.removeListener(_onPhoneFocusChanged);
+    _formFieldFocused.dispose();
+    _holdTimer?.cancel();
+    _holdLeft.dispose();
     _scrollController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
     _emailFocusNode.dispose();
     _phoneFocusNode.dispose();
+    _bookingFlow.dispose();
     super.dispose();
   }
 
@@ -185,6 +337,18 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
   Widget build(BuildContext context) {
     return BlocConsumer<PassengerCubit, PassengerState>(
       listener: _handleStateChanges,
+      // Email / telefon har harfda cubit'ga yoziladi — butun sahifa qayta
+      // qurilmasin (maydonlar o'z controller'i orqali yangilanadi). Saqlash /
+      // xato oraliq holatlarida ham sahifa spinner'ga almashmaydi.
+      buildWhen: (previous, current) {
+        if (current is! PassengerLoaded) return previous is PassengerInitial;
+        if (previous is PassengerLoaded &&
+            (previous.email != current.email ||
+                previous.phone != current.phone)) {
+          return false;
+        }
+        return true;
+      },
       builder: (context, state) {
         if (state is! PassengerLoaded) {
           return const Scaffold(
@@ -217,19 +381,42 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
                       controller: _scrollController,
                       keyboardDismissBehavior:
                           ScrollViewKeyboardDismissBehavior.onDrag,
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                      padding: const EdgeInsets.only(bottom: 24),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _buildRouteSummary(context),
-                          const SizedBox(height: 12),
-                          const SupportWidget(),
-                          const SizedBox(height: 20),
-                          _SectionTitle("passenger_data_title".tr()),
-                          _buildPassengersList(context, state),
-                          const SizedBox(height: 20),
-                          _SectionTitle("your_contacts".tr()),
-                          _buildContactForm(context, state),
+                          // Marshrut — ekran kengligi bo'yicha (yon
+                          // to'ldirishsiz), shuning uchun scroll padding'i
+                          // faqat pastda; qolgan blok o'zi 16 px oladi.
+                          RouteArcHero(
+                            element: _element,
+                            // Faqat mavjud ma'lumot ko'rsatiladi — so'rov yo'q.
+                            onDetails: () => showFlightDetailsSheet(
+                              context,
+                              _element,
+                              passengerCount: _totalPassengers,
+                            ),
+                          ),
+                          Padding(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                const SizedBox(height: 4),
+                                _SectionTitle("passenger_data_title".tr()),
+                                // Tasdiqlash sahifasi olib tashlangach (№22)
+                                // eslatma shu yerda: chipta hujjatdagidek
+                                // chiqadi.
+                                const _CheckDataNotice(),
+                                const SizedBox(height: 10),
+                                _buildPassengersList(context, state),
+                                const SizedBox(height: 20),
+                                _SectionTitle("your_contacts".tr()),
+                                _buildContactForm(context, state),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -237,7 +424,10 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
                 ),
                 // Klaviatura har kadrda o'zgaradi — faqat pastki qism qayta
                 // quriladi, butun sahifa emas.
-                Builder(builder: _buildBottomArea),
+                ValueListenableBuilder<bool>(
+                  valueListenable: _formFieldFocused,
+                  builder: (context, _, __) => _buildBottomArea(context),
+                ),
               ],
             ),
           ),
@@ -290,7 +480,7 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
     } else if (state is PassengerValidationError) {
       _handleValidationError(state);
     } else if (state is PassengerSaved) {
-      _navigateToBookingPage(context, state);
+      _createBooking(state);
     }
   }
 
@@ -299,31 +489,171 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
     if (key != null) {
       _scrollToField(key);
     }
-    // Yo'lovchi maydonlari alohida sahifada — bu yerda umumiy xabar.
-    _showSnackBar(state.passengerIndex != null
-        ? "incomplete_passenger_data".tr()
+    // Yo'lovchi maydonlari alohida sahifada — qaysi yo'lovchi va nima xato
+    // ekani aniq aytiladi.
+    final index = state.passengerIndex;
+    _showSnackBar(index != null
+        ? "${"passenger_number".tr(namedArgs: {"number": "${index + 1}"})}: "
+            "${state.message.isNotEmpty ? state.message : "incomplete_passenger_data".tr()}"
         : state.message);
   }
 
-  Future<void> _navigateToBookingPage(
-      BuildContext context, PassengerSaved state) async {
-    // SDK'da login talab qilinmaydi — sessiyani host boshqaradi (web-register).
-    // Token tekshiruvi va auth bottom-sheet olib tashlangan.
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => BookingCreatePage(
-          passenger: state.passengersJson,
-          passengersToSave: state.passengersToSaveJson,
-          price: state.price,
-          trId: state.trId,
+  /// "Tasdiqlash va bron qilish" (№22): ma'lumotlar tekshirilgach bron shu
+  /// yerning o'zida yaratiladi va to'lov sahifasi ochiladi. Avval fondagi
+  /// reys tekshiruvi kutiladi (№36).
+  Future<void> _createBooking(PassengerSaved saved) async {
+    final cubit = _passengerCubit;
+    if (_bookingBusy || _bookingFlow.isRunning) return;
+    _bookingBusy = true;
+    try {
+      // Pasport safardan keyin 6 oydan kam amal qilsa — yumshoq ogohlantirish
+      // (№72). Bron to'xtatilmaydi, foydalanuvchi tanlaydi.
+      if (!await _confirmPassportExpiry(saved, cubit)) {
+        if (mounted) cubit.restoreState();
+        return;
+      }
+      if (!mounted) return;
+      // SDK'da login talab qilinmaydi — sessiyani host boshqaradi
+      // (web-register). Token tekshiruvi va auth bottom-sheet yo'q.
+      final canBook = await _awaitFlightValidation(cubit);
+      if (!mounted) return;
+      if (!canBook) {
+        cubit.restoreState();
+        return;
+      }
+      final outcome = await _bookingFlow.start(
+        context,
+        BookingCreateRequest(
+          passengers: saved.passengersJson,
+          passengersToSave: saved.passengersToSaveJson,
+          // Tekshiruvdan so'ng yangilangan token va narx.
+          trId: cubit.trId,
+          price: cubit.price,
+          flight: _element,
         ),
-      ),
+      );
+      if (!mounted) return;
+      if (outcome == BookingCreateOutcome.cancelled) {
+        LoadingDialog.dismiss(context);
+      }
+      cubit.restoreState();
+    } finally {
+      _bookingBusy = false;
+    }
+  }
+
+  /// Ogohlantirish tasdiqlangan pasportlar (`docnum|docexp`) — har bosishda
+  /// qayta so'ralmaydi.
+  final Set<String> _expiryAcknowledged = {};
+
+  /// Pasporti oxirgi reysdan keyin 6 oydan kam amal qiladigan yo'lovchilar
+  /// bo'lsa ogohlantiradi (№72). `true` — davom etish.
+  Future<bool> _confirmPassportExpiry(
+      PassengerSaved saved, PassengerCubit cubit) async {
+    final numbers = <String>[];
+    final keys = <String>[];
+    for (int i = 0; i < saved.passengersJson.length; i++) {
+      final p = PassengerModel.fromJson(saved.passengersJson[i]);
+      final key = '${p.docnum}|${p.docexp}';
+      if (_expiryAcknowledged.contains(key)) continue;
+      if (!PassengerRules.passportExpiresSoon(p.docexp,
+          lastFlight: cubit.lastFlightDate)) {
+        continue;
+      }
+      numbers.add('${i + 1}');
+      keys.add(key);
+    }
+    if (numbers.isEmpty) return true;
+    final confirmed = await showSdkSheetAlert<bool>(
+      context: context,
+      icon: Assets.iconsDialogWarningIcon,
+      tone: SdkDialogTone.warning,
+      title: 'passport_expires_soon_title'.tr(),
+      message: 'passport_expires_soon_message'
+          .tr(namedArgs: {'passengers': numbers.join(', ')}),
+      actions: [
+        SdkDialogAction(label: 'continue'.tr(), value: true),
+        SdkDialogAction(
+          label: 'change'.tr(),
+          value: false,
+          variant: SdkDialogButtonVariant.secondary,
+        ),
+      ],
     );
+    if (confirmed != true) return false;
+    _expiryAcknowledged.addAll(keys);
+    return true;
+  }
 
-    if (!mounted) return;
+  /// Fondagi reys tekshiruvini kutadi (bron yuklanish oynasi ostida).
+  /// `true` — bron qilish mumkin; `false` — xato yoki foydalanuvchi yangi
+  /// narxni rad etdi (sahifada qoladi yoki natijalarga qaytadi).
+  Future<bool> _awaitFlightValidation(PassengerCubit cubit) async {
+    while (true) {
+      final pending = _pendingValidation;
+      if (pending == null) return true;
 
-    context.read<PassengerCubit>().restoreState();
+      LoadingDialog.show(context);
+      final result = await pending.result;
+      if (!mounted) return false;
+
+      final decision = BookingGate.decide(
+        shown: _element,
+        result: result,
+        currency: context.currencyProvider.currency,
+      );
+      switch (decision) {
+        case BookingGateProceed(:final element):
+          // Yuklanish oynasi yopilmaydi — bron so'rovi shu zahoti boshlanadi.
+          _applyValidatedFlight(element, cubit);
+          return true;
+        case BookingGatePriceChanged():
+          LoadingDialog.dismiss(context);
+          // Yangi narx darhol qo'llanadi — rad etilsa ham keyingi bosishda
+          // aynan shu (ko'rsatilgan) narx bilan bron qilinadi.
+          _applyValidatedFlight(decision.element, cubit);
+          final confirmed = await ProjectDialogs.showPriceIncreasedConfirm(
+            context,
+            oldPrice: decision.oldPrice,
+            newPrice: decision.newPrice,
+            currencyLabel: decision.currencyLabel,
+          );
+          return confirmed && mounted;
+        case BookingGateFailed(:final failure):
+          LoadingDialog.dismiss(context);
+          final retry = await _showValidationError(failure, pending);
+          if (!retry || !mounted) return false;
+          setState(() => _pendingValidation = pending.retry());
+      }
+    }
+  }
+
+  void _applyValidatedFlight(FlightElement element, PassengerCubit cubit) {
+    cubit.updateFlight(trId: element.id, price: element.price);
+    setState(() {
+      _element = element;
+      _pendingValidation = null;
+    });
+  }
+
+  /// Reys tekshiruvdan o'tmadi: "Qayta urinish" (`true`) yoki "Qayta
+  /// qidirish" — natijalar sahifasiga qaytib, xuddi shu parametrlar bilan
+  /// qayta qidiriladi. Kiritilgan yo'lovchilar qoralamada saqlanib qoladi.
+  Future<bool> _showValidationError(
+      FlightValidationFailed failure, FlightValidation pending) async {
+    final action = await ProjectDialogs.showApiErrorDialog(
+      context,
+      message: failure.message,
+      errorType: failure.errorType,
+      showRetry: pending.canRetry,
+      secondaryLabel: "search_again".tr(),
+    );
+    if (!mounted) return false;
+    if (action == ErrorDialogAction.retry) return true;
+    if (!RecommendationsTicketPage.returnAndSearchAgain(context)) {
+      Navigator.of(context).maybePop();
+    }
+    return false;
   }
 
   void _updateContactControllers(String email, String phone) {
@@ -345,6 +675,7 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
       backgroundColor: Colors.transparent,
       leading: IconButton(
         onPressed: () => Navigator.of(context).maybePop(),
+        tooltip: MaterialLocalizations.of(context).backButtonTooltip,
         icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 19),
       ),
       title: Text(
@@ -352,130 +683,10 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
         style: context.textTheme.bodyLarge
             ?.copyWith(fontSize: 17, fontWeight: FontWeight.w800),
       ),
+      // Qo'llab-quvvatlash faqat shu yerda — sahifa ichidagi karta olib
+      // tashlandi.
+      actions: const [_SupportAppBarAction()],
     );
-  }
-
-  Widget _buildRouteSummary(BuildContext context) {
-    final segs = widget.element.segments ?? const [];
-    if (segs.isEmpty) return const SizedBox.shrink();
-
-    final dir0 = widget.element.getSegmentsByDirection(0);
-    final origin =
-        segs.first.dep.city?.title ?? segs.first.dep.airport?.code ?? '';
-    final dest = dir0.isNotEmpty
-        ? (dir0.last.arr.city?.title ?? dir0.last.arr.airport?.code ?? '')
-        : (segs.last.arr.city?.title ?? '');
-
-    final dir1 = widget.element.getSegmentsByDirection(1);
-    final String? depDate = _shortDate(segs.first.dep.date);
-    final String? retDate =
-        dir1.isNotEmpty ? _shortDate(dir1.first.dep.date) : null;
-
-    final parts = <String>[
-      if (depDate != null) retDate != null ? "$depDate - $retDate" : depDate,
-      "passengers_count".tr(namedArgs: {"count": "$_totalPassengers"}),
-    ];
-
-    final bool isRoundTrip = dir1.isNotEmpty;
-    final bool isDark = context.isDarkMode;
-    final brand = ProjectTheme.brandColor;
-
-    return BookingCard(
-      padding: const EdgeInsets.all(14),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.08)
-                  : brand.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(BookingFormStyle.radius),
-            ),
-            child: SvgPicture.asset(
-              Assets.iconsPlaceAirportIcon,
-              width: 22,
-              height: 22,
-              colorFilter: ColorFilter.mode(
-                isDark ? Colors.white : brand,
-                BlendMode.srcIn,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        origin,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: context.textTheme.bodyLarge?.copyWith(
-                            fontSize: 16, fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      child: Icon(
-                        isRoundTrip
-                            ? Icons.swap_horiz_rounded
-                            : Icons.arrow_forward_rounded,
-                        size: 17,
-                        color: BookingFormStyle.label(context),
-                      ),
-                    ),
-                    Flexible(
-                      child: Text(
-                        dest,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: context.textTheme.bodyLarge?.copyWith(
-                            fontSize: 16, fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  parts.join(' · '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: context.textTheme.headlineSmall?.copyWith(
-                    fontSize: 13,
-                    color: BookingFormStyle.label(context),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String? _shortDate(String? raw) {
-    if (raw == null || raw.isEmpty) return null;
-    DateTime? d = DateTime.tryParse(raw);
-    if (d == null) {
-      final parts = raw.split(RegExp(r'[.\-/]'));
-      if (parts.length == 3) {
-        final a = int.tryParse(parts[0]);
-        final b = int.tryParse(parts[1]);
-        final c = int.tryParse(parts[2]);
-        if (a != null && b != null && c != null) {
-          d = a > 31 ? DateTime(a, b, c) : DateTime(c, b, a);
-        }
-      }
-    }
-    if (d == null) return null;
-    return "${d.day} ${ElementFormatter.formatMonth(d.month).toLowerCase()}";
   }
 
   Widget _buildContactForm(BuildContext context, PassengerLoaded state) {
@@ -493,16 +704,25 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
       phoneFocusNode: _phoneFocusNode,
       onPhoneChanged: (digits) => _onPhoneChanged(cubit, digits),
       onNextField: _goToNextEmptyField,
-      rawPhoneDigits: _rawPhoneDigits,
     );
   }
 
   void _onPhoneChanged(PassengerCubit cubit, String digits) {
-    setState(() => _rawPhoneDigits = digits);
+    // setState yo'q — sahifa har raqamda qayta qurilmaydi.
+    _rawPhoneDigits = digits;
     cubit.updatePhone(digits);
   }
 
+  /// Panel matni ("Keyingi" / "Davom etish") maydonlar to'lishiga bog'liq —
+  /// faqat panel controller'larni tinglab qayta quriladi.
   Widget _buildKeyboardNextBar(BuildContext context) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([_emailController, _phoneController]),
+      builder: (context, _) => _buildKeyboardNextBarContent(context),
+    );
+  }
+
+  Widget _buildKeyboardNextBarContent(BuildContext context) {
     final isDark = context.isDarkMode;
     final targets = _fieldTargets;
     final allFilled = !targets.any(_fieldNeedsAttention);
@@ -581,7 +801,12 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
   ) {
     final passenger = state.passengers[index];
     final bool filled = passenger.displayName.isNotEmpty;
-    final bool complete = passenger.isValid;
+    final bool complete = passenger.isValid &&
+        PassengerRules.invalidFields(
+          passenger,
+          firstFlight: _firstFlightDate(_element),
+          lastFlight: _lastFlightDate(_element),
+        ).isEmpty;
     final bool hasError = state.showErrors && !complete;
     final bool isDark = context.isDarkMode;
     final brand = ProjectTheme.brandColor;
@@ -697,6 +922,16 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
           adultCount: widget.adt,
           childCount: widget.chd,
           initialSaveToProfile: current.saveToProfile.contains(index),
+          firstFlightDate: _firstFlightDate(_element),
+          lastFlightDate: _lastFlightDate(_element),
+          excludedDocnums: cubit.docnumsUsedExcept(index),
+          // Orqaga qaytilganda chala kiritilganlar ham yo'qolmaydi —
+          // slotga qoralama sifatida yoziladi (tekshiruv "Davom etish"da).
+          onDraft: (draft) {
+            if (cubit.isClosed) return;
+            cubit.setPassenger(index, draft.passenger,
+                saveToProfile: draft.saveToProfile);
+          },
         ),
       ),
     );
@@ -711,17 +946,30 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
   Widget _buildBottomButton(BuildContext context) {
     return KeyedSubtree(
       key: _continueButtonKey,
-      child: NextButtonWidget(
-        nextTittle: 'continue_purchase',
-        analyticsId: 'booking_passenger_continue',
-        onPressed: () {
-          ////////////////
-          // FocusScope.of(context).unfocus();
-          context.read<PassengerCubit>().validateAndSave();
-        },
-        passenger: _totalPassengers,
-        showButton: true,
-        price: widget.element.price,
+      child: ValueListenableBuilder<Duration>(
+        valueListenable: _holdLeft,
+        builder: (context, left, _) => NextButtonWidget(
+          // Alohida "Ma'lumotlarni tasdiqlash" sahifasi yo'q (№22) — bu
+          // bosish bronni yaratadi va to'lov sahifasini ochadi.
+          nextTittle: 'confirm_and_book',
+          analyticsId: 'booking_passenger_continue',
+          // Vaqt tugagach tugma o'chadi — davom etib bo'lmaydi.
+          onPressed: _holdExpired
+              ? null
+              : () {
+                  if (_bookingBusy) return;
+                  _dismissKeyboard();
+                  context.read<PassengerCubit>().validateAndSave();
+                },
+          passenger: _totalPassengers,
+          showButton: true,
+          // Tasdiqlash sahifasi yo'q (№22) — to'lovdan oldingi oxirgi
+          // ekran, shuning uchun jami summa shu yerda qoladi.
+          price: _element.price,
+          noteHighlight: 'booking_free'.tr(),
+          note: 'price_may_change_note'.tr(namedArgs: {'time': _mmss(left)}),
+          footer: const _OfferNotice(),
+        ),
       ),
     );
   }
@@ -771,7 +1019,9 @@ class _PassengerInformationViewState extends State<_PassengerInformationView> {
         key: _emailKey,
         focusNode: _emailFocusNode,
         getText: () => _emailController.text,
-        validator: (v) => _validateRequired(v, 'enter_email_address'.tr()),
+        validator: (v) =>
+            _validateRequired(v, 'enter_email_address'.tr()) ??
+            (PassengerCubit.isValidEmail(v) ? null : 'srv_invalid_email'.tr()),
       ),
       _BookingFieldTarget(
         fieldName: 'phone',
@@ -863,6 +1113,135 @@ class _BookingFieldTarget {
   });
 }
 
+/// Tugma ostidagi oferta qatori (№22): "davom etish — shartlarga rozilik";
+/// "Oferta" bosilsa ommaviy oferta matni ochiladi (til — uz/ru/en).
+class _OfferNotice extends StatelessWidget {
+  const _OfferNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final Color muted = BookingFormStyle.label(context);
+    final Color link =
+        context.isDarkMode ? ProjectTheme.accentLight : ProjectTheme.brandColor;
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => Navigator.pushNamed(context, WebViewScreen.routName,
+          arguments: "https://mysafar.uz/${dataLang()}/oferta"),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(text: "${"offer_accept_by_booking".tr()} · "),
+              TextSpan(
+                text: "offer_title".tr(),
+                style: TextStyle(
+                  color: link,
+                  fontWeight: FontWeight.w700,
+                  decoration: TextDecoration.underline,
+                  decorationColor: link,
+                ),
+              ),
+            ],
+          ),
+          textAlign: TextAlign.center,
+          style: context.textTheme.bodySmall?.copyWith(
+            fontSize: 12,
+            height: 1.3,
+            fontWeight: FontWeight.w500,
+            color: muted,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Yo'lovchilar ro'yxati ustidagi eslatma: chipta hujjatdagi ma'lumotlar
+/// bo'yicha rasmiylashtiriladi — bron qilishdan oldin tekshirib chiqish kerak.
+class _CheckDataNotice extends StatelessWidget {
+  const _CheckDataNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isDark = context.isDarkMode;
+    final Color brand = ProjectTheme.brandColor;
+    final Color accent = isDark ? ProjectTheme.accentLight : brand;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.06)
+            : brand.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: SvgPicture.asset(
+              Assets.iconsBookingInfoIcon,
+              width: 18,
+              height: 18,
+              colorFilter: ColorFilter.mode(accent, BlendMode.srcIn),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              "confirm_data_hint".tr(),
+              style: context.textTheme.bodyMedium?.copyWith(
+                fontSize: 13,
+                height: 1.35,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// AppBar'ning o'ng burchagidagi yordam tugmasi — bosilganda
+/// qo'llab-quvvatlash menyusi ochiladi (host sozlamalaridagi aloqa).
+class _SupportAppBarAction extends StatelessWidget {
+  const _SupportAppBarAction();
+
+  static const double _size = 38;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+    final radius = BorderRadius.circular(_size * .32);
+    return Padding(
+      padding: const EdgeInsets.only(right: 12),
+      child: Center(
+        child: Material(
+          color: isDark
+              ? Colors.white.withValues(alpha: .08)
+              : ProjectTheme.swimmer200,
+          borderRadius: radius,
+          child: InkWell(
+            borderRadius: radius,
+            onTap: () => ProjectDialogs.showSupportMenu(context),
+            child: Padding(
+              padding: const EdgeInsets.all(_size * .08),
+              child: Image.asset(
+                'packages/mysafar_sdk/assets/img/home/icons/support_ic.png',
+                width: _size * .84,
+                height: _size * .84,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _SectionTitle extends StatelessWidget {
   const _SectionTitle(this.text);
 
@@ -879,4 +1258,19 @@ class _SectionTitle extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Birinchi uchish sanasi (yosh toifasi shu kun bo'yicha).
+DateTime? _firstFlightDate(FlightElement element) {
+  final segments = element.segments ?? const [];
+  if (segments.isEmpty) return null;
+  return PassengerRules.parseFlightDate(segments.first.dep.date);
+}
+
+/// Oxirgi qo'nish sanasi (pasport safar tugaguncha amal qilishi kerak).
+DateTime? _lastFlightDate(FlightElement element) {
+  final segments = element.segments ?? const [];
+  if (segments.isEmpty) return null;
+  return PassengerRules.parseFlightDate(segments.last.arr.date) ??
+      PassengerRules.parseFlightDate(segments.last.dep.date);
 }

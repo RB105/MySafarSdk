@@ -1,4 +1,5 @@
 import 'package:hive_ce_flutter/hive_ce_flutter.dart';
+import 'package:mysafar_sdk/src/service/cache/hive_service.dart' show HiveService;
 import 'package:mysafar_sdk/src/core/constants/end_points.dart';
 
 /// Firebase Firestore'dan olinadigan va Hive'da keshlanadigan remote config.
@@ -31,7 +32,7 @@ class RemoteConfigService {
   static const String boxName = 'remote_config';
   static const String _kRecommendationEndpoints = 'recommendation_endpoints';
 
-  Box get _box => Hive.box(boxName);
+  Box get _box => HiveService.box(boxName);
 
   /// Firestore ham, kesh ham bo'sh bo'lsa ishlatiladigan zaxira ro'yxat —
   /// hozirgi qattiq yozilgan 3 endpoint.

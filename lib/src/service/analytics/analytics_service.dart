@@ -1,4 +1,5 @@
 import 'dart:async' show unawaited;
+import 'dart:convert' show base64Url, jsonDecode, utf8;
 
 import 'package:flutter/foundation.dart';
 import 'package:mysafar_sdk/src/api/sdk.dart' show MySafarSdk;
@@ -6,6 +7,8 @@ import 'package:mysafar_sdk/src/core/router/navigation_service.dart';
 import 'package:mysafar_sdk/src/core/tools/project_utils.dart'
     show ProjectUtils;
 import 'package:mysafar_sdk/src/core/config/sdk_storage.dart';
+import 'package:mysafar_sdk/src/model/local/recom_req_model.dart'
+    show RecommendationRequestBody;
 
 /// Analytics service for tracking events.
 /// Centralized service for all analytics tracking in the SDK — konkret
@@ -28,6 +31,22 @@ class AnalyticsService {
   static const String _eventApiError = 'api_error';
   static const String _eventButtonTap = 'button_tap';
   static const String _eventScreenView = 'screen_view';
+  static const String _eventResultsShown = 'results_shown';
+  static const String _eventNoResults = 'no_results';
+  static const String _eventBookingFailed = 'booking_failed';
+  static const String _eventFlightSelected = 'flight_selected';
+  static const String _eventPassengerFormStarted = 'passenger_form_started';
+  static const String _eventPassengerFormCompleted = 'passenger_form_completed';
+  static const String _eventPaymentStarted = 'payment_started';
+
+  // Voronka route nomlari (import sikli bo'lmasligi uchun literal; sahifa
+  // `routeName`lari bilan bir xil — test tekshiradi).
+  static const String passengerInfoRoute = '/passengerInformation';
+  static const String bookingConfirmRoute = '/bookingConfirm';
+
+  /// Bitta qidiruv bir necha joydan (forma + router) yozilsa takrorlanmasin.
+  static const Duration _searchDedupWindow = Duration(seconds: 3);
+  static DateTime? _lastSearchTrackedAt;
 
   /// Analytics profil ID'si sessiyalararo saqlanmaydi — uni har app ochilishida
   /// qayta qo'yish uchun oxirgi qiymatni shu kalit ostida saqlaymiz.
@@ -103,7 +122,9 @@ class AnalyticsService {
     Map<String, Object>? attributes,
   }) async {
     try {
-      if (userId != null && userId.isNotEmpty) {
+      // №97: profil ID faqat backend account ID — telefon raqami (PII)
+      // hech qachon profil ID bo'lmaydi (aks holda bir odam ikki profil).
+      if (userId != null && userId.isNotEmpty && !looksLikePhone(userId)) {
         await MySafarSdk.analytics.setUserId(userId);
         // Sessiyalararo eslab qolamiz — keyingi launchda restoreUserProfile()
         // shu ID'ni qayta qo'yadi (aks holda qaytuvchi user'da profil_id bo'sh).
@@ -115,6 +136,39 @@ class AnalyticsService {
     } catch (e) {
       debugPrint('Analytics: setUser failed: $e');
     }
+  }
+
+  /// Telefon raqamiga o'xshash ID (eski build'lar profil ID sifatida
+  /// telefonni yozgan) — bunday qiymat profil ID sifatida ishlatilmaydi.
+  @visibleForTesting
+  static bool looksLikePhone(String id) =>
+      RegExp(r'^\+?\d{11,15}$').hasMatch(id.trim());
+
+  /// JWT access token payload'idan backend foydalanuvchi ID'si (`user_id`).
+  /// Topilmasa `null`.
+  @visibleForTesting
+  static String? userIdFromJwt(String? token) {
+    if (token == null) return null;
+    final parts = token.split('.');
+    if (parts.length != 3) return null;
+    try {
+      final payload = jsonDecode(
+          utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))));
+      if (payload is! Map) return null;
+      final id = payload['user_id'] ?? payload['id'];
+      final text = id?.toString().trim() ?? '';
+      return text.isEmpty ? null : text;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Login/ro'yxatdan o'tishdan keyin: access token'dagi backend ID bilan
+  /// profilni bog'laydi (profil sahifasi ochilmasa ham). ID topilmasa faqat
+  /// [attributes] yuboriladi — profil ID keyin `ProfileCubit` orqali qo'yiladi.
+  Future<void> bindUserFromToken(String? accessToken,
+      {Map<String, Object>? attributes}) {
+    return setUser(userId: userIdFromJwt(accessToken), attributes: attributes);
   }
 
   /// Logout'da chaqiriladi — profil ID'sini tozalaydi.
@@ -134,6 +188,12 @@ class AnalyticsService {
   Future<void> restoreUserProfile() async {
     try {
       final userId = sdkStorage().read<String>(_kProfileIdKey);
+      if (userId != null && looksLikePhone(userId)) {
+        // Eski build telefonni profil ID qilib saqlagan — tashlaymiz,
+        // backend ID token/profil yuklanganda qo'yiladi.
+        await sdkStorage().remove(_kProfileIdKey);
+        return;
+      }
       if (userId != null && userId.isNotEmpty) {
         await MySafarSdk.analytics.setUserId(userId);
         debugPrint('Analytics: profile ID restored ($userId)');
@@ -171,6 +231,9 @@ class AnalyticsService {
 
   /// Ekran ko'rsatilishini kuzatadi. Navigatsiya observer'idan (har push/pop/
   /// replace'da) avtomatik chaqiriladi.
+  ///
+  /// SDK qayta ochilganda (embed) birinchi ekran "takror" deb tashlanmasligi
+  /// uchun `NavigationService.resetScreenTracking()` chaqiriladi.
   void trackScreenView(String screen) {
     if (screen.isEmpty) return;
     unawaited(_reportEvent(_eventScreenView, {'screen': screen}));
@@ -186,6 +249,27 @@ class AnalyticsService {
       'method': 'phone',
       'has_phone': phoneNumber.isNotEmpty,
     });
+  }
+
+  /// Jim (web-register) sessiya ochildi. `user_registered` faqat backend
+  /// yangi hisob yaratilganini aytganda ([isNewUser]) yuboriladi — har
+  /// yashirin webRegister ro'yxatdan o'tish emas (№97).
+  Future<void> trackWebRegister({required bool isNewUser}) async {
+    await _reportEvent(
+      isNewUser ? _eventUserRegistered : _eventUserLoggedIn,
+      const {'method': 'web_register'},
+    );
+  }
+
+  /// webRegister javobidan "yangi hisob" belgisini o'qiydi (backend
+  /// `created` / `is_new` / `is_new_user` / `registered` dan birini
+  /// yuborsa). Belgi bo'lmasa `false` — ya'ni `user_logged_in`.
+  static bool isNewUserResponse(Object? data) {
+    if (data is! Map) return false;
+    for (final key in const ['created', 'is_new', 'is_new_user', 'new_user']) {
+      if (data[key] == true) return true;
+    }
+    return false;
   }
 
   /// Track user login via phone OTP
@@ -214,19 +298,60 @@ class AnalyticsService {
   // yozilmaydi — to'lov muvaffaqiyati faqat `transaction_paid` bilan ketadi.
 
   /// Voronka 1-bosqichi: foydalanuvchi chipta qidirdi.
+  ///
+  /// Natijalar sahifasiga har qanday yo'l bilan kirilganda router ham
+  /// chaqiradi; [_searchDedupWindow] ichidagi ikkinchi chaqiruv tashlanadi
+  /// (masalan forma + router bir qidiruvni ikki marta yozmasin).
   void trackTicketSearched({
     String? from,
     String? to,
     int? passengers,
     bool? roundTrip,
     String? travelClass,
+    String? source,
   }) {
+    final now = DateTime.now();
+    final last = _lastSearchTrackedAt;
+    if (last != null && now.difference(last) < _searchDedupWindow) return;
+    _lastSearchTrackedAt = now;
     unawaited(_reportEvent(_eventTicketSearched, {
+      if (source != null) 'source': source,
       if (from != null) 'from': from,
       if (to != null) 'to': to,
       if (passengers != null) 'passengers': passengers,
       if (roundTrip != null) 'round_trip': roundTrip,
       if (travelClass != null) 'class': travelClass,
+    }));
+  }
+
+  /// [trackTicketSearched] ning qidiruv tanasidan chaqiriladigan shakli —
+  /// natijalar sahifasi ichidagi qayta qidiruvlar (sana lentasi, "qayta
+  /// qidirish", filtrdan keyin) ham `ticket_searched` bo'lib yozilsin (№97).
+  void trackTicketSearchedFor(RecommendationRequestBody body,
+      {required String source}) {
+    try {
+      final segments = body.segments ?? const [];
+      trackTicketSearched(
+        from: segments.isEmpty ? null : segments.first.from?.cityIataCode,
+        to: segments.isEmpty ? null : segments.first.to?.cityIataCode,
+        passengers: body.adt + body.chd + body.inf,
+        roundTrip: body.flight_Type == 1,
+        travelClass: body.klass,
+        source: source,
+      );
+    } catch (_) {
+      // Analitika qidiruvni hech qachon to'xtatmasin.
+    }
+  }
+
+  /// Hamma manba xato berdi (reys ko'rsatilmadi) — `no_results`
+  /// `reason: error` bilan (№97). Bo'sh javobdan farqlash uchun.
+  void trackSearchFailed({String? errorType, int? passengers}) {
+    unawaited(_reportEvent(_eventNoResults, {
+      'count': 0,
+      'reason': 'error',
+      if (errorType != null) 'error_type': errorType,
+      if (passengers != null) 'passengers': passengers,
     }));
   }
 
@@ -247,7 +372,126 @@ class AnalyticsService {
     });
   }
 
+  /// Qidiruv natijalari chiqdi ([count] > 0) yoki natija yo'q ([count] == 0
+  /// bo'lsa `no_results`). Natijalar sahifasi (tickets cubit) qidiruv
+  /// yakunlanganda BIR MARTA chaqiradi.
+  void trackSearchResults({
+    required int count,
+    String? from,
+    String? to,
+    int? passengers,
+    bool? roundTrip,
+  }) {
+    unawaited(_reportEvent(count > 0 ? _eventResultsShown : _eventNoResults, {
+      'count': count,
+      if (from != null) 'from': from,
+      if (to != null) 'to': to,
+      if (passengers != null) 'passengers': passengers,
+      if (roundTrip != null) 'round_trip': roundTrip,
+    }));
+  }
+
+  /// Bron yaratilmadi (booking-create xatosi).
+  void trackBookingFailed({
+    String? tid,
+    int? passengers,
+    Object? error,
+  }) {
+    unawaited(_reportEvent(_eventBookingFailed, {
+      if (tid != null) 'tid': tid,
+      if (passengers != null) 'passengers': passengers,
+      'message': _shortMessage(error),
+    }));
+  }
+
+  /// Voronka: foydalanuvchi natijalardan reysni tanladi (tafsilot ochildi).
+  void trackFlightSelected({
+    String? source,
+    String? from,
+    String? to,
+    String? airline,
+    num? amount,
+    String? currency,
+  }) {
+    unawaited(_reportEvent(_eventFlightSelected, {
+      if (source != null) 'source': source,
+      if (from != null) 'from': from,
+      if (to != null) 'to': to,
+      if (airline != null) 'airline': airline,
+      if (amount != null) 'amount': amount,
+      if (currency != null) 'currency': currency,
+    }));
+  }
+
+  /// Bitta forma sessiyasida `passenger_form_completed` bir marta ketadi:
+  /// forma submit'i (bron'dan oldin) ham, route fallback'i ham shu bayroq
+  /// orqali o'tadi. `passenger_form_started` qayta ochadi.
+  static bool _formCompletedSent = false;
+
+  /// Voronka: yo'lovchi ma'lumotlari formasi ochildi.
+  void trackPassengerFormStarted({int? passengers, String? source}) {
+    _formCompletedSent = false;
+    unawaited(_reportEvent(_eventPassengerFormStarted, {
+      if (passengers != null) 'passengers': passengers,
+      if (source != null) 'source': source,
+    }));
+  }
+
+  /// Voronka: yo'lovchi formasi to'ldirilib, keyingi qadamga (bron/to'lov)
+  /// o'tildi. Forma validatsiyadan o'tib bron so'rovi yuborilayotganda
+  /// chaqiriladi (bron xatosi "formani tashlab ketdi" bo'lib ko'rinmasin).
+  void trackPassengerFormCompleted({int? passengers, String? source}) {
+    if (_formCompletedSent) return;
+    _formCompletedSent = true;
+    unawaited(_reportEvent(_eventPassengerFormCompleted, {
+      if (passengers != null) 'passengers': passengers,
+      if (source != null) 'source': source,
+    }));
+  }
+
+  /// Navigatsiyadan voronka eventlari (route observer har push'da chaqiradi):
+  /// yo'lovchi sahifasi ochilsa — `passenger_form_started`; undan to'g'ridan
+  /// bron/to'lov sahifasiga o'tilsa — `passenger_form_completed`. Sahifa
+  /// ichidagi kodga bog'lanmaydi, shuning uchun oqim refaktorida ham ishlaydi.
+  void trackRouteFunnel(String? name, String? previousName) {
+    final event = funnelEventForPush(name, previousName);
+    if (event == null) return;
+    if (event == _eventPassengerFormStarted) {
+      _formCompletedSent = false;
+    } else if (event == _eventPassengerFormCompleted) {
+      // Submit'da allaqachon yozilgan bo'lsa takrorlanmaydi.
+      if (_formCompletedSent) return;
+      _formCompletedSent = true;
+    }
+    unawaited(_reportEvent(event, const {'source': 'route'}));
+  }
+
+  /// [trackRouteFunnel] mantig'i (test uchun sof funksiya).
+  @visibleForTesting
+  static String? funnelEventForPush(String? name, String? previousName) {
+    if (name == passengerInfoRoute) return _eventPassengerFormStarted;
+    if (previousName == passengerInfoRoute && name == bookingConfirmRoute) {
+      return _eventPassengerFormCompleted;
+    }
+    return null;
+  }
+
   // ─────────────────────────── Payment ───────────────────────────
+
+  /// Voronka: foydalanuvchi "To'lash"ni bosdi (to'lov so'rovi yuborilyapti).
+  void trackPaymentStarted({
+    String? trId,
+    String? paymentMethod,
+    num? amount,
+    String? currency,
+  }) {
+    unawaited(_reportEvent(_eventPaymentStarted, {
+      if (trId != null) 'tr_id': trId,
+      if (paymentMethod != null) 'payment_method': paymentMethod,
+      if (amount != null) 'amount': amount,
+      if (currency != null) 'currency': currency,
+    }));
+  }
 
   /// Track paid transaction with tr_id, amount and billing number
   Future<void> trackTransactionPaid({

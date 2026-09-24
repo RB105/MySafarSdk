@@ -20,6 +20,7 @@ PreferredSizeWidget sdkBodyColoredAppBar(
             .copyWith(statusBarColor: Colors.transparent),
     leading: IconButton(
       onPressed: () => Navigator.of(context).maybePop(),
+      tooltip: MaterialLocalizations.of(context).backButtonTooltip,
       icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 19),
     ),
     title: Column(

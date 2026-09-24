@@ -34,7 +34,9 @@ class _TixTheme {
   static const _light = _TixTheme(
     card: Colors.white,
     hi: Color(0xFF16244A),
-    mid: Color(0xFF7A849E),
+    // Ikkilamchi matn oq fonda ≥4.5:1 kontrastli bo'lsin (ilgari #7A849E ~3.8:1
+    // edi — mayda yorliqlar xira o'qilardi).
+    mid: Color(0xFF687290),
     line: Color(0xFFE8ECF3),
     tonal: Color(0xFFF1F4F9),
     dark: false,
@@ -171,6 +173,7 @@ class _FigmaTicketCardState extends State<_FigmaTicketCard> {
             onTap: () {
               HapticFeedback.lightImpact();
               AnalyticsService().trackButtonTap('ticket_select');
+              AnalyticsService().trackFlightSelected(source: 'results');
               TicketInfoPage.show(context, f);
             },
             onTapDown: (_) => _setPressed(true),
@@ -670,8 +673,9 @@ class _AirlineCircle extends StatelessWidget {
           cacheManager: AppCacheManager.instance,
           imageUrl: ProjectAssets.getSegmentProviderImg(code),
           fit: BoxFit.contain,
+          // Faqat bitta tomon — ikkalasi berilsa kvadrat bo'lmagan logo
+          // cho'zilib dekodlanadi (№43).
           memCacheWidth: 72,
-          memCacheHeight: 72,
           fadeInDuration: Duration.zero,
           fadeOutDuration: Duration.zero,
           placeholder: (_, __) => const SizedBox(),
@@ -986,4 +990,54 @@ class _MultipleDateFlightContainer extends StatelessWidget {
         isCheapest: isCheapest,
         showEconomBadge: showEconomBadge,
       );
+}
+
+/// ═══════════════════════════════════════════════════════════════════
+///  NATIJA YO'Q / XATO HOLATI — boshi berk ko'cha bo'lmasin.
+/// ═══════════════════════════════════════════════════════════════════
+
+/// "Bilet topilmadi" yoki xato holati: [_TicketsEmptyView] (ikonka, sarlavha,
+/// izoh) + ostida joriy dialoglardagi [SdkDialogButton] juftligi — asosiy va
+/// ikkilamchi amal (masalan, "Qidiruvni o'zgartirish" / "Qayta qidirish").
+class _NoResultsView extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final String primaryLabel;
+  final VoidCallback onPrimary;
+  final String secondaryLabel;
+  final VoidCallback onSecondary;
+
+  const _NoResultsView({
+    required this.title,
+    this.subtitle,
+    required this.primaryLabel,
+    required this.onPrimary,
+    required this.secondaryLabel,
+    required this.onSecondary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _TicketsEmptyView(title: title, subtitle: subtitle),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SdkDialogButton(label: primaryLabel, onPressed: onPrimary),
+              const SizedBox(height: 10),
+              SdkDialogButton(
+                label: secondaryLabel,
+                onPressed: onSecondary,
+                variant: SdkDialogButtonVariant.secondary,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }

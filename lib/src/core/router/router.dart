@@ -8,6 +8,8 @@ import 'package:mysafar_sdk/src/model/remote/fornex/pop_destinations.dart'
     show PopDestinationsModel;
 import 'package:mysafar_sdk/src/model/remote/profile/profile_model.dart';
 import 'package:mysafar_sdk/src/model/remote/profile/users_model.dart';
+import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart'
+    show AnalyticsService;
 import 'package:mysafar_sdk/src/view/ban_register/ban_register_page.dart';
 import 'package:mysafar_sdk/src/view/ban_register/uz_ban_register.dart';
 import 'package:mysafar_sdk/src/view/booking/ticket_pdf_page.dart';
@@ -41,6 +43,7 @@ import 'package:mysafar_sdk/src/view/tickets/ticket_info_page.dart';
 import 'package:mysafar_sdk/src/view/tickets/ticket_page.dart';
 import 'package:mysafar_sdk/src/view/visa/myid_verification_page.dart';
 import 'package:mysafar_sdk/src/view/visa/ordering_visa_card_page.dart';
+import 'package:mysafar_sdk/src/core/router/navigation_service.dart';
 
 class RouterGenerator {
   //Singletone
@@ -48,7 +51,11 @@ class RouterGenerator {
 
   static RouterGenerator get router => generator;
 
-  RouterGenerator._init();
+  RouterGenerator._init() {
+    // Navbar route'i uchun screen_view — ko'rinib turgan tab nomi (№19).
+    NavigationService.registerScreenAlias(
+        BottomNavBarPage.routeName, BottomNavBarPage.currentScreenName);
+  }
 
   // generator
   Route onGenerate(RouteSettings settings) {
@@ -95,7 +102,13 @@ class RouterGenerator {
       case RecommendationsTicketPage.routeName:
         return _navigateWithArgument<RecommendationRequestBody>(
           settings,
-          (args) => RecommendationsTicketPage(requestBody: args),
+          (args) {
+            // Natijalar sahifasiga qaysi yo'ldan kirilmasin (bosh forma,
+            // qidiruv sahifasi, yo'nalishlar, ovozli yordamchi) —
+            // ticket_searched yoziladi (№19). Takror dedup bilan tashlanadi.
+            _trackSearch(args);
+            return RecommendationsTicketPage(requestBody: args);
+          },
         );
 
       case TicketInfoPage.routeName:
@@ -209,6 +222,22 @@ class RouterGenerator {
           }
         }
         return _pageRouteNavigate(BottomNavBarPage(), settings);
+    }
+  }
+
+  void _trackSearch(RecommendationRequestBody body) {
+    try {
+      final segments = body.segments ?? const [];
+      AnalyticsService().trackTicketSearched(
+        from: segments.isEmpty ? null : segments.first.from?.cityIataCode,
+        to: segments.isEmpty ? null : segments.first.to?.cityIataCode,
+        passengers: body.adt + body.chd + body.inf,
+        roundTrip: body.flight_Type == 1,
+        travelClass: body.klass,
+        source: 'results_route',
+      );
+    } catch (_) {
+      // Analitika navigatsiyani hech qachon to'xtatmasin.
     }
   }
 

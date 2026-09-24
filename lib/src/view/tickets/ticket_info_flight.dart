@@ -3,6 +3,116 @@
 
 part of 'ticket_info_page.dart';
 
+/// "Borish / Qaytish" almashtirgichi — ikki teng tugma bitta sokin
+/// konteynerda. Faol tugma to'q neytral rangda, ostida yo'nalish sanasi.
+class _DirectionSwitch extends StatelessWidget {
+  final FlightElement flightElement;
+  final int count;
+  final int selected;
+  final ValueChanged<int> onSelect;
+
+  const _DirectionSwitch({
+    required this.flightElement,
+    required this.count,
+    required this.selected,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: context.color.primaryContainer,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < count; i++) ...[
+            if (i > 0) const SizedBox(width: 4),
+            Expanded(child: _tab(context, i)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _tab(BuildContext context, int index) {
+    final active = index == selected;
+    final muted = _tiMuted(context);
+    final label = (index == 0 ? "when" : "return").tr();
+    // Faol tugma — to'q neytral to'ldirilgan, matn fon rangida (teskari).
+    final activeFg = context.color.primaryContainer;
+    final date = flightElement.getDirectionTime(index);
+
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => onSelect(index),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            color: active ? _tiText(context) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SvgPicture.asset(
+                index == 0
+                    ? Assets.iconsTicketTakeoffIcon
+                    : Assets.iconsTicketLandingIcon,
+                width: 16,
+                height: 16,
+                colorFilter: ColorFilter.mode(
+                  active ? activeFg : muted,
+                  BlendMode.srcIn,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.textTheme.bodyMedium?.copyWith(
+                        fontSize: 14,
+                        height: 1.15,
+                        fontWeight: FontWeight.w700,
+                        color: active ? activeFg : _tiText(context),
+                      ),
+                    ),
+                    if (date.isNotEmpty)
+                      Text(
+                        date,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.textTheme.bodySmall?.copyWith(
+                          fontSize: 11.5,
+                          height: 1.2,
+                          fontWeight: FontWeight.w500,
+                          color:
+                              active ? activeFg.withValues(alpha: 0.75) : muted,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Bitta yo'nalish (borish yoki qaytish) kartasi: sarlavha va reys
 /// bosqichlari vaqt chizig'i.
 class _FlightDirectionCard extends StatelessWidget {
@@ -10,14 +120,10 @@ class _FlightDirectionCard extends StatelessWidget {
   final List<FlightSegment> segments;
   final int directionIndex;
 
-  /// Borish-kelish bo'lsa "Borish" / "Qaytish" belgisi ko'rsatiladi.
-  final bool showDirectionLabel;
-
   const _FlightDirectionCard({
     required this.flightElement,
     required this.segments,
     required this.directionIndex,
-    this.showDirectionLabel = false,
   });
 
   @override
@@ -32,7 +138,6 @@ class _FlightDirectionCard extends StatelessWidget {
               flightElement: flightElement,
               segments: segments,
               directionIndex: directionIndex,
-              showDirectionLabel: showDirectionLabel,
             ),
           ),
           Divider(
@@ -58,20 +163,16 @@ class _DirectionHeader extends StatelessWidget {
   final FlightElement flightElement;
   final List<FlightSegment> segments;
   final int directionIndex;
-  final bool showDirectionLabel;
 
   const _DirectionHeader({
     required this.flightElement,
     required this.segments,
     required this.directionIndex,
-    required this.showDirectionLabel,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.isDarkMode;
-    final brand = ProjectTheme.brandColor;
-    final Color accent = isDark ? Colors.white : brand;
+    final Color accent = _tiText(context);
     final muted = _tiMuted(context);
 
     final fromCity =
@@ -101,9 +202,7 @@ class _DirectionHeader extends StatelessWidget {
           height: 40,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.08)
-                : brand.withValues(alpha: 0.08),
+            color: _tiTonal(context),
             borderRadius: BorderRadius.circular(12),
           ),
           child: SvgPicture.asset(
@@ -155,24 +254,6 @@ class _DirectionHeader extends StatelessWidget {
             ],
           ),
         ),
-        if (showDirectionLabel) ...[
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: _tiTonal(context),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              (directionIndex == 0 ? "when" : "return").tr(),
-              style: context.textTheme.bodySmall?.copyWith(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w700,
-                color: muted,
-              ),
-            ),
-          ),
-        ],
       ],
     );
   }
@@ -297,7 +378,8 @@ class _FlightTimeline extends StatelessWidget {
 
   // ── Tugunlar ────────────────────────────────────────────────────────
   Widget _endpointDot(BuildContext context, {required bool filled}) {
-    final brand = ProjectTheme.brandColor;
+    // Nuqtalar neytral — sahifada ko'k faqat asosiy tugmada.
+    final brand = _tiText(context);
     return Container(
       width: 12,
       height: 12,

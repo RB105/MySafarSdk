@@ -540,6 +540,7 @@ class _DetailsButton extends StatelessWidget {
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
+              settings: const RouteSettings(name: '/myContractDetail'),
               builder: (_) =>
                   MyContractDetailPage(loanId: loanId, contractId: contractId),
             ),

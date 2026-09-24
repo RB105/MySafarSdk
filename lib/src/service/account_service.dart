@@ -1,9 +1,11 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:mysafar_sdk/src/core/config/request_config.dart';
 import 'package:mysafar_sdk/src/core/config/response_config.dart';
 import 'package:mysafar_sdk/src/core/constants/end_points.dart';
+import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:mysafar_sdk/src/core/tools/project_utils.dart';
 import 'package:mysafar_sdk/src/model/remote/profile/cheque_model.dart';
 
@@ -44,11 +46,13 @@ class AccountService with RequestConfig {
 
   Future<NetworkResponse> checkAppVersion() async {
     final versionCode = await ProjectUtils.getVersionCode();
-    NetworkResponse response =
-        await postRequest(endPoint: EndPoints.check_version_platform, params: {
-      "version_code": versionCode,
-      "platform_type": Platform.isAndroid ? "ANDROID" : "IOS"
-    });
+    NetworkResponse response = await postRequest(
+        retryable: true,
+        endPoint: EndPoints.check_version_platform,
+        params: {
+          "version_code": versionCode,
+          "platform_type": Platform.isAndroid ? "ANDROID" : "IOS"
+        });
 
     if (response is NetworkSuccessResponse) {
       return NetworkSuccessResponse(data: response.data);
@@ -77,16 +81,31 @@ class AccountService with RequestConfig {
         await getRequest(endPoint: EndPoints.user_ofd_cheques, headers: true);
 
     if (response is NetworkSuccessResponse) {
-      if (response.data is List && (response.data as List).isEmpty) {
+      final data = response.data;
+      if (data is! List) {
+        // Kutilmagan javob shakli — sahifa yuklanishda qotmasin (№89).
+        return NetworkErrorResponse(error: 'error_other'.tr());
+      }
+      if (data.isEmpty) {
         return NetworkErrorResponse(
             error: "empty", errorType: ErrorType.emptyResponse);
       }
 
-      final result = (response.data as List)
-          .map(
-            (e) => ChequeModel.fromJson(e),
-          )
-          .toList();
+      // Bitta buzuq chek butun ro'yxatni yiqitmaydi — o'tkazib yuboriladi
+      // (TypeError ham ushlanadi).
+      final result = <ChequeModel>[];
+      for (final e in data) {
+        if (e is! Map) continue;
+        try {
+          result.add(ChequeModel.fromJson(Map<String, dynamic>.from(e)));
+        } catch (err) {
+          debugPrint('MySafarSdk: chek o\'tkazib yuborildi '
+              '(${err.runtimeType})');
+        }
+      }
+      if (result.isEmpty) {
+        return NetworkErrorResponse(error: 'error_other'.tr());
+      }
       return NetworkSuccessResponse(data: result);
     } else if (response is NetworkErrorResponse) {
       return NetworkErrorResponse(

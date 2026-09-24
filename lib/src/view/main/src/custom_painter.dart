@@ -26,17 +26,16 @@ class AnimatedAirplanePainter extends CustomPainter {
     for (int i = 0; i < 3; i++) {
       canvas.drawImageRect(
         cloudImage,
-        Rect.fromLTWH(0, 0, cloudImage.width.toDouble(), cloudImage.height.toDouble()),
+        Rect.fromLTWH(
+            0, 0, cloudImage.width.toDouble(), cloudImage.height.toDouble()),
         Rect.fromLTWH(startX + i * cloudWidth, 10, cloudWidth, cloudHeight),
         paint,
       );
     }
 
-
     double targetPlaneHeight = 120;
     double originalPlaneWidth = planeImage.width.toDouble();
     double originalPlaneHeight = planeImage.height.toDouble();
-
 
     double aspectRatio = originalPlaneWidth / originalPlaneHeight;
     double targetPlaneWidth = targetPlaneHeight * aspectRatio;
@@ -51,7 +50,6 @@ class AnimatedAirplanePainter extends CustomPainter {
       paint,
     );
   }
-
 
   @override
   bool shouldRepaint(covariant AnimatedAirplanePainter oldDelegate) {

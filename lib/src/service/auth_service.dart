@@ -60,7 +60,9 @@ class AuthService with RequestConfig {
 
       // Track phone registration analytics
       _analyticsService.trackUserRegisteredPhone(phoneNumber: phoneNum);
-      _analyticsService.setUser(userId: phoneNum, attributes: {
+      // Profil ID — backend ID (JWT), telefon emas (№97).
+      _analyticsService.bindUserFromToken(MySafarSdk.tokens.accessToken,
+          attributes: {
         'auth_provider': 'phone',
         'registered': true,
         'lang': _db.read<String>('lang') ?? 'uz',
@@ -86,8 +88,12 @@ class AuthService with RequestConfig {
       );
       MySafarSdk.callbacks.onLoggedIn?.call();
 
-      _analyticsService.trackUserRegisteredPhone(phoneNumber: phoneNumber);
-      _analyticsService.setUser(userId: phoneNumber, attributes: {
+      // №97: har jim webRegister "ro'yxatdan o'tish" emas — faqat backend
+      // yangi hisob deganda user_registered, aks holda user_logged_in.
+      _analyticsService.trackWebRegister(
+          isNewUser: AnalyticsService.isNewUserResponse(response.data));
+      _analyticsService.bindUserFromToken(MySafarSdk.tokens.accessToken,
+          attributes: {
         'auth_provider': 'web_register',
         'lang': _db.read<String>('lang') ?? 'uz',
       });
@@ -164,7 +170,8 @@ class AuthService with RequestConfig {
 
       // Track phone login analytics
       _analyticsService.trackUserLoggedInPhone(phoneNumber: phone);
-      _analyticsService.setUser(userId: phone, attributes: {
+      _analyticsService.bindUserFromToken(MySafarSdk.tokens.accessToken,
+          attributes: {
         'auth_provider': 'phone',
         'lang': _db.read<String>('lang') ?? 'uz',
       });

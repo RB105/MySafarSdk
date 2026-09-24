@@ -1,8 +1,10 @@
 // ignore_for_file: deprecated_member_use
 
+import 'package:mysafar_sdk/src/view/destinations/cover_image_cache_size.dart';
 import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:mysafar_sdk/src/core/tools/app_cache_manager.dart' show AppCacheManager;
+import 'package:mysafar_sdk/src/core/tools/app_cache_manager.dart'
+    show AppCacheManager;
 import 'package:mysafar_sdk/src/cubit/main/popularDestinations/pop_destinations_cubit.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart';
 import 'package:mysafar_sdk/src/model/remote/fornex/pop_destinations.dart'
@@ -226,14 +228,20 @@ class _ServicesPageState extends State<ServicesPage> {
                                     fit: BoxFit.cover,
                                     width: double.infinity,
                                     height: double.infinity,
-                                    imageBuilder: (context, imageProvider) {
-                                      return Image(
-                                        image: imageProvider,
-                                        fit: BoxFit.cover,
-                                        width: double.infinity,
-                                        height: double.infinity,
-                                      );
-                                    },
+                                    // Karusel o'lchamida dekodlanadi (№43).
+                                    memCacheWidth: coverImageCacheSize(
+                                            context,
+                                            context.width,
+                                            context.height * 0.48)
+                                        .width,
+                                    memCacheHeight: coverImageCacheSize(
+                                            context,
+                                            context.width,
+                                            context.height * 0.48)
+                                        .height,
+                                    // imageBuilder olib tashlandi: u
+                                    // o'lchami kichraytirilmagan provider
+                                    // oladi va memCache'ni bekor qilardi.
                                     placeholder: (context, url) =>
                                         Container(color: Colors.grey.shade300),
                                     errorWidget: (context, url, error) =>
@@ -493,8 +501,9 @@ class _ServicesPageState extends State<ServicesPage> {
             ),
           ),
           Padding(
-              padding: const EdgeInsets.only(left: 16, right: 16, top: 36),
-              child:   const BookedTicketPaymentBanner(),)
+            padding: const EdgeInsets.only(left: 16, right: 16, top: 36),
+            child: const BookedTicketPaymentBanner(),
+          )
         ],
       ),
     );

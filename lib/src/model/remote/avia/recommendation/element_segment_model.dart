@@ -95,13 +95,14 @@ class FlightSegment {
               country: Supplier(id: 0, code: "", title: "")),
       seats: _getInt(json["seats"]),
       flightNumber: json["flight_number"] ?? "",
-      direction: json["direction"] ?? "",
+      // "" / "1" kabi qiymatlar ilgari int ga TypeError tashlardi (№77).
+      direction: _getInt(json["direction"]),
       duration: json["duration"] is Map<String, dynamic>
           ? FlightDuration.fromJson(json["duration"])
           : FlightDuration(
               flight: TransferClass(common: 0, hour: 0, minute: 0),
               transfer: TransferClass(common: 0, hour: 0, minute: 0)),
-      routeDuration: json["route_duration"] ?? "",
+      routeDuration: _getInt(json["route_duration"]),
       isBaggage: json["is_baggage"] ?? false,
       baggage: Baggage.fromJson(json["baggage"]),
       comment: json["comment"] ?? "",
@@ -135,8 +136,13 @@ class FlightSegment {
           : [],
       provider: Provider.fromJson(json["provider"]),
       type: json["type"] ?? "",
-      refundBlock: RefundBlock.fromJson(json['refundBlock']),
-      exchangeBlock: ExchangeBlock.fromJson(json['exchangeBlock']));
+      // Bloklar kelmasa null qoladi (ilgari null.['beforeDeparture'] qulardi).
+      refundBlock: _asMap(json['refundBlock']) != null
+          ? RefundBlock.fromJson(_asMap(json['refundBlock'])!)
+          : null,
+      exchangeBlock: _asMap(json['exchangeBlock']) != null
+          ? ExchangeBlock.fromJson(_asMap(json['exchangeBlock'])!)
+          : null);
 
   Map<String, dynamic> toJson() => {
         "arr": arr.toJson(),
@@ -186,8 +192,8 @@ class ExchangeBlock {
 
   factory ExchangeBlock.fromJson(Map<String, dynamic> json) {
     return ExchangeBlock(
-      beforeDeparture: json['beforeDeparture'] != null
-          ? BeforeDeparture.fromJson(json['beforeDeparture'])
+      beforeDeparture: _asMap(json['beforeDeparture']) != null
+          ? BeforeDeparture.fromJson(_asMap(json['beforeDeparture'])!)
           : null,
     );
   }
@@ -206,8 +212,8 @@ class RefundBlock {
 
   factory RefundBlock.fromJson(Map<String, dynamic> json) {
     return RefundBlock(
-      beforeDeparture: json['beforeDeparture'] != null
-          ? BeforeDeparture.fromJson(json['beforeDeparture'])
+      beforeDeparture: _asMap(json['beforeDeparture']) != null
+          ? BeforeDeparture.fromJson(_asMap(json['beforeDeparture'])!)
           : null,
     );
   }
@@ -228,9 +234,9 @@ class BeforeDeparture {
 
   factory BeforeDeparture.fromJson(Map<String, dynamic> json) {
     return BeforeDeparture(
-      isAvailable: json['isAvailable'],
-      isFree: json['isFree'],
-      comment: json['comment'],
+      isAvailable: json['isAvailable'] is bool ? json['isAvailable'] : null,
+      isFree: json['isFree'] is bool ? json['isFree'] : null,
+      comment: json['comment']?.toString(),
     );
   }
 
@@ -331,13 +337,17 @@ class Baggage {
       this.weightUnit,
       this.dimensions});
 
-  factory Baggage.fromJson(Map<String, dynamic> json) => Baggage(
-      piece: json["piece"] ?? 0,
-      weight: json["weight"] ?? 0,
-      dimensions: json["dimensions"] != null
-          ? Dimensions.fromJson(json["dimensions"])
-          : Dimensions(),
-      weightUnit: json["weight_unit"]);
+  /// `baggage: null` bo'lsa — 0 bo'lak / 0 kg (ilgari butun reys qulardi).
+  factory Baggage.fromJson(dynamic raw) {
+    final json = _asMap(raw) ?? const <String, dynamic>{};
+    return Baggage(
+        piece: _getInt(json["piece"]),
+        weight: _getInt(json["weight"]),
+        dimensions: _asMap(json["dimensions"]) != null
+            ? Dimensions.fromJson(_asMap(json["dimensions"])!)
+            : Dimensions(),
+        weightUnit: json["weight_unit"]?.toString());
+  }
 
   Map<String, dynamic> toJson() => {
         "piece": piece,
@@ -358,14 +368,17 @@ class Cbaggage {
     this.weightUnit,
   });
 
-  factory Cbaggage.fromJson(Map<String, dynamic> json) => Cbaggage(
-        piece: json["piece"] ?? 0,
-        weight: json["weight"] ?? 0,
-        dimensions: json["dimensions"] is Map<String, dynamic>
-            ? Dimensions.fromJson(json["dimensions"])
-            : Dimensions(width: 0, length: 0, height: 0),
-        weightUnit: json["weight_unit"] ?? "",
-      );
+  factory Cbaggage.fromJson(dynamic raw) {
+    final json = _asMap(raw) ?? const <String, dynamic>{};
+    return Cbaggage(
+      piece: _getInt(json["piece"]),
+      weight: _getInt(json["weight"]),
+      dimensions: _asMap(json["dimensions"]) != null
+          ? Dimensions.fromJson(_asMap(json["dimensions"])!)
+          : Dimensions(width: 0, length: 0, height: 0),
+      weightUnit: "${json["weight_unit"] ?? ""}",
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         "piece": piece,
@@ -387,9 +400,9 @@ class Dimensions {
   });
 
   factory Dimensions.fromJson(Map<String, dynamic> json) => Dimensions(
-        width: json["width"],
-        length: json["length"],
-        height: json["height"],
+        width: _intOrNull(json["width"]),
+        length: _intOrNull(json["length"]),
+        height: _intOrNull(json["height"]),
       );
 
   Map<String, dynamic> toJson() => {
@@ -435,9 +448,9 @@ class TransferClass {
   });
 
   factory TransferClass.fromJson(Map<String, dynamic> json) => TransferClass(
-        common: json["common"] ?? 0,
-        hour: json["hour"] ?? 0,
-        minute: json["minute"] ?? 0,
+        common: _getInt(json["common"]),
+        hour: _getInt(json["hour"]),
+        minute: _getInt(json["minute"]),
       );
 
   Map<String, dynamic> toJson() => {

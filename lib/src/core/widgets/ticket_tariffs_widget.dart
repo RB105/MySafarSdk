@@ -1,37 +1,77 @@
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:mysafar_sdk/src/core/tools/currency_provider.dart'
     show CurrencyProvider;
+import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_model.dart'
+    show FlightElement;
 import 'package:mysafar_sdk/src/model/remote/avia/ticket_tariff_model.dart'
     show FlightTariffModel;
 import 'package:mysafar_sdk/src/view/imports/app_imports.dart';
+import 'package:mysafar_sdk/src/core/widgets/fare_status_icon.dart';
 import 'package:provider/provider.dart' show Provider;
 
 class TariffPickerWidget extends StatefulWidget {
   final List<FlightTariffModel> tariffs;
   final String id;
 
+  /// Hozir tanlangan reys. Tekshiruvdan keyin uning id'si bron tokeniga
+  /// almashadi — tarif shunda [stableKey] bo'yicha topiladi (№61).
+  final FlightElement? current;
+
   const TariffPickerWidget(
-      {super.key, required this.tariffs, required this.id});
+      {super.key, required this.tariffs, required this.id, this.current});
+
+  /// Tarifni id'siz taniydigan barqaror kalit: har segmentning reys raqami,
+  /// tarif kodi (fare code), bagaj va qo'l yuki, hamda tarif oilasi turi.
+  /// Marketing nomi kirmaydi — u so'rov tiliga qarab farq qilishi mumkin.
+  static String stableKey(FlightElement flight) {
+    final segments = flight.segments ?? const [];
+    final parts = [
+      (flight.fareFamilyType ?? '').trim().toUpperCase(),
+      for (final s in segments)
+        '${s.flightNumber.trim().toUpperCase()}:'
+            '${s.fareCode.trim().toUpperCase()}:'
+            '${s.baggage.piece}x${s.baggage.weight}:'
+            '${s.cbaggage.piece}x${s.cbaggage.weight}',
+    ];
+    return parts.join('|');
+  }
+
+  /// [tariffs] ichida [current] ga mos tarif indeksi: avval id, so'ng
+  /// [stableKey] (faqat bitta mos kelsa). Topilmasa `-1` — hech qaysi tarif
+  /// jimgina belgilanmaydi (ilgari 1-tarif belgilanib, "Tasdiqlash" reysni
+  /// boshqa tarifga almashtirib yuborardi).
+  static int indexOfCurrent(
+      List<FlightTariffModel> tariffs, String id, FlightElement? current) {
+    if (id.isNotEmpty) {
+      final byId = tariffs.indexWhere((t) => t.flight.id == id);
+      if (byId >= 0) return byId;
+    }
+    if (current == null || (current.segments ?? const []).isEmpty) return -1;
+    final key = stableKey(current);
+    int found = -1;
+    for (int i = 0; i < tariffs.length; i++) {
+      if (stableKey(tariffs[i].flight) != key) continue;
+      if (found >= 0) return -1; // Bir nechta mos — noaniq.
+      found = i;
+    }
+    return found;
+  }
 
   @override
   State<TariffPickerWidget> createState() => _TariffPickerWidgetState();
 }
 
 class _TariffPickerWidgetState extends State<TariffPickerWidget> {
-  /// selected tariff index
+  /// selected tariff index (`-1` — hozirgi tarif ro'yxatda topilmadi,
+  /// foydalanuvchi o'zi tanlaydi)
   late int selected;
   var tariffs = <FlightTariffModel>[];
 
   @override
   void initState() {
     tariffs = widget.tariffs;
-    selected = 0;
-    for (int i = 0; i < tariffs.length; i++) {
-      if (tariffs[i].flight.id == widget.id) {
-        selected = i;
-        break;
-      }
-    }
+    selected =
+        TariffPickerWidget.indexOfCurrent(tariffs, widget.id, widget.current);
     super.initState();
   }
 
@@ -50,9 +90,8 @@ class _TariffPickerWidgetState extends State<TariffPickerWidget> {
     // (light'da fon buzilib qolardi).
     final isDark = context.isDarkMode;
     return Scaffold(
-      backgroundColor: isDark
-          ? ProjectTheme.backgroundDark
-          : ProjectTheme.backgroundLight,
+      backgroundColor:
+          isDark ? ProjectTheme.backgroundDark : ProjectTheme.backgroundLight,
       body: Column(
         children: [
           _header(context),
@@ -141,15 +180,18 @@ class _TariffPickerWidgetState extends State<TariffPickerWidget> {
     final secondary = isDark
         ? ProjectTheme.secondaryTextDark
         : ProjectTheme.secondaryTextLight;
-    final name = _tariffName(tariffs[selected], selected);
-    final price =
-        currencyProvider.getElementPrice(tariffs[selected].flight.price);
+    final hasSelection = selected >= 0 && selected < tariffs.length;
+    final name = hasSelection
+        ? _tariffName(tariffs[selected], selected)
+        : 'choose_other_tariff'.tr();
+    final price = hasSelection
+        ? currencyProvider.getElementPrice(tariffs[selected].flight.price)
+        : '';
 
     return Container(
       decoration: BoxDecoration(
-        color: isDark
-            ? ProjectTheme.cardColorDark
-            : ProjectTheme.cardColorLight,
+        color:
+            isDark ? ProjectTheme.cardColorDark : ProjectTheme.cardColorLight,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
         boxShadow: context.shadowUp,
       ),
@@ -193,55 +235,62 @@ class _TariffPickerWidgetState extends State<TariffPickerWidget> {
                 ],
               ),
               const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                      Navigator.of(context).pop(tariffs[selected].flight);
-                    },
-                    child: Ink(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        gradient: LinearGradient(
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                          colors: [brand, ProjectTheme.blueBg],
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: brand.withAlpha(80),
-                            blurRadius: 16,
-                            offset: const Offset(0, 6),
+              // Tarif tanlanmagan bo'lsa tugma o'chiq (xira).
+              Opacity(
+                opacity: hasSelection ? 1 : 0.5,
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 54,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: hasSelection
+                          ? () {
+                              HapticFeedback.lightImpact();
+                              Navigator.of(context)
+                                  .pop(tariffs[selected].flight);
+                            }
+                          : null,
+                      child: Ink(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          gradient: LinearGradient(
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                            colors: [brand, ProjectTheme.blueBg],
                           ),
-                        ],
-                      ),
-                      child: Center(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              "continue".tr(),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                              ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: brand.withAlpha(80),
+                              blurRadius: 16,
+                              offset: const Offset(0, 6),
                             ),
-                            const SizedBox(width: 8),
-                            const Icon(Icons.arrow_forward_rounded,
-                                color: Colors.white, size: 18),
                           ],
+                        ),
+                        child: Center(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                "continue".tr(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Icon(Icons.arrow_forward_rounded,
+                                  color: Colors.white, size: 18),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
+              )
             ],
           ),
         ),
@@ -369,15 +418,15 @@ class _TariffCard extends StatelessWidget {
                   children: [
                     _FeatureRow(
                       icon: Icons.event_seat_rounded,
-                      label: "seat_count".tr(
-                          namedArgs: {"count": "${flight.getSeatCount()}"}),
+                      label: "seat_count"
+                          .tr(namedArgs: {"count": "${flight.getSeatCount()}"}),
                       status: null,
                     ),
                     _FeatureRow(
                       icon: Icons.shopping_bag_outlined,
                       label: flight.withCBaggage()
-                          ? "luggage_size".tr(
-                              namedArgs: {"count": flight.getCBaggage()})
+                          ? "luggage_size"
+                              .tr(namedArgs: {"count": flight.getCBaggage()})
                           : "no_luggage".tr(),
                       status: flight.withCBaggage(),
                     ),
@@ -465,8 +514,7 @@ class _FeatureRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = context.isDarkMode;
-    final brand =
-        isDark ? ProjectTheme.accentLight : ProjectTheme.brandColor;
+    final brand = isDark ? ProjectTheme.accentLight : ProjectTheme.brandColor;
     return Padding(
       padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
       child: Row(
@@ -476,10 +524,24 @@ class _FeatureRow extends StatelessWidget {
             height: 30,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: brand.withAlpha(isDark ? 45 : 20),
+              color: (status == false ? ProjectTheme.error : brand)
+                  .withAlpha(isDark ? 45 : 20),
               borderRadius: BorderRadius.circular(9),
             ),
-            child: Icon(icon, size: 16, color: brand),
+            // Shart yo'q bo'lsa ikonka qizil va ustidan chiziq tortilgan.
+            child: FareStatusIcon(
+              icon: icon,
+              positive: status ?? true,
+              size: 16,
+              color: status == false ? ProjectTheme.error : brand,
+              gapColor: Color.alphaBlend(
+                (status == false ? ProjectTheme.error : brand)
+                    .withAlpha(isDark ? 45 : 20),
+                isDark
+                    ? ProjectTheme.cardColorDark
+                    : ProjectTheme.cardColorLight,
+              ),
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(

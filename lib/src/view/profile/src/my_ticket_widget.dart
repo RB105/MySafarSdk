@@ -1,30 +1,30 @@
 // ignore_for_file: depend_on_referenced_packages
 
-import 'dart:io';
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:mysafar_sdk/src/core/localization/sdk_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:mysafar_sdk/src/core/config/dio_client.dart' show DioClient;
 import 'package:mysafar_sdk/src/core/extension/context_ext.dart';
 import 'package:mysafar_sdk/src/core/tools/lang_helper.dart';
 import 'package:mysafar_sdk/src/core/styles/theme.dart';
 import 'package:mysafar_sdk/src/core/tools/formatters.dart';
 import 'package:mysafar_sdk/src/core/tools/project_assets.dart';
 import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart';
+import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart'
+    show AppMessageType;
 import 'package:mysafar_sdk/src/generated/assets.dart';
-import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart';
 import 'package:mysafar_sdk/src/model/remote/booking/booking_create_model.dart';
 import 'package:mysafar_sdk/src/model/remote/profile/confirmed_ticket_models.dart';
+import 'package:mysafar_sdk/src/model/remote/profile/order_status_classifier.dart';
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart'
     show AnalyticsService;
+import 'package:mysafar_sdk/src/service/pdf/ticket_pdf_actions.dart';
 import 'package:mysafar_sdk/src/view/booking/booking_confirm_page.dart';
-import 'package:mysafar_sdk/src/view/profile/src/expire_time_widget.dart';
-import 'package:open_filex/open_filex.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+import 'package:mysafar_sdk/src/view/booking/widget/payment_countdown_card.dart';
+import 'package:mysafar_sdk/src/view/profile/src/order_rebook.dart';
 
 import '../../../model/remote/avia/recommendation/get_recom_res_model.dart'
     show FlightPrice, FluffyUzs;
@@ -47,45 +47,95 @@ class MyTicketWidget extends StatefulWidget {
 class _MyTicketWidgetState extends State<MyTicketWidget> {
   bool _isLoading = false;
 
+  /// "Ulashish" (PDF yuklanib share sheet ochilguncha).
+  bool _isSharing = false;
+
   /// Ko'p segmentli (multi-marshrut / vtrip) biletda karta juda uzayib
   /// ketmasligi uchun boshida FAQAT birinchi parvoz ko'rsatiladi. Foydalanuvchi
   /// tugmani bosganda qolgan segmentlar ochiladi, qayta bosilganda yig'iladi.
   bool _segmentsExpanded = false;
 
-  Future<void> downloadAndOpenFile(String url, String fileName) async {
-    try {
-      setState(() {
-        _isLoading = true;
-      });
+  /// To'lov uchun qolgan soniyalar — har soniyada faqat taymer kartasi
+  /// qayta chiziladi, butun buyurtma kartasi emas.
+  final ValueNotifier<int> _remaining = ValueNotifier<int>(0);
+  Timer? _countdown;
 
-      final Directory appDir = await getApplicationSupportDirectory();
-      final Directory targetDir = Directory(p.join(appDir.path, 'mysafar'));
+  @override
+  void initState() {
+    super.initState();
+    _startCountdown();
+  }
 
-      if (!await targetDir.exists()) {
-        await targetDir.create(recursive: true);
+  @override
+  void didUpdateWidget(covariant MyTicketWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Ro'yxat yangilangach element boshqa buyurtmaga tegishli bo'lishi mumkin.
+    if (oldWidget.ticketsModel.createdAt != widget.ticketsModel.createdAt ||
+        oldWidget.ticketsModel.orderStatus != widget.ticketsModel.orderStatus) {
+      _startCountdown();
+    }
+  }
+
+  @override
+  void dispose() {
+    _countdown?.cancel();
+    _remaining.dispose();
+    super.dispose();
+  }
+
+  /// Qolgan vaqt har safar `createdAt` dan hisoblanadi (№88) — ilova fonda
+  /// bo'lganda taymer orqada qolmaydi.
+  int _computeRemaining() => ElementFormatter()
+      .bookingExpireRemainingSeconds(widget.ticketsModel.createdAt ?? '');
+
+  void _startCountdown() {
+    _countdown?.cancel();
+    _countdown = null;
+    _remaining.value = _computeRemaining();
+    if (!OrderStatusClassifier.isAwaitingPayment(
+            widget.ticketsModel.orderStatus) ||
+        _remaining.value <= 0) {
+      return;
+    }
+    _countdown = Timer.periodic(const Duration(seconds: 1), (timer) {
+      final left = _computeRemaining();
+      _remaining.value = left;
+      if (left <= 0) {
+        timer.cancel();
+        _countdown = null;
+        // Vaqt tugadi — "To'lovga o'tish" o'rniga "Qayta bron qilish".
+        if (mounted) setState(() {});
       }
+    });
+  }
 
-      final String filePath = p.join(targetDir.path, "$fileName.pdf");
-
-      await DioClient.downloadFile(url, filePath);
-
-      await OpenFilex.open(filePath);
-    } catch (e) {
-      AnalyticsService().trackApiError(
-        endpoint: url,
-        method: 'GET',
-        errorType: 'ticket_download_error',
-        error: e,
+  /// Chipta PDF'ini (har safar yangisini) yuklab ochadi. Ochilmasa (PDF
+  /// ko'ruvchi yo'q) — brauzerda ochish taklif qilinadi (№30).
+  Future<void> downloadAndOpenFile(String url, String fileName) async {
+    setState(() {
+      _isLoading = true;
+    });
+    try {
+      final result = await TicketPdfActions.downloadAndOpen(
+        context,
+        url: url,
+        fileName: fileName,
+        forceDownload: true,
       );
-      if (!mounted) return;
-      showErrorMessage(
-        "Faylni ochishda xatolik yuz berdi",
-        context: context,
-      );
+      if (result != null && !result.isSuccess && !result.noViewer) {
+        AnalyticsService().trackApiError(
+          endpoint: url,
+          method: 'GET',
+          errorType: 'ticket_download_error',
+          error: result.errorMessage,
+        );
+      }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -336,8 +386,7 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
     final serverTitle = widget.ticketsModel.orderStatusTitle;
     final humanized = status
         .replaceAll(RegExp(r'[_\-]+'), ' ')
-        .replaceAllMapped(
-            RegExp(r'(?<=[a-z])(?=[A-Z])'), (_) => ' ')
+        .replaceAllMapped(RegExp(r'(?<=[a-z])(?=[A-Z])'), (_) => ' ')
         .trim();
     final fallback = serverTitle.isNotEmpty
         ? serverTitle
@@ -693,20 +742,60 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
   // ──────────────────────────────────────────────────────────────────
 
   /// Holatga qarab tugma: Booked (muddati o'tmagan) — to'lovga o'tish,
+  /// muddati o'tgan va parvoz oldinda — qayta bron qilish,
   /// Ticketed/Paid — chiptani yuklab olish, qolganlarida tugma yo'q.
+  /// Holatga mos amal (№59): "Yuklab olish" faqat chipta haqiqatan bor
+  /// bo'lsa (Ticketed / PartiallyTicketed / TicketedWaitingPNR + havola);
+  /// to'langan, lekin chipta hali yo'q — "chipta rasmiylashtirilmoqda".
   Widget? _actionFor(String status, ConfirmTicketResponseData responseData) {
-    switch (status) {
-      case 'Booked':
-        final canPay =
-            ElementFormatter.expireStatus(widget.ticketsModel.createdAt ?? "");
-        if (!canPay) return null;
-        return _buildPayButton(responseData);
-      case 'Ticketed':
-      case 'Paid':
-        return _buildDownloadButton(responseData);
-      default:
-        return null;
+    // To'lov vaqti o'tgan, lekin parvoz hali oldinda — o'sha yo'nalish va
+    // sana bo'yicha qayta qidiruv, yo'lovchilar oldindan to'ldiriladi.
+    if (OrderRebook.canRebook(widget.ticketsModel)) {
+      return _buildRebookAction();
     }
+    if (OrderStatusClassifier.isAwaitingPayment(status)) {
+      final canPay =
+          ElementFormatter.expireStatus(widget.ticketsModel.createdAt ?? "");
+      if (!canPay) return null;
+      return _buildPayButton(responseData);
+    }
+    final url = _ticketReceiptUrl(responseData);
+    if (OrderStatusClassifier.canDownloadTicket(status, url)) {
+      return _buildDownloadButton(responseData);
+    }
+    if (OrderStatusClassifier.isTicketPending(status, url)) {
+      return _buildTicketPendingNote();
+    }
+    return null;
+  }
+
+  /// To'langan, chipta hali chiqmagan — tugma o'rniga izoh.
+  Widget _buildTicketPendingNote() {
+    final Color c = ProjectTheme.success;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: c.withValues(alpha: _isDark ? 0.16 : 0.08),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.hourglass_top_rounded, size: 20, color: c),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'ticket_being_issued'.tr(),
+              style: context.textTheme.bodyMedium?.copyWith(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                color: _textColor,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _openPayment(ConfirmTicketResponseData responseData) {
@@ -728,74 +817,214 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
                       responseData.book?.order?.billingNumber.toString() ?? "",
                   trId: widget.ticketsModel.transaction?.trId ?? "",
                   createdAt: widget.ticketsModel.createdAt),
-              price: price),
+              price: price,
+              // Reys kartasi buyurtma ma'lumotidan (yo'nalish, sana, bagaj,
+              // qaytarish shartlari) — №23.
+              summary: BookingConfirmPage.orderSummary(responseData.book)),
         ));
   }
 
-  /// To'lovga o'tish — to'liq brend tugma, o'ngda qolgan vaqt.
+  /// To'lovga o'tish — to'lov sahifasidagi taymer kartasi
+  /// ([PaymentCountdownCard]) va asosiy tugma ([NextButtonWidget] uslubi).
   Widget _buildPayButton(ConfirmTicketResponseData responseData) {
-    final brand = ProjectTheme.brandColor;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: brand.withValues(alpha: 0.25),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Material(
-        color: brand,
-        borderRadius: BorderRadius.circular(14),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        PaymentCountdownCard(remaining: _remaining),
+        const SizedBox(height: 10),
+        _primaryButton(
+          title: "proceed_to_payment".tr(),
           onTap: () {
-            HapticFeedback.lightImpact();
+            // Taymer orqada qolgan bo'lishi mumkin (№88) — bosilganda qayta
+            // tekshiramiz: muddat o'tgan bo'lsa to'lov sahifasi ochilmaydi.
+            if (!ElementFormatter.expireStatus(
+                widget.ticketsModel.createdAt ?? "")) {
+              setState(() {});
+              ProjectDialogs.showCustomToast(
+                  context, 'payment_time_expired'.tr(),
+                  type: AppMessageType.warning);
+              return;
+            }
             _openPayment(responseData);
           },
+        ),
+      ],
+    );
+  }
+
+  /// To'lov vaqti tugagan buyurtma — izoh va "Qayta bron qilish".
+  Widget _buildRebookAction() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 1),
+              child: Icon(Icons.info_outline_rounded, size: 18, color: _muted),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                "order_rebook_hint".tr(),
+                style: context.textTheme.bodySmall?.copyWith(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: _muted,
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        _primaryButton(
+          title: "order_rebook".tr(),
+          onTap: () {
+            AnalyticsService().trackButtonTap('order_rebook');
+            OrderRebook.open(context, widget.ticketsModel);
+          },
+        ),
+      ],
+    );
+  }
+
+  /// Asosiy brend tugma — [NextButtonWidget] uslubi: markazda matn va
+  /// o'ng strelka, katta shriftda balandligi o'sadi (№32).
+  Widget _primaryButton({required String title, required VoidCallback onTap}) {
+    final brand = ProjectTheme.brandColor;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 52),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: brand.withValues(alpha: 0.25),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Material(
+          color: brand,
+          borderRadius: BorderRadius.circular(14),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              onTap();
+            },
+            child: Center(
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        title,
+                        maxLines: 2,
+                        textAlign: TextAlign.center,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: "packages/mysafar_sdk/Gilroy",
+                          fontSize: 16,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SvgPicture.asset(
+                      Assets.iconsBookingArrowRightIcon,
+                      width: 20,
+                      height: 20,
+                      colorFilter:
+                          const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Elektron chiptani yuklab olish + tizim "Ulashish" oynasi (№30).
+  Widget _buildDownloadButton(ConfirmTicketResponseData responseData) {
+    final url = _ticketReceiptUrl(responseData);
+    if (url.isEmpty) return _buildDownloadOnlyButton(responseData);
+    return Row(
+      children: [
+        Expanded(child: _buildDownloadOnlyButton(responseData)),
+        const SizedBox(width: 8),
+        _buildShareButton(url),
+      ],
+    );
+  }
+
+  /// PDF'ni yuklab tizim "Ulashish" oynasini ochadi (Telegram, pochta,
+  /// "Fayllar"ga saqlash). iPad'da oyna shu tugma ustidan chiqadi.
+  Widget _buildShareButton(String url) {
+    final brand = ProjectTheme.brandColor;
+    final Color fg = _isDark ? Colors.white : brand;
+    return Material(
+      color: _isDark
+          ? Colors.white.withValues(alpha: 0.10)
+          : brand.withValues(alpha: 0.10),
+      borderRadius: BorderRadius.circular(14),
+      clipBehavior: Clip.antiAlias,
+      child: Builder(
+        builder: (buttonContext) => InkWell(
+          onTap: _isSharing
+              ? null
+              : () async {
+                  HapticFeedback.lightImpact();
+                  AnalyticsService().trackButtonTap('ticket_share');
+                  setState(() => _isSharing = true);
+                  await TicketPdfActions.share(
+                    context,
+                    url: url,
+                    fileName: widget.ticketsModel.billingId ?? '',
+                    originContext: buttonContext,
+                  );
+                  if (mounted) setState(() => _isSharing = false);
+                },
           child: SizedBox(
             height: 52,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 8, 0),
-              child: Row(
-                children: [
-                  SvgPicture.asset(
-                    Assets.iconsOrderCardIcon,
-                    width: 20,
-                    height: 20,
-                    colorFilter:
-                        const ColorFilter.mode(Colors.white, BlendMode.srcIn),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      "proceed_to_payment".tr(),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: context.textTheme.bodyMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15.5,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: Center(
+                child: _isSharing
+                    ? SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.4,
+                          color: fg,
+                        ),
+                      )
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.ios_share_rounded, size: 20, color: fg),
+                          const SizedBox(width: 6),
+                          Text(
+                            'share_ticket'.tr(),
+                            maxLines: 1,
+                            style: context.textTheme.bodyMedium?.copyWith(
+                              color: fg,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: ExpireTimeText(
-                      createdAt: widget.ticketsModel.createdAt ?? "",
-                      onExpired: () {
-                        if (mounted) setState(() {});
-                      },
-                    ),
-                  ),
-                ],
               ),
             ),
           ),
@@ -805,7 +1034,7 @@ class _MyTicketWidgetState extends State<MyTicketWidget> {
   }
 
   /// Elektron chiptani yuklab olish — yumshoq (tonal) brend tugma.
-  Widget _buildDownloadButton(ConfirmTicketResponseData responseData) {
+  Widget _buildDownloadOnlyButton(ConfirmTicketResponseData responseData) {
     final brand = ProjectTheme.brandColor;
     final Color fg = _isDark ? Colors.white : brand;
     return Material(

@@ -69,14 +69,28 @@ class LocationAirportService {
 
   /// [force] — foydalanuvchi o'zi bosganda: oxirgi 5 daqiqadagi muvaffaqiyatsiz
   /// urinish cheklovini chetlab o'tadi (masalan, sozlamalardan ruxsat berilgan).
+  ///
+  /// [allowPrompt] — `false` bo'lsa hech qanday tizim oynasi (ruxsat yoki
+  /// joylashuv xizmatini yoqish) ko'rsatilmaydi: ruxsat allaqachon berilgan
+  /// bo'lsagina jim aniqlanadi. Ilova ochilishida shunday chaqiriladi —
+  /// ruxsat faqat foydalanuvchi "Joriy joylashuv"ni bosganda so'raladi.
   Future<AirPortsModel?> getNearbyAirport({
     String? lang,
     bool force = false,
+    bool allowPrompt = true,
   }) async {
     if (_cachedNearbyAirport != null) {
       debugPrint(
           "LocationAirportService: Returning cached nearby airport: ${_cachedNearbyAirport?.cityName}");
       return _cachedNearbyAirport;
+    }
+
+    // Jim rejim: ruxsat yo'q yoki xizmat o'chiq — so'ramaymiz va urinish
+    // hisoblanmaydi (keyin foydalanuvchi bosganda odatdagidek so'raladi).
+    if (!allowPrompt && !await canLocateSilently()) {
+      debugPrint(
+          "LocationAirportService: silent mode — no permission, skipping");
+      return null;
     }
 
     final now = DateTime.now();

@@ -16,10 +16,17 @@ class DatePickerCubit extends Cubit<DatePickerState> with NetworkCancel {
   final AirPortsModel? toWhere;
   final int? flightType;
 
+  /// Oylik narxlar so'rovi parametrlari — yo'nalish qidiruv sahifasidagi
+  /// bilan AYNAN bir xil bo'lishi kerak (adt/chd/inf/klass/direct/baggage),
+  /// aks holda AviaService keshi ishlamay, bir xil narxlar 2–3 marta
+  /// so'raladi. Berilmasa — standart (1 katta, barcha klasslar).
+  final MonthPriceParams priceParams;
+
   DatePickerCubit({
     this.fromWhere,
     this.toWhere,
     this.flightType,
+    this.priceParams = const MonthPriceParams(),
   }) : super(DatePickerInitState()) {
     if (flightType != 2) {
       getPricesByDate();
@@ -40,6 +47,12 @@ class DatePickerCubit extends Cubit<DatePickerState> with NetworkCancel {
         () => _aviaService.getPriceByMonth(
           fromWhere?.cityIataCode ?? "",
           toWhere?.cityIataCode ?? "",
+          adt: priceParams.adt,
+          chd: priceParams.chd,
+          inf: priceParams.inf,
+          klass: MonthPriceParams.normalizeKlass(priceParams.klass),
+          direct: priceParams.direct,
+          baggage: priceParams.baggage,
         ),
       );
       if (isClosed) return;
@@ -49,5 +62,32 @@ class DatePickerCubit extends Cubit<DatePickerState> with NetworkCancel {
     } catch (e) {
       debugPrint("DatePickerState $e");
     }
+  }
+}
+
+/// Oylik narxlar so'rovining yo'lovchi/klass/filtr parametrlari. Barcha
+/// chaqiruvchilar klassni shu yerda bir xil ko'rinishga keltiradi
+/// ([normalizeKlass]) — kesh kaliti mos kelishi uchun.
+class MonthPriceParams {
+  final int adt;
+  final int chd;
+  final int inf;
+  final String klass;
+  final bool direct;
+  final bool baggage;
+
+  const MonthPriceParams({
+    this.adt = 1,
+    this.chd = 0,
+    this.inf = 0,
+    this.klass = 'a',
+    this.direct = false,
+    this.baggage = false,
+  });
+
+  /// Klass kodi: bo'sh/null → `a` (barcha), kichik harf, bo'shliqsiz.
+  static String normalizeKlass(String? klass) {
+    final k = (klass ?? '').trim().toLowerCase();
+    return k.isEmpty ? 'a' : k;
   }
 }

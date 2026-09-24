@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show AssetManifest, rootBundle;
 
@@ -28,7 +29,8 @@ class HomeBackgroundCarousel extends StatefulWidget {
   State<HomeBackgroundCarousel> createState() => _HomeBackgroundCarouselState();
 }
 
-class _HomeBackgroundCarouselState extends State<HomeBackgroundCarousel> {
+class _HomeBackgroundCarouselState extends State<HomeBackgroundCarousel>
+    with WidgetsBindingObserver {
   // Manifest butun app sessiyasi davomida bir marta o'qiladi (kesh).
   static Future<List<String>>? _assetsFuture;
 
@@ -37,15 +39,34 @@ class _HomeBackgroundCarouselState extends State<HomeBackgroundCarousel> {
   Timer? _timer;
   bool _didPrecache = false;
 
+  /// Bosh sahifa ko'rinib turibdimi: ustida boshqa sahifa ochilganda
+  /// Navigator/IndexedStack `TickerMode`ni o'chiradi — taymer ham to'xtaydi.
+  bool _tickerEnabled = true;
+
+  /// Ilova fonda (paused/hidden) bo'lsa taymer ishlamaydi.
+  bool _appResumed = true;
+
+  bool get _canRotate => _tickerEnabled && _appResumed;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _assetsFuture ??= _discoverBackgrounds();
     _assetsFuture!.then((imgs) {
       if (!mounted) return;
       setState(() => _images = imgs);
+      _precacheAll();
       _startRotation();
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final resumed = state == AppLifecycleState.resumed;
+    if (resumed == _appResumed) return;
+    _appResumed = resumed;
+    _startRotation();
   }
 
   /// `backgrounds/` papkasidagi rasm asset'larini AssetManifest orqali topadi.
@@ -79,7 +100,8 @@ class _HomeBackgroundCarouselState extends State<HomeBackgroundCarousel> {
 
   void _startRotation() {
     _timer?.cancel();
-    if (_images.length < 2) return;
+    _timer = null;
+    if (_images.length < 2 || !_canRotate) return;
     _timer = Timer.periodic(HomeBackgroundCarousel.interval, (_) {
       if (!mounted) return;
       setState(() => _index = (_index + 1) % _images.length);
@@ -89,17 +111,41 @@ class _HomeBackgroundCarouselState extends State<HomeBackgroundCarousel> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Barcha fon rasmlarini oldindan keshlaymiz — almashuvda "sakrash" bo'lmaydi.
-    if (!_didPrecache && _images.isNotEmpty) {
-      _didPrecache = true;
-      for (final path in _images) {
-        precacheImage(AssetImage(path), context).catchError((_) {});
-      }
+    // TickerMode notifier'i — sahifa ustiga boshqa route ochilganda false.
+    // Eski Flutter'li host'lar bilan moslik uchun (getValuesNotifier 3.35+).
+    // ignore: deprecated_member_use
+    final notifier = TickerMode.getNotifier(context);
+    if (!identical(notifier, _tickerNotifier)) {
+      _tickerNotifier?.removeListener(_onTickerModeChanged);
+      _tickerNotifier = notifier..addListener(_onTickerModeChanged);
+      _onTickerModeChanged();
+    }
+  }
+
+  ValueListenable<bool>? _tickerNotifier;
+
+  void _onTickerModeChanged() {
+    final enabled = _tickerNotifier?.value ?? true;
+    if (enabled == _tickerEnabled) return;
+    _tickerEnabled = enabled;
+    _startRotation();
+  }
+
+  /// Barcha fon rasmlarini oldindan keshlaymiz — almashuvda "sakrash"
+  /// bo'lmaydi. Ilgari didChangeDependencies'da chaqirilardi, u paytda
+  /// ro'yxat hali bo'sh edi — shuning uchun hech narsa keshlanmasdi.
+  void _precacheAll() {
+    if (_didPrecache || _images.isEmpty || !mounted) return;
+    _didPrecache = true;
+    for (final path in _images) {
+      precacheImage(AssetImage(path), context).catchError((_) {});
     }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _tickerNotifier?.removeListener(_onTickerModeChanged);
     _timer?.cancel();
     super.dispose();
   }

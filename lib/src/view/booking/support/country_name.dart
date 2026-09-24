@@ -75,6 +75,7 @@ class _CountryListPickState extends State<CountryListPick> {
     final result = await Navigator.push(
         context,
         MaterialPageRoute(
+          settings: const RouteSettings(name: '/countryPicker'),
           builder: (context) => SelectionList(
             elements,
             selectedItem,

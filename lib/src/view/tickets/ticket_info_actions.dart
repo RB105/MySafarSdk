@@ -51,7 +51,7 @@ class _MapRouteButton extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      "Marshrutni xaritada ko'rish",
+                      "route_map_title".tr(),
                       style: context.textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w800,
                         color: brand,
@@ -60,7 +60,7 @@ class _MapRouteButton extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      "Parvoz yo'lini animatsiyada kuzating",
+                      "route_map_subtitle".tr(),
                       style: context.textTheme.titleSmall?.copyWith(
                         fontSize: 11.5,
                         color: secondary,
@@ -211,13 +211,9 @@ class _BookButtonState extends State<_BookButton> {
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   alignment: Alignment.center,
                   child: widget.isLoading
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            color: Colors.white,
-                          ),
+                      ? const CupertinoActivityIndicator(
+                          radius: 11,
+                          color: Colors.white,
                         )
                       : Row(
                           mainAxisSize: MainAxisSize.min,

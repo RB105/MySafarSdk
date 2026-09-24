@@ -90,4 +90,3 @@ class PassengerSaved extends PassengerState {
     required this.price,
   });
 }
-

@@ -23,15 +23,19 @@ import 'package:mysafar_sdk/src/core/tools/project_assets.dart'
 import 'package:mysafar_sdk/src/service/analytics/analytics_service.dart';
 import 'package:mysafar_sdk/src/generated/assets.dart' show Assets;
 import 'package:mysafar_sdk/src/core/tools/project_dialogs.dart'
-    show ErrorDialogAction, ProjectDialogs;
+    show ErrorDialogAction, ErrorDialogKind, ProjectDialogs;
 import 'package:mysafar_sdk/src/core/tools/sdk_sheets.dart';
+import 'package:mysafar_sdk/src/core/widgets/sdk_dialog.dart'
+    show SdkDialogButton, SdkDialogButtonVariant;
 import 'package:mysafar_sdk/src/core/widgets/toast_widget.dart'
     show AppMessageType;
 import 'package:mysafar_sdk/src/cubit/tickets/tickets_cubit.dart';
+import 'package:mysafar_sdk/src/cubit/tickets/flight_results_utils.dart'
+    show FlightResultsUtils, ListResultMemo;
 import 'package:mysafar_sdk/src/model/local/recom_req_model.dart'
     show RecommendationRequestBody;
 import 'package:mysafar_sdk/src/model/remote/avia/recommendation/get_recom_res_model.dart'
-    show FlightElement, FlightSegment;
+    show FlightElement, FlightSegment, GetRecommendationResModel;
 import 'package:flutter_bloc/flutter_bloc.dart' show BlocConsumer, BlocProvider;
 import 'package:flutter_svg/flutter_svg.dart' show SvgPicture;
 import 'package:mysafar_sdk/src/view/tickets/ticket_info_page.dart';
@@ -143,6 +147,12 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
   Timer? _priceRefreshTimer;
   bool _refreshDialogOpen = false;
 
+  // Foydalanuvchi eskirish dialogini yopib, natijalarni ko'rishda davom etdi —
+  // ro'yxat ustida bloklamaydigan ogohlantirish banneri ("Qayta qidirish"
+  // bilan) ko'rsatiladi. Yangi qidiruv boshlanganda o'chadi. Bron oldidan
+  // reys baribir serverda qayta tekshiriladi (TicketInfoPage).
+  bool _pricesStale = false;
+
   // ── API xatosi dialogi ────────────────────────────────────────────────
   // Qidiruvda barcha manbalar xato bergan bo'lsa (tarmoq uzilishi va h.k.),
   // ro'yxat o'rniga dialog chiqaramiz: "Qayta urinish" — xuddi shu parametrlar
@@ -165,6 +175,7 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
   void initState() {
     super.initState();
     _live.add(this);
+    _loadedStripFilters = _stripFilters();
     _loadMonthPrices();
   }
 
@@ -176,14 +187,52 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
     final to = segments.first.to?.cityIataCode ?? '';
     if (from.isEmpty || to.isEmpty) return;
     try {
-      final response = await AviaService().getPriceByMonth(from, to);
-      if (!mounted) return;
+      // Qidiruvdagi yo'lovchilar/klass bilan — qidiruv sahifasi bilan bir xil
+      // kesh kaliti (takroriy so'rov yo'q) va narxlar shu qidiruvga mos.
+      final body = widget.requestBody;
+      // №80: lenta narxlari qidiruvning "To'g'ri reys" / "Bagaj" filtrlari
+      // bilan (ilgari ulanishli/bagajsiz reys narxi ko'rinardi).
+      final (direct, baggage) = _stripFilters();
+      final int req = ++_monthPricesReq;
+      final response = await AviaService().getPriceByMonth(
+        from,
+        to,
+        adt: body.adt,
+        chd: body.chd,
+        inf: body.inf,
+        klass: body.klass ?? 'a',
+        direct: direct,
+        baggage: baggage,
+      );
+      if (!mounted || req != _monthPricesReq) return;
       if (response is NetworkSuccessResponse) {
         setState(() => _monthPrices = response.data as TicketDatePriceModel);
       }
     } catch (_) {
       // Narxlarsiz ham lenta ishlayveradi.
     }
+  }
+
+  int _monthPricesReq = 0;
+  (bool, bool)? _loadedStripFilters;
+
+  /// Sana lentasi narxlari uchun filtrlar: qidiruv (server) filtri yoki
+  /// ekrandagi ko'rinish filtri yoqilgan bo'lsa.
+  (bool, bool) _stripFilters() {
+    final body = _ticketCubit?.filterReqBody ?? widget.requestBody;
+    return (
+      body.isDirect() || _viewFilters.directOnly,
+      body.getBaggage() || _viewFilters.baggageOnly,
+    );
+  }
+
+  /// Filtrlar o'zgargan bo'lsa lenta narxlarini qayta so'raydi.
+  void _reloadMonthPricesIfFiltersChanged() {
+    if (!_showDateStrip) return;
+    final current = _stripFilters();
+    if (current == _loadedStripFilters) return;
+    _loadedStripFilters = current;
+    _loadMonthPrices();
   }
 
   /// Birinchi segment sanasi ("24.7.2026" yoki "24-07-2026" ko'rinishida).
@@ -212,8 +261,20 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
 
   int get _viewSort => _viewFilters.sort;
 
+  // Ko'rinish filtrlari versiyasi — filtrlangan ro'yxat keshi ([_viewFlightsMemo])
+  // faqat filtr yoki natija ro'yxati o'zgarganda qayta hisoblanishi uchun.
+  int _viewFiltersVersion = 0;
+  final ListResultMemo<List<FlightElement>> _viewFlightsMemo =
+      ListResultMemo<List<FlightElement>>();
+
   void _clearViewFilters({String source = 'empty_view'}) {
-    setState(() => _viewFilters.reset());
+    setState(() {
+      _viewFilters.reset();
+      _viewFiltersVersion++;
+      _orderFrozen = false;
+      _hasHiddenUpdates = false;
+    });
+    _reloadMonthPricesIfFiltersChanged();
     AnalyticsService()
         .trackButtonTap('filter_reset', extra: {'source': source});
   }
@@ -284,7 +345,14 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
       countResults: (values) => _applyViewFilters(flights, values).length,
     );
     if (result != null && mounted) {
-      setState(() => _viewFilters.copyFrom(result));
+      setState(() {
+        _viewFilters.copyFrom(result);
+        _viewFiltersVersion++;
+        // Foydalanuvchi o'zi qayta saraladi — muzlatilgan tartib bekor.
+        _orderFrozen = false;
+        _hasHiddenUpdates = false;
+      });
+      _reloadMonthPricesIfFiltersChanged();
     }
   }
 
@@ -302,17 +370,21 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
     cubit.add(GetRecommendationsEvent(cubit.filterReqBody));
   }
 
-  // ── Har saralanishda eng arzonni ko'rsatish ───────────────────────────
-  // Natijalar 3 ta manbadan bosqichma-bosqich keladi va ro'yxat har safar narx
-  // bo'yicha qayta saralanadi (eng arzon tepaga) — oxirgi manbani kutmasdan.
-  // Agar foydalanuvchi shu paytgacha pastga scroll qilib ketgan bo'lsa, yangi
-  // eng arzonni sezmay qoladi. Shuning uchun har bir manba kelganda (2-, 3-...),
-  // user tepada bo'lmasa, ro'yxatni silliq tepaga suramiz.
+  // ── Yangi manba kelganda scroll joyini saqlash ────────────────────────
+  // Natijalar 3 ta manbadan bosqichma-bosqich keladi va ro'yxat narx bo'yicha
+  // saralanadi. Ilgari foydalanuvchi pastda bo'lsa ro'yxat majburan tepaga
+  // surilardi — o'qiyotgan kartasi yo'qolardi. Endi user pastda bo'lsa,
+  // ko'rsatilayotgan tartib MUZLATILADI (`_orderFrozen`): mavjud kartalar
+  // joyida qoladi, yangi reyslar oxiriga qo'shiladi va pastda "Yangi reyslar"
+  // tugmasi chiqadi. Uni bossa (yoki o'zi tepaga qaytsa) ro'yxat to'liq
+  // saralanadi.
   //
-  // Bunda kartalarni qayta tartiblovchi FLIP animatsiyasi scroll bilan bir
-  // vaqtda to'qnashmasligi uchun, shu bitta yangilanishda FLIP o'tkazib
-  // yuboriladi (`_reorderSuppressed`) — ro'yxat tekis saralangan holda suriladi.
+  // Tugma bosilganda kartalarni qayta tartiblovchi FLIP animatsiyasi scroll
+  // bilan to'qnashmasligi uchun shu yangilanishda FLIP o'tkazib yuboriladi
+  // (`_reorderSuppressed`).
   bool _reorderSuppressed = false;
+  bool _orderFrozen = false;
+  bool _hasHiddenUpdates = false;
   // NestedScrollView body'sining ichki (koordinatsiyalangan) scroll controlleri.
   ScrollController? _innerScroll;
 
@@ -347,8 +419,29 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
     if (searchAgain) {
       // Joriy (filtrlangan yoki boshlang'ich) parametrlar bilan qayta qidiramiz;
       // natija kelganda taymer yana qaytadan boshlanadi.
+      AnalyticsService().trackButtonTap('tickets_search_again',
+          extra: {'source': 'prices_outdated'});
       cubit.add(GetRecommendationsEvent(cubit.filterReqBody));
+    } else {
+      // Yopildi — bloklamaymiz, faqat ro'yxat ustida banner qoladi.
+      setState(() => _pricesStale = true);
     }
+  }
+
+  /// "Bilet topilmadi" / xato holatidan qidiruv formasiga (oldingi ekranga)
+  /// qaytish — sana, yo'nalish yoki yo'lovchilarni o'zgartirish uchun.
+  void _changeSearch(String source) {
+    AnalyticsService()
+        .trackButtonTap('tickets_change_search', extra: {'source': source});
+    Navigator.of(context).maybePop();
+  }
+
+  /// "Bilet topilmadi" / xato holatidan xuddi shu parametrlar bilan qayta
+  /// qidirish.
+  void _retrySearch(String source) {
+    AnalyticsService()
+        .trackButtonTap('tickets_search_again', extra: {'source': source});
+    _searchAgain();
   }
 
   /// API'dan HAR QANDAY xato kelganda (tarmoq, timeout, 4xx, 5xx, noma'lum)
@@ -383,6 +476,16 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
     }
   }
 
+  /// Xato holati izohi — dialogdagi qoida bilan bir xil: server matni bo'sh
+  /// yoki sarlavhaning o'zi bo'lsa, xato turiga mos tayyor matn.
+  static String _errorSubtitle(TicketErrorState state) {
+    final kind = ErrorDialogKind.fromErrorType(state.errorType);
+    final message = state.errorMsg.trim();
+    return (message.isEmpty || message == kind.title)
+        ? kind.fallbackMessage
+        : message;
+  }
+
   @override
   void dispose() {
     _live.remove(this);
@@ -397,27 +500,61 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
     }
   }
 
-  /// Har bir manba kelib ro'yxat qayta saralanganda chaqiriladi. Foydalanuvchi
-  /// pastga scroll qilgan bo'lsa — eng arzon reys tepaga chiqqanini ko'rishi
-  /// uchun ro'yxatni silliq tepaga suradi. Allaqachon tepada bo'lsa hech narsa
-  /// qilmaymiz (FLIP animatsiyasi qayta tartiblanishni o'zi ko'rsatadi).
-  void _maybeScrollCheapestToTop() {
+  /// Har bir manba natijasi kelganda chaqiriladi. Foydalanuvchi pastga scroll
+  /// qilgan bo'lsa — joyidan SURILMAYDI: tartib muzlatiladi va "Yangi reyslar"
+  /// tugmasi ko'rsatiladi. Tepada bo'lsa hech narsa qilmaymiz (FLIP animatsiyasi
+  /// qayta tartiblanishni o'zi ko'rsatadi).
+  /// [_onResultsArrived] oxirgi marta qaysi natija obyekti uchun chaqirilgan.
+  GetRecommendationResModel? _lastArrivedRes;
+
+  /// Oxirgi ko'rilgan natijaning reyslari — yangi reys qo'shildimi
+  /// solishtirish uchun (№86).
+  List<FlightElement>? _lastArrivedFlights;
+
+  void _onResultsArrived() {
     final controller = _innerScroll;
     if (controller == null || !controller.hasClients) return;
     // Ozgina qoldiqni "tepada" deb hisoblaymiz (aniq 0 bo'lishi shart emas).
     if (controller.offset <= 8) return;
+    setState(() {
+      _orderFrozen = true;
+      _hasHiddenUpdates = true;
+    });
+  }
 
+  /// "Yangi reyslar" tugmasi: ro'yxat to'liq saralanadi va tepaga suriladi.
+  void _showUpdatedResults() {
+    HapticFeedback.lightImpact();
+    AnalyticsService().trackButtonTap('tickets_new_results');
+    final controller = _innerScroll;
     // Scroll bilan bir vaqtda kartalar FLIP qilib to'qnashmasin — shu
     // yangilanishda qayta tartiblash animatsiyasini o'tkazib yuboramiz.
-    _reorderSuppressed = true;
-    controller.animateTo(
-      0,
-      duration: const Duration(milliseconds: 450),
-      curve: Curves.easeOutCubic,
-    );
+    setState(() {
+      _reorderSuppressed = true;
+      _orderFrozen = false;
+      _hasHiddenUpdates = false;
+    });
+    if (controller != null && controller.hasClients) {
+      controller.animateTo(
+        0,
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeOutCubic,
+      );
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _reorderSuppressed = false;
     });
+  }
+
+  /// User o'zi ro'yxat tepasiga qaytdi — muzlatilgan tartibni bekor qilamiz.
+  bool _onBodyScroll(ScrollUpdateNotification n) {
+    if (_orderFrozen && n.depth == 0 && n.metrics.pixels <= 8) {
+      setState(() {
+        _orderFrozen = false;
+        _hasHiddenUpdates = false;
+      });
+    }
+    return false;
   }
 
   @override
@@ -431,15 +568,41 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
             // qaytadan boshlaymiz — shu paytdan idle hisoblanadi.
             if (state is TicketLoadingState) {
               _priceRefreshTimer?.cancel();
+              // Server filtri (appbar) o'zgargan bo'lsa — lenta narxlari ham.
+              _reloadMonthPricesIfFiltersChanged();
+              _lastArrivedFlights = null;
+              // Yangi qidiruv — eskirish banneri va muzlatilgan tartib bekor.
+              if (_pricesStale || _orderFrozen || _hasHiddenUpdates) {
+                setState(() {
+                  _pricesStale = false;
+                  _orderFrozen = false;
+                  _hasHiddenUpdates = false;
+                });
+              }
             } else if (state is TicketSuccessState) {
               if (!state.isLoadingMore) {
                 _restartPriceRefreshTimer(
                     BlocProvider.of<TicketCubit>(context));
               }
-              // Har bir manba kelib ro'yxat qayta saralanganda (2-, 3-...),
-              // user pastda bo'lsa eng arzonni ko'rsatish uchun tepaga suramiz —
-              // oxirgi manbani kutib turmaymiz (u kech kelishi mumkin).
-              _maybeScrollCheapestToTop();
+              // Har bir manba kelganda (2-, 3-...) user pastda bo'lsa —
+              // joyidan surmaymiz, "Yangi reyslar" tugmasini ko'rsatamiz.
+              // Xato / bo'sh manba ham shu holatni (o'sha ro'yxat bilan)
+              // qayta chiqaradi — ro'yxat o'zgarmagan bo'lsa tugma chiqmasin.
+              if (!identical(state.recommendationRes, _lastArrivedRes)) {
+                _lastArrivedRes = state.recommendationRes;
+                // Merge har doim YANGI obyekt qaytaradi — dedupe'dan keyin
+                // yangi reys qo'shilmagan bo'lsa (faqat takror yoki arzonroq
+                // dublikat) tugma chiqmaydi (№86).
+                final previous = _lastArrivedFlights;
+                final current =
+                    state.recommendationRes.recommedations?.flights ??
+                        const <FlightElement>[];
+                _lastArrivedFlights = current;
+                if (previous == null ||
+                    FlightResultsUtils.hasNewFlights(previous, current)) {
+                  _onResultsArrived();
+                }
+              }
             } else if (state is TicketEmptyState || state is TicketErrorState) {
               _restartPriceRefreshTimer(BlocProvider.of<TicketCubit>(context));
               // API xato qaytardi (tur muhim emas) — ro'yxat o'rniga xato
@@ -499,11 +662,12 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
                           systemOverlayStyle: _ticketPageOverlayStyle(isDark),
                           toolbarHeight: 64,
                           centerTitle: true,
-                          leadingWidth: 46,
+                          leadingWidth: 52,
                           leading: Padding(
                             padding: const EdgeInsets.only(left: 4),
                             child: _RecHeroIconButton(
                               asset: Assets.iconsScanBackIcon,
+                              semanticLabel: "back".tr(),
                               onTap: () => Navigator.of(context).maybePop(),
                             ),
                           ),
@@ -515,6 +679,7 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
                           actions: [
                             _RecHeroIconButton(
                               asset: Assets.iconsTicketsCurrencyIcon,
+                              semanticLabel: "rate".tr(),
                               onTap: () =>
                                   ProjectDialogs.showCurrencyMenu(context),
                             ),
@@ -523,6 +688,7 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
                             // belgida faol filtrlar soni.
                             _RecHeroIconButton(
                               asset: Assets.iconsTicketsFiltersIcon,
+                              semanticLabel: "filter_title".tr(),
                               badge: _viewFilters.activeCount,
                               onTap: () => _openViewFilters(ticketCubit, null),
                             ),
@@ -555,13 +721,30 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
                       _innerScroll = PrimaryScrollController.maybeOf(context);
                       // Chiplardagi ko'rinish filtrlari yuklangan ro'yxatga
                       // shu yerda qo'llanadi (web'dagi kabi — darhol).
-                      final List<FlightElement> viewFlights = state
-                              is TicketSuccessState
-                          ? _applyViewFilters(
-                              state.recommendationRes.recommedations!.flights)
-                          : const [];
-                      return CustomScrollView(
+                      // Natija ro'yxati yoki filtrlar o'zgarmasa — keshdan
+                      // (har rebuild'da qayta filtrlanmaydi).
+                      final List<FlightElement> viewFlights =
+                          state is TicketSuccessState
+                              ? _viewFlightsMemo.get(
+                                  state.recommendationRes.recommedations!
+                                      .flights,
+                                  _viewFiltersVersion,
+                                  () => _applyViewFilters(state
+                                      .recommendationRes
+                                      .recommedations!
+                                      .flights))
+                              : const [];
+                      final list = CustomScrollView(
                         slivers: [
+                          // Narxlar eskirgan (dialog yopilgan) — bloklamaydigan
+                          // ogohlantirish + "Qayta qidirish".
+                          if (state is TicketSuccessState && _pricesStale)
+                            SliverToBoxAdapter(
+                              child: _PricesOutdatedBanner(
+                                onRefresh: () =>
+                                    _retrySearch('prices_outdated_banner'),
+                              ),
+                            ),
                           // "Aviakompaniyalar bo'yicha" jamlama kartasi.
                           if (state is TicketSuccessState)
                             SliverToBoxAdapter(
@@ -587,6 +770,7 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
                                 isLoadingMore: state.isLoadingMore,
                                 flightType: widget.requestBody.flight_Type ?? 0,
                                 animateReorder: !_reorderSuppressed,
+                                freezeOrder: _orderFrozen,
                               ),
                             _ => SliverPadding(
                                 padding: context.k16horizontalPadding,
@@ -600,19 +784,66 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
                                                   1,
                                         ),
                                       ),
-                                    TicketEmptyState() => _TicketsEmptyView(
+                                    // Boshi berk ko'cha emas: qidiruvni
+                                    // o'zgartirish yoki qayta qidirish.
+                                    TicketEmptyState() => _NoResultsView(
                                         title: "not_found_tickets".tr(),
-                                        subtitle: "found_other_tickets".tr(),
+                                        // "Boshqa sanalarda topdik" izohi faqat
+                                        // sana-narx lentasi ko'rinsa ma'noli.
+                                        subtitle: _showDateStrip
+                                            ? "found_other_tickets".tr()
+                                            : null,
+                                        primaryLabel: "change_search".tr(),
+                                        onPrimary: () =>
+                                            _changeSearch('empty'),
+                                        secondaryLabel: "search_again".tr(),
+                                        onSecondary: () =>
+                                            _retrySearch('empty'),
                                       ),
-                                    // Xato dialog orqali ko'rsatiladi —
-                                    // sahifa tanasida takrorlanmasin.
-                                    TicketErrorState() => const SizedBox(),
+                                    // Xato asosan dialog orqali ko'rsatiladi;
+                                    // dialog chiqmagan hollarda (sahifa o'sha
+                                    // payt ko'rinmagan) sahifa bo'sh qolmasin —
+                                    // xuddi shu matn va "Qayta urinish".
+                                    TicketErrorState() => _NoResultsView(
+                                        title: ErrorDialogKind.fromErrorType(
+                                                state.errorType)
+                                            .title,
+                                        subtitle: _errorSubtitle(state),
+                                        primaryLabel: "retry_search".tr(),
+                                        onPrimary: () =>
+                                            _retrySearch('error'),
+                                        secondaryLabel: "change_search".tr(),
+                                        onSecondary: () =>
+                                            _changeSearch('error'),
+                                      ),
                                     _ => const SizedBox(),
                                   },
                                 ),
                               ),
                           },
                         ],
+                      );
+                      return NotificationListener<ScrollUpdateNotification>(
+                        onNotification: _onBodyScroll,
+                        child: Stack(
+                          children: [
+                            list,
+                            // Pastda turgan userga: yangi manba natijalari
+                            // qo'shildi — bosilsa saralanib tepaga suriladi.
+                            if (_hasHiddenUpdates &&
+                                state is TicketSuccessState)
+                              Positioned(
+                                left: 0,
+                                right: 0,
+                                bottom: 20,
+                                child: Center(
+                                  child: _NewResultsPill(
+                                    onTap: _showUpdatedResults,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       );
                     }))),
               ),
@@ -628,9 +859,13 @@ class _RecommendationsTicketPageState extends State<RecommendationsTicketPage> {
 // ════════════════════════════════════════════════════════════════════
 
 /// App bar tugmasi — och fonda to'q rangli oddiy ikonka (doirasiz).
+/// Bosish maydoni 48dp; ekran o'quvchi uchun [semanticLabel] bilan.
 class _RecHeroIconButton extends StatelessWidget {
   final String asset;
   final VoidCallback onTap;
+
+  /// Ekran o'quvchi (TalkBack/VoiceOver) o'qiydigan tugma nomi.
+  final String semanticLabel;
 
   /// 0 dan katta bo'lsa o'ng yuqori burchakda son belgisi ko'rsatiladi.
   final int badge;
@@ -638,6 +873,7 @@ class _RecHeroIconButton extends StatelessWidget {
   const _RecHeroIconButton({
     required this.asset,
     required this.onTap,
+    required this.semanticLabel,
     this.badge = 0,
   });
 
@@ -652,8 +888,8 @@ class _RecHeroIconButton extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: SizedBox(
-          width: 42,
-          height: 42,
+          width: 48,
+          height: 48,
           child: Center(
             child: SvgPicture.asset(
               asset,
@@ -665,15 +901,23 @@ class _RecHeroIconButton extends StatelessWidget {
         ),
       ),
     );
-    if (badge <= 0) return button;
+    final String label =
+        badge > 0 ? "$semanticLabel ($badge)" : semanticLabel;
+    final labelled = Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: button,
+    );
+    if (badge <= 0) return labelled;
 
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        button,
+        labelled,
         Positioned(
-          top: 5,
-          right: 4,
+          top: 7,
+          right: 6,
           child: IgnorePointer(
             child: Container(
               constraints: const BoxConstraints(minWidth: 17),
@@ -690,7 +934,8 @@ class _RecHeroIconButton extends StatelessWidget {
               ),
               child: Text(
                 "$badge",
-                style: _TixTheme.style(10.5, FontWeight.w800, Colors.white),
+                style: _TixTheme.style(11, FontWeight.w800, Colors.white),
+                textScaler: TextScaler.noScaling,
               ),
             ),
           ),
@@ -720,6 +965,15 @@ class _RecHeroTitle extends StatelessWidget {
     final Color subColor =
         isDark ? Colors.white70 : ProjectTheme.secondaryTextLight;
 
+    // Appbar balandligi qat'iy (64px) — katta tizim shriftida ikki qator
+    // sig'may qolmasligi uchun matn kattalashishi cheklanadi.
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.2,
+      child: _buildPill(textColor, subColor, isDark),
+    );
+  }
+
+  Widget _buildPill(Color textColor, Color subColor, bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
       decoration: BoxDecoration(
@@ -973,6 +1227,8 @@ class _RecHeroLoadingBarState extends State<_RecHeroLoadingBar>
                         "$percent%",
                         textAlign: TextAlign.right,
                         maxLines: 1,
+                        // Qat'iy 36x14 joy — tizim shrifti kattalashtirmasin.
+                        textScaler: TextScaler.noScaling,
                         style: TextStyle(
                           fontFamily: 'Gilroy',
                           fontSize: 11,
@@ -1076,30 +1332,112 @@ class _MoreResultsLoading extends StatelessWidget {
   }
 }
 
+/// Narxlar eskirgan bo'lishi mumkinligi haqida ro'yxat ustidagi bloklamaydigan
+/// banner (eskirish dialogi yopilgandan keyin) — "Qayta qidirish" bilan.
+class _PricesOutdatedBanner extends StatelessWidget {
+  final VoidCallback onRefresh;
+
+  const _PricesOutdatedBanner({required this.onRefresh});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = _TixTheme.of(context);
+    const Color amber = Color(0xFFB45309);
+    final Color accent = t.dark ? const Color(0xFFFBBF24) : amber;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: accent.withAlpha(t.dark ? 36 : 24),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: accent.withAlpha(t.dark ? 90 : 70)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.schedule_rounded, size: 20, color: accent),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              "prices_outdated_banner".tr(),
+              style: _TixTheme.style(13, FontWeight.w600, t.hi, height: 1.3),
+            ),
+          ),
+          const SizedBox(width: 6),
+          TextButton(
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              onRefresh();
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: ProjectTheme.brandColor,
+              minimumSize: const Size(48, 44),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+            ),
+            child: Text(
+              "search_again".tr(),
+              style: _TixTheme.style(
+                  13.5,
+                  FontWeight.w700,
+                  t.dark ? Colors.white : ProjectTheme.brandColor),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// User pastda turganda yangi manba natijalari qo'shilganini bildiruvchi
+/// suzuvchi tugma — bosilsa ro'yxat saralanib tepaga suriladi.
+class _NewResultsPill extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _NewResultsPill({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      liveRegion: true,
+      child: Material(
+        color: ProjectTheme.brandColor,
+        elevation: 4,
+        shadowColor: Colors.black38,
+        shape: const StadiumBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 44),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.arrow_upward_rounded,
+                      size: 18, color: Colors.white),
+                  const SizedBox(width: 6),
+                  Text(
+                    "new_flights_found".tr(),
+                    style: _TixTheme.style(14, FontWeight.w700, Colors.white),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ════════════════════════════════════════════════════════════════════
 //  NARX BO'YICHA SARALANADIGAN, SILLIQ SILJISH ANIMATSIYALI RO'YXAT
 // ════════════════════════════════════════════════════════════════════
 
-/// Narx satridan sonni ajratadi. `amount` formatlangan bo'lishi mumkin
-/// ("1 500 000", "1,500,000" kabi) — shuning uchun raqam va nuqtadan boshqa
-/// barcha belgilarni (bo'shliq, vergul, valyuta) olib tashlab parse qilamiz.
-double _parseAmount(String? s) {
-  if (s == null) return double.infinity;
-  final cleaned = s.replaceAll(',', '').replaceAll(RegExp(r'[^0-9.]'), '');
-  final v = double.tryParse(cleaned);
-  return (v == null || v <= 0) ? double.infinity : v;
-}
-
-/// FlightElement narxini (son) qaytaradi — saralash uchun. Avval UZS, bo'lmasa
-/// USD, so'ng RUB. Valyutalar chiziqli konvertatsiya bo'lgani uchun tartib
-/// istalgan valyutada bir xil. Noaniq/yo'q narx ro'yxat oxiriga tushadi.
-double _flightPriceUzs(FlightElement f) {
-  final uzs = _parseAmount(f.price?.uzs?.amount);
-  if (uzs != double.infinity) return uzs;
-  final usd = _parseAmount(f.price?.usd?.amount);
-  if (usd != double.infinity) return usd;
-  return _parseAmount(f.price?.rub?.amount);
-}
+/// FlightElement narxini (son) qaytaradi — saralash uchun. Narx matni bir
+/// marta (odatda fon isolate'da) o'qilib keshlanadi: [FlightElement.sortPrice].
+double _flightPriceUzs(FlightElement f) => f.sortPrice;
 
 /// Sana ("24.07.2026" / "24-07-2026" / "2026-07-24") va vaqt ("19:10")
 /// satrlaridan monotonik saralash kaliti yasaydi. Ba'zi manbalarda `ts`
@@ -1174,12 +1512,17 @@ class _AnimatedFlightList extends StatefulWidget {
   /// ikki animatsiya to'qnashmasligi uchun).
   final bool animateReorder;
 
+  /// `true` — ko'rsatilayotgan tartib saqlanadi (user pastda turganda yangi
+  /// manba keldi): mavjud kartalar joyida qoladi, yangilari oxiriga qo'shiladi.
+  final bool freezeOrder;
+
   const _AnimatedFlightList({
     required this.flights,
     required this.isLoadingMore,
     required this.flightType,
     this.sortMode = 0,
     this.animateReorder = true,
+    this.freezeOrder = false,
   });
 
   @override
@@ -1195,10 +1538,45 @@ class _AnimatedFlightListState extends State<_AnimatedFlightList> {
   /// — narx bo'yicha saralangan).
   late List<FlightElement> _display;
 
+  /// Joriy ro'yxatdagi eng arzon reys id'si ("Eng arzon" belgisi uchun —
+  /// tartib muzlatilganda ham to'g'ri kartaga qo'yilsin).
+  String? _cheapestId;
+
+  /// Barqaror karta kaliti: arzonroq dublikat eski kartani almashtirganda
+  /// (boshqa id) yangi reys ESKI kartaning kalitini oladi — karta qayta
+  /// yaratilmaydi va muzlatilgan tartibda o'z o'rnida qoladi (№86).
+  /// `reys id → kalit`; yo'q bo'lsa kalit = id.
+  final Map<String, String> _stableKey = {};
+
+  String _keyOf(FlightElement f) => _stableKey[f.id] ?? f.id;
+
+  /// Almashtirilgan reyslar uchun kalitlarni ko'chiradi va eskilarini tozalaydi.
+  void _updateStableKeys(Map<String, String> replaced) {
+    final currentIds = <String>{for (final f in widget.flights) f.id};
+    replaced.forEach((newId, oldId) {
+      final key = _stableKey[oldId] ?? oldId;
+      // Kalit boshqa (mavjud) reys id'si bilan to'qnashmasin.
+      if (currentIds.contains(key) && key != newId) return;
+      _stableKey[newId] = key;
+    });
+    _stableKey.removeWhere((id, _) => !currentIds.contains(id));
+  }
+
   @override
   void initState() {
     super.initState();
     _display = _computeDisplay();
+    _cheapestId = _findCheapestId();
+  }
+
+  String? _findCheapestId() {
+    FlightElement? best;
+    for (final f in widget.flights) {
+      // Faqat UZS narxli reys "Eng arzon" bo'la oladi (№82).
+      if (!f.hasUzsSortPrice) continue;
+      if (best == null || f.sortPrice < best.sortPrice) best = f;
+    }
+    return best?.id;
   }
 
   void _register(String id, _FlipItemState s) => _active[id] = s;
@@ -1218,33 +1596,69 @@ class _AnimatedFlightListState extends State<_AnimatedFlightList> {
   /// (teng qiymatlarda kelish tartibini saqlovchi) saralash. Manbalar
   /// bosqichma-bosqich kelsa ham (2-, 3-...) eng yaxshisi darhol tepaga
   /// chiqadi, oxirgi manbani kutmasdan.
-  List<FlightElement> _computeDisplay() {
-    final indexed = <MapEntry<int, FlightElement>>[
-      for (int i = 0; i < widget.flights.length; i++)
-        MapEntry(i, widget.flights[i]),
+  List<FlightElement> _computeDisplay() =>
+      FlightResultsUtils.stableSort(widget.flights, _sortKey);
+
+  /// Muzlatilgan tartib: hozir ko'rinayotgan kartalar o'z o'rnida (ro'yxatda
+  /// hali bo'lsa), yangi kelganlar — o'zaro saralangan holda — oxirida.
+  List<FlightElement> _computeFrozenDisplay(
+      [Map<String, String> replaced = const {}]) {
+    final byId = <String, FlightElement>{
+      for (final f in widget.flights) f.id: f,
+    };
+    // eski id → uni almashtirgan (arzonroq dublikat) reys id'si.
+    final replacedBy = <String, String>{
+      for (final e in replaced.entries) e.value: e.key,
+    };
+    final kept = <FlightElement>[];
+    for (final f in _display) {
+      final newId = replacedBy[f.id];
+      final current =
+          byId.remove(f.id) ?? (newId == null ? null : byId.remove(newId));
+      if (current != null) kept.add(current);
+    }
+    final added = [
+      for (final f in widget.flights)
+        if (byId.containsKey(f.id)) f,
     ];
-    indexed.sort((a, b) {
-      final c = _sortKey(a.value).compareTo(_sortKey(b.value));
-      return c != 0 ? c : a.key.compareTo(b.key);
-    });
-    return [for (final e in indexed) e.value];
+    return [...kept, ...FlightResultsUtils.stableSort(added, _sortKey)];
   }
 
   @override
   void didUpdateWidget(covariant _AnimatedFlightList oldWidget) {
     super.didUpdateWidget(oldWidget);
 
+    // Ro'yxat, saralash rejimi va muzlatish o'zgarmagan bo'lsa (masalan
+    // indikator yoki taymer tufayli rebuild) — qayta saralamaymiz.
+    if (identical(oldWidget.flights, widget.flights) &&
+        oldWidget.sortMode == widget.sortMode &&
+        oldWidget.freezeOrder == widget.freezeOrder) {
+      return;
+    }
+
     final oldDisplay = _display;
-    final newDisplay = _computeDisplay();
+    // Eski tartib kalitlari — kalitlar yangilanishidan OLDIN.
+    final oldIds = [for (final f in oldDisplay) _keyOf(f)];
+    Map<String, String> replaced = const {};
+    if (!identical(oldWidget.flights, widget.flights)) {
+      replaced =
+          FlightResultsUtils.replacedIds(oldWidget.flights, widget.flights);
+      _updateStableKeys(replaced);
+    }
+    final newDisplay = widget.freezeOrder
+        ? _computeFrozenDisplay(replaced)
+        : _computeDisplay();
     _display = newDisplay;
+    if (!identical(oldWidget.flights, widget.flights)) {
+      _cheapestId = _findCheapestId();
+    }
 
     // Ota-widget shu yangilanishda ro'yxatni tepaga scroll qilayotgan bo'lsa,
     // FLIP'ni o'tkazib yuboramiz — ro'yxat to'g'ridan-to'g'ri saralangan holda
     // ko'rsatiladi (scroll animatsiyasi bilan to'qnashmasin).
     if (!widget.animateReorder) return;
 
-    final oldIds = [for (final f in oldDisplay) f.id];
-    final newIds = [for (final f in newDisplay) f.id];
+    final newIds = [for (final f in newDisplay) _keyOf(f)];
     if (!_orderChanged(oldIds, newIds)) return;
 
     // Eski (joriy layout) pozitsiyalarni — yangi tartib qurilishidan OLDIN —
@@ -1341,11 +1755,13 @@ class _AnimatedFlightListState extends State<_AnimatedFlightList> {
           final flight = flights[index];
           // Belgilar faqat narx bo'yicha saralashda ma'noli: "Eng arzon" —
           // 1-kartada (logo yonida), "Ekonom" — 1- va 2-kartalarda (tepada).
-          final bool isCheapest = index == 0 && widget.sortMode == 0;
+          final bool isCheapest =
+              widget.sortMode == 0 && flight.id == _cheapestId;
           final bool economBadge = index < 2 && widget.sortMode == 0;
+          final String stableKey = _keyOf(flight);
           return _FlipItem(
-            key: ValueKey(flight.id),
-            id: flight.id,
+            key: ValueKey(stableKey),
+            id: stableKey,
             controller: this,
             child: RepaintBoundary(
               child: switch (widget.flightType) {

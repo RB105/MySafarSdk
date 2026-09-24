@@ -41,13 +41,14 @@ class FornexRepository with RequestConfig {
     }
 
     final response = await postRequest(
+      retryable: true,
       endPoint: EndPoints.destination_list,
       params: const <String, dynamic>{"page": 1, "page_size": 20},
     );
     if (response is NetworkSuccessResponse &&
         response.data is Map<String, dynamic>) {
-      final page =
-          DestinationListPageResult.fromJson(response.data as Map<String, dynamic>);
+      final page = DestinationListPageResult.fromJson(
+          response.data as Map<String, dynamic>);
       if (page.items.isNotEmpty) {
         _allDestCache = _TtlEntry(page.items);
         return page.items;
@@ -76,6 +77,7 @@ class FornexRepository with RequestConfig {
     required int pageSize,
   }) async {
     final response = await postRequest(
+      retryable: true,
       endPoint: EndPoints.destination_list,
       params: {"page": page, "page_size": pageSize},
     );
@@ -104,8 +106,7 @@ class FornexRepository with RequestConfig {
     final code = (aviationCode ?? '').trim().toUpperCase();
     if (code.isNotEmpty) {
       final map = await _detailSlugByAirport();
-      resolved =
-          map[code] ?? map[_cityToAirportAlias[code] ?? ''] ?? resolved;
+      resolved = map[code] ?? map[_cityToAirportAlias[code] ?? ''] ?? resolved;
     }
 
     if (resolved.isEmpty) {
@@ -120,13 +121,14 @@ class FornexRepository with RequestConfig {
     }
 
     final response = await postRequest(
+      retryable: true,
       endPoint: EndPoints.destination_detail,
       params: {"id": resolved},
     );
     if (response is NetworkSuccessResponse &&
         response.data is Map<String, dynamic>) {
-      final model =
-          DestinationDetailModel.fromJson(response.data as Map<String, dynamic>);
+      final model = DestinationDetailModel.fromJson(
+          response.data as Map<String, dynamic>);
       _destDetailCache[resolved] = _TtlEntry(model);
       return NetworkSuccessResponse(data: model);
     }
@@ -180,7 +182,8 @@ class FornexRepository with RequestConfig {
     return response;
   }
 
-  Future<NetworkResponse> getPopDestinations({bool forceRefresh = false}) async {
+  Future<NetworkResponse> getPopDestinations(
+      {bool forceRefresh = false}) async {
     if (!forceRefresh) {
       final cached = _popDestCache;
       if (cached != null && cached.isFresh(_popDestTtl)) {
@@ -216,7 +219,7 @@ class FornexRepository with RequestConfig {
       final result = DestinationsInfoModel.fromJson(response.data);
       _popDestInfoCache[info] = _TtlEntry(result);
       return NetworkSuccessResponse(data: result);
-    }else if (response is NetworkErrorResponse) {
+    } else if (response is NetworkErrorResponse) {
       return NetworkErrorResponse(
           error: response.getError(), errorType: response.errorType);
     }
@@ -234,21 +237,22 @@ class FornexRepository with RequestConfig {
 
     return response;
   }
-  Future<NetworkResponse> searchAiChatVoice({required FormData prompt}) async {
 
+  Future<NetworkResponse> searchAiChatVoice({required FormData prompt}) async {
     final response = await post(
-        contentType: "multipart/form-data",
-        endPoint: EndPoints.ai_search_chat,
-        params:  prompt,);
+      contentType: "multipart/form-data",
+      endPoint: EndPoints.ai_search_chat,
+      params: prompt,
+    );
     if (response is NetworkSuccessResponse) {
-      if(response.data['query_search']!=null){
+      if (response.data['query_search'] != null) {
         return NetworkSuccessResponse(
             data: RecommendationRequestBody.fromJson(
                 response.data['query_search']));
-      }else{
-        return NetworkErrorResponse(error:"speak_clear_address_date".tr());
+      } else {
+        return NetworkErrorResponse(error: "speak_clear_address_date".tr());
       }
-    }else if (response is NetworkErrorResponse) {
+    } else if (response is NetworkErrorResponse) {
       return NetworkErrorResponse(
           error: response.getError(), errorType: response.errorType);
     }

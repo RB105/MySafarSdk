@@ -3,23 +3,32 @@
 ///
 /// Hamma maydon ixtiyoriy: hech narsa berilmasa SDK odatdagidek ishlaydi.
 ///
-/// Xavfsizlik: karta ma'lumotlari faqat xotirada (in-memory) saqlanadi —
-/// diskka, keshga yoki analytics'ga yozilmaydi, `toString()` da karta raqami
-/// maskalanadi. Ilova qayta ishga tushsa host ularni yana berishi kerak.
+/// Xavfsizlik: karta va pasport ma'lumotlari faqat xotirada (in-memory)
+/// saqlanadi — diskka, keshga yoki analytics'ga yozilmaydi, `toString()` da
+/// karta raqami va shaxsiy ma'lumotlar maskalanadi. Ilova qayta ishga tushsa
+/// host ularni yana berishi kerak.
+///
+/// Xaridor ma'lumotlari ([firstName], [lastName], [birthDate], hujjat) berilsa
+/// bron formasida birinchi katta yoshli yo'lovchi shular bilan oldindan
+/// to'ldiriladi (foydalanuvchi o'zgartirishi mumkin).
 class MySafarUserData {
   const MySafarUserData({
     this.email,
-    this.identification,
     this.uzsCards = const [],
     this.foreignCards = const [],
+    this.firstName,
+    this.lastName,
+    this.middleName,
+    this.birthDate,
+    this.gender,
+    this.citizenship,
+    this.documentNumber,
+    this.documentExpiry,
   });
 
   /// Host user emaili. `MySafarEmbed.email` berilmasa shu ishlatiladi
   /// (telefon bilan ro'yxatdan o'tgach profilga yoziladi).
   final String? email;
-
-  /// Host MyID malumoti. Bersa bron da "Ozimning malumotim" chiqadi
-  final MySafarUserIdentification? identification;
 
   /// So'mdagi (UZS) kartalar — UzCard / Humo.
   final List<MySafarUzsCard> uzsCards;
@@ -27,9 +36,46 @@ class MySafarUserData {
   /// Boshqa valyutadagi kartalar (USD va h.k.) — token orqali.
   final List<MySafarForeignCard> foreignCards;
 
+  /// Ism — pasportdagidek lotincha (masalan `VALI`).
+  final String? firstName;
+
+  /// Familiya — pasportdagidek lotincha (masalan `ALIYEV`).
+  final String? lastName;
+
+  /// Otasining ismi (ixtiyoriy).
+  final String? middleName;
+
+  /// Tug'ilgan sana (faqat sana qismi ishlatiladi).
+  final DateTime? birthDate;
+
+  /// Jinsi. Berilmasa formada tanlanmagan holda turadi.
+  final MySafarGender? gender;
+
+  /// Fuqarolik — ISO 3166-1 alpha-2 kodi (`UZ`, `RU`, `KZ` ...).
+  final String? citizenship;
+
+  /// Pasport / ID-karta raqami (masalan `AA1234567`).
+  final String? documentNumber;
+
+  /// Hujjatning amal qilish muddati.
+  final DateTime? documentExpiry;
+
   bool get hasEmail => email?.trim().isNotEmpty ?? false;
 
-  bool get hasIdentification => identification?.hasUsefulData ?? false;
+  /// Yo'lovchi formasini to'ldirish uchun biror maydon berilganmi.
+  bool get hasPassengerData =>
+      _filled(firstName) ||
+      _filled(lastName) ||
+      birthDate != null ||
+      _filled(documentNumber);
+
+  static bool _filled(String? value) => value?.trim().isNotEmpty ?? false;
+
+  static String? _clean(String? value, {bool upper = false}) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    return upper ? trimmed.toUpperCase() : trimmed;
+  }
 
   bool get hasCards => uzsCards.isNotEmpty || foreignCards.isNotEmpty;
 
@@ -37,206 +83,63 @@ class MySafarUserData {
   /// qaytaradi. Ro'yxatlar o'zgarmas (unmodifiable) bo'ladi.
   MySafarUserData sanitized() {
     final trimmedEmail = email?.trim();
-    final id = identification?.sanitized();
     return MySafarUserData(
       email:
           (trimmedEmail == null || trimmedEmail.isEmpty) ? null : trimmedEmail,
-      identification: (id != null && id.hasUsefulData) ? id : null,
       uzsCards: List.unmodifiable(uzsCards.where((c) => c.isValid)),
       foreignCards: List.unmodifiable(foreignCards.where((c) => c.isValid)),
+      firstName: _clean(firstName, upper: true),
+      lastName: _clean(lastName, upper: true),
+      middleName: _clean(middleName, upper: true),
+      birthDate: birthDate,
+      gender: gender,
+      // Faqat 2 harfli kod qabul qilinadi — boshqasi jim tashlanadi.
+      citizenship: switch (_clean(citizenship, upper: true)) {
+        final String code when RegExp(r'^[A-Z]{2}$').hasMatch(code) => code,
+        _ => null,
+      },
+      documentNumber:
+          _clean(documentNumber, upper: true)?.replaceAll(RegExp(r'\s+'), ''),
+      documentExpiry: documentExpiry,
     );
   }
 
   MySafarUserData copyWith({
     String? email,
-    MySafarUserIdentification? identification,
     List<MySafarUzsCard>? uzsCards,
     List<MySafarForeignCard>? foreignCards,
+    String? firstName,
+    String? lastName,
+    String? middleName,
+    DateTime? birthDate,
+    MySafarGender? gender,
+    String? citizenship,
+    String? documentNumber,
+    DateTime? documentExpiry,
   }) {
     return MySafarUserData(
       email: email ?? this.email,
-      identification: identification ?? this.identification,
       uzsCards: uzsCards ?? this.uzsCards,
       foreignCards: foreignCards ?? this.foreignCards,
+      firstName: firstName ?? this.firstName,
+      lastName: lastName ?? this.lastName,
+      middleName: middleName ?? this.middleName,
+      birthDate: birthDate ?? this.birthDate,
+      gender: gender ?? this.gender,
+      citizenship: citizenship ?? this.citizenship,
+      documentNumber: documentNumber ?? this.documentNumber,
+      documentExpiry: documentExpiry ?? this.documentExpiry,
     );
   }
 
   @override
   String toString() => 'MySafarUserData(email: ${hasEmail ? '***' : null}, '
-      'identification: ${hasIdentification ? identification : null}, '
+      'passenger: ${hasPassengerData ? '***' : null}, '
       'uzsCards: $uzsCards, foreignCards: $foreignCards)';
 }
 
-/// Host MyID dan olgan user malumoti.
-/// init da userData.identification ga beriladi.
-/// Forma ozi toldirilmaydi — user "Ozimning malumotim" ni bosib tasdiqlasa
-/// shunda maydonlarga yoziladi.
-///
-/// Misol:
-/// MySafarUserIdentification(
-///   firstName: 'VALI',
-///   lastName: 'ALIYEV',
-///   middleName: 'VALIYEVICH',
-///   address: 'Toshkent sh.',
-///   pinfl: '30103901234567',       // 14 ta raqam
-///   pinflMask: '30103********',    // ixtiyoriy, ui da shu chiqadi
-///   passSeries: 'AA1234567',       // 2 harf + 7 raqam
-///   passSeriesMask: 'AA*******',   // ixtiyoriy
-///   passExpiry: '15.03.2030',      // pasport amal qilish muddati
-///   birthDate: '15.03.1990',       // dd.MM.yyyy yoki 1990-03-15
-///   isResident: true,
-/// )
-class MySafarUserIdentification {
-  const MySafarUserIdentification({
-    this.firstName,
-    this.lastName,
-    this.middleName,
-    this.address,
-    this.pinfl,
-    this.pinflMask,
-    this.passSeries,
-    this.passSeriesMask,
-    this.passExpiry,
-    this.birthDate,
-    this.isResident,
-  });
-
-  /// Ism, masalan VALI
-  final String? firstName;
-
-  /// Familiya, masalan ALIYEV
-  final String? lastName;
-
-  /// Otasini ismi, ixtiyoriy
-  final String? middleName;
-
-  /// Manzil. Formaga yozilmaydi, faqat tasdiqlashda korinadi
-  final String? address;
-
-  /// Pinfl toliq — 14 raqam
-  final String? pinfl;
-
-  /// Pinfl maskasi, berilmasa yuqoridagi toliq chiqadi
-  final String? pinflMask;
-
-  /// Pasport/id raqami, masalan AA1234567 — formadagi docnum ga ketadi
-  final String? passSeries;
-
-  /// Hujjat maskasi, berilmasa passSeries chiqadi
-  final String? passSeriesMask;
-
-  /// Pasport amal qilish muddati: 15.03.2030 yoki 2030-03-15.
-  /// Formadagi docexp ga ketadi
-  final String? passExpiry;
-
-  /// Tugilgan kun: 15.03.1990 yoki 1990-03-15. Ichida dd.MM.yyyy ga otkaziladi
-  final String? birthDate;
-
-  /// true bolsa fuqarolik UZ qoyiladi
-  final bool? isResident;
-
-  /// Ui da korsatish: maska bolsa maska, yoq bolsa toliq
-  String? get displayPinfl {
-    final mask = pinflMask?.trim();
-    if (mask != null && mask.isNotEmpty) return mask;
-    final raw = pinfl?.trim();
-    return (raw == null || raw.isEmpty) ? null : raw;
-  }
-
-  /// Ui da korsatish: maska bolsa maska, yoq bolsa toliq
-  String? get displayPassSeries {
-    final mask = passSeriesMask?.trim();
-    if (mask != null && mask.isNotEmpty) return mask;
-    final raw = passSeries?.trim();
-    return (raw == null || raw.isEmpty) ? null : raw;
-  }
-
-  /// dd.MM.yyyy ga keltirilgan tugilgan sana
-  String? get normalizedBirthDate => _normalizeDate(birthDate);
-
-  /// dd.MM.yyyy ga keltirilgan pasport muddati
-  String? get normalizedPassExpiry => _normalizeDate(passExpiry);
-
-  /// Biror maydon toldirilganmi
-  bool get hasUsefulData {
-    bool filled(String? v) => v != null && v.trim().isNotEmpty;
-    return filled(firstName) ||
-        filled(lastName) ||
-        filled(middleName) ||
-        filled(passSeries) ||
-        filled(passExpiry) ||
-        filled(birthDate) ||
-        filled(pinfl) ||
-        filled(address);
-  }
-
-  MySafarUserIdentification sanitized() {
-    String? clean(String? v) {
-      final t = v?.trim();
-      return (t == null || t.isEmpty) ? null : t;
-    }
-
-    return MySafarUserIdentification(
-      firstName: clean(firstName),
-      lastName: clean(lastName),
-      middleName: clean(middleName),
-      address: clean(address),
-      pinfl: clean(pinfl),
-      pinflMask: clean(pinflMask),
-      passSeries: clean(passSeries),
-      passSeriesMask: clean(passSeriesMask),
-      passExpiry: clean(passExpiry),
-      birthDate: clean(birthDate),
-      isResident: isResident,
-    );
-  }
-
-  factory MySafarUserIdentification.fromJson(Map<String, dynamic> json) {
-    return MySafarUserIdentification(
-      firstName: json['first_name']?.toString(),
-      lastName: json['last_name']?.toString(),
-      middleName: json['middle_name']?.toString(),
-      address: json['address']?.toString(),
-      pinfl: json['pinfl']?.toString(),
-      pinflMask: json['pinfl_mask']?.toString(),
-      passSeries: json['pass_series']?.toString(),
-      passSeriesMask: json['pass_series_mask']?.toString(),
-      passExpiry: json['pass_expiry']?.toString(),
-      birthDate: json['birth_date']?.toString(),
-      isResident: json['is_resident'] is bool
-          ? json['is_resident'] as bool
-          : null,
-    );
-  }
-
-  Map<String, dynamic> toJson() => {
-        'first_name': firstName,
-        'last_name': lastName,
-        'middle_name': middleName,
-        'address': address,
-        'pinfl': pinfl,
-        'pinfl_mask': pinflMask,
-        'pass_series': passSeries,
-        'pass_series_mask': passSeriesMask,
-        'pass_expiry': passExpiry,
-        'birth_date': birthDate,
-        'is_resident': isResident,
-      };
-
-  @override
-  String toString() =>
-      'MySafarUserIdentification(${lastName ?? ''} ${firstName ?? ''}, '
-      'doc: ${displayPassSeries ?? '—'})';
-}
-
-String? _normalizeDate(String? raw) {
-  final t = raw?.trim();
-  if (t == null || t.isEmpty) return null;
-  if (RegExp(r'^\d{2}\.\d{2}\.\d{4}$').hasMatch(t)) return t;
-  final iso = RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch(t);
-  if (iso != null) return '${iso[3]}.${iso[2]}.${iso[1]}';
-  return t;
-}
+/// Yo'lovchi jinsi ([MySafarUserData.gender]).
+enum MySafarGender { male, female }
 
 /// So'mdagi (UZS) karta — UzCard / Humo.
 class MySafarUzsCard {
@@ -308,8 +211,7 @@ String? _compactMaskedName(String? name) {
       if (word.isNotEmpty) result.add(word);
       continue;
     }
-    final visible =
-        word.replaceAll(mask, '').replaceFirst(RegExp(r'\.+$'), '');
+    final visible = word.replaceAll(mask, '').replaceFirst(RegExp(r'\.+$'), '');
     if (visible.isNotEmpty) result.add('$visible.');
   }
   return result.isEmpty ? null : result.join(' ');
